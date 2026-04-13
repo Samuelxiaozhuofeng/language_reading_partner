@@ -6,6 +6,13 @@ import ReadingPage from './components/ReadingPage'
 import SettingsDialog from './components/SettingsDialog'
 import WorkspacePage from './components/WorkspacePage'
 import { countByStatus } from './lib/appState'
+import {
+  DEFAULT_CHAPTER_RANGE_SIZE,
+  getDefaultSentenceRange,
+  getNextSentenceRange,
+  getSentencesInRange,
+  normalizeSentenceRange,
+} from './lib/chapterRange'
 import { useAnalysisRunner } from './hooks/useAnalysisRunner'
 import { useLibraryStore } from './hooks/useLibraryStore'
 import { usePersistentConfig } from './hooks/usePersistentConfig'
@@ -14,6 +21,7 @@ import type {
   AppPage,
   SettingsTab,
   SentenceItem,
+  SentenceRange,
   WorkspaceSource,
 } from './types'
 
@@ -21,11 +29,23 @@ function resolveStateAction<T>(current: T, action: SetStateAction<T>) {
   return typeof action === 'function' ? (action as (value: T) => T)(current) : action
 }
 
+function getSafeChapterRange(
+  sentences: SentenceItem[],
+  range: SentenceRange | null | undefined,
+) {
+  return normalizeSentenceRange(range, sentences.length)
+}
+
+function areRangesEqual(left: SentenceRange | null, right: SentenceRange | null) {
+  return left?.start === right?.start && left?.end === right?.end
+}
+
 function App() {
   const [activePage, setActivePage] = useState<AppPage>('library')
   const [workspaceSource, setWorkspaceSource] = useState<WorkspaceSource>('draft')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>('ai')
+  const [chapterRangeOverrides, setChapterRangeOverrides] = useState<Record<string, SentenceRange | null>>({})
 
   const persistent = usePersistentConfig()
   const library = useLibraryStore()
@@ -37,6 +57,11 @@ function App() {
   const workspaceSourceText = activeChapter?.sourceText ?? persistent.sourceText
   const workspaceSentences = activeChapter?.sentences ?? persistent.sentences
   const workspaceResults = activeChapter?.results ?? persistent.results
+  const chapterRangeOverride = activeChapter ? chapterRangeOverrides[activeChapter.id] : undefined
+  const activeReadingRange =
+    effectiveWorkspaceSource === 'chapter'
+      ? getSafeChapterRange(workspaceSentences, activeChapter?.activeRange)
+      : null
 
   const setWorkspaceSourceText: Dispatch<SetStateAction<string>> = (action) => {
     if (effectiveWorkspaceSource === 'draft') {
@@ -79,9 +104,83 @@ function App() {
       ? `已载入《${library.selectedBook?.title ?? '当前书籍'}》的章节《${activeChapter.title}》。`
       : persistent.initialNotice
 
+  const selectedChapterRange =
+    effectiveWorkspaceSource === 'chapter'
+      ? getSafeChapterRange(
+          workspaceSentences,
+          chapterRangeOverride ??
+            getDefaultSentenceRange(
+              workspaceSentences.length,
+              activeChapter?.activeRange ?? null,
+            ),
+        )
+      : null
+  const workspaceVisibleSentences =
+    effectiveWorkspaceSource === 'chapter'
+      ? getSentencesInRange(workspaceSentences, selectedChapterRange)
+      : workspaceSentences
+  const readingRangeSentences =
+    effectiveWorkspaceSource === 'chapter'
+      ? getSentencesInRange(workspaceSentences, activeReadingRange)
+      : workspaceSentences
+  const readingVisibleSentences =
+    effectiveWorkspaceSource === 'chapter'
+      ? readingRangeSentences.filter((sentence) => workspaceResults[sentence.id])
+      : workspaceSentences
+  const readingSentenceIndices =
+    effectiveWorkspaceSource === 'chapter'
+      ? readingRangeSentences.flatMap((sentence, index) =>
+          workspaceResults[sentence.id] ? [(activeReadingRange?.start ?? 0) + index] : [],
+        )
+      : []
+
   const analysis = useAnalysisRunner({
     apiConfig: persistent.apiConfig,
+    chapterRange: selectedChapterRange,
     initialNotice,
+    onChapterRangeCommitted: (range) => {
+      if (effectiveWorkspaceSource !== 'chapter') {
+        return
+      }
+
+      return library.updateCurrentChapter((chapter) => {
+        const previousRange = getSafeChapterRange(chapter.sentences, chapter.activeRange)
+        let nextLastReadEnd = Math.max(-1, chapter.lastReadEnd ?? -1)
+
+        if (range.start > 0) {
+          nextLastReadEnd = Math.max(nextLastReadEnd, range.start - 1)
+        }
+
+        if (previousRange && range.start > previousRange.end) {
+          nextLastReadEnd = Math.max(nextLastReadEnd, previousRange.end)
+        }
+
+        return {
+          ...chapter,
+          activeRange: range,
+          lastReadEnd: nextLastReadEnd,
+        }
+      })
+    },
+    onChapterSegmentReset: (sentenceCount) => {
+      if (effectiveWorkspaceSource !== 'chapter') {
+        return
+      }
+
+      setChapterRangeOverrides((current) =>
+        activeChapter
+          ? {
+              ...current,
+              [activeChapter.id]: getDefaultSentenceRange(sentenceCount, null),
+            }
+          : current,
+      )
+      void library.updateCurrentChapter((chapter) => ({
+        ...chapter,
+        activeRange: null,
+        lastReadEnd: -1,
+      }))
+    },
     promptConfig: persistent.promptConfig,
     results: workspaceResults,
     sentences: workspaceSentences,
@@ -93,15 +192,55 @@ function App() {
     workspaceSource: effectiveWorkspaceSource,
   })
 
-  const successCount = countByStatus(workspaceSentences, 'success')
-  const errorCount = countByStatus(workspaceSentences, 'error')
-  const queuedCount = countByStatus(workspaceSentences, 'queued')
-  const runningCount = countByStatus(workspaceSentences, 'running')
+  const progressSentences =
+    effectiveWorkspaceSource === 'chapter' ? workspaceVisibleSentences : workspaceSentences
+  const successCount = countByStatus(progressSentences, 'success')
+  const errorCount = countByStatus(progressSentences, 'error')
+  const queuedCount = countByStatus(progressSentences, 'queued')
+  const runningCount = countByStatus(progressSentences, 'running')
   const completedResultCount = Object.keys(workspaceResults).length
   const finishedCount = successCount + errorCount
-  const progressTotal = workspaceSentences.length
+  const progressTotal = progressSentences.length
   const progressPercent =
     progressTotal === 0 ? 0 : Math.round((finishedCount / progressTotal) * 100)
+  const readingSuccessCount =
+    effectiveWorkspaceSource === 'chapter'
+      ? readingVisibleSentences.length
+      : countByStatus(readingVisibleSentences, 'success')
+  const readingErrorCount =
+    effectiveWorkspaceSource === 'chapter'
+      ? countByStatus(readingRangeSentences, 'error')
+      : countByStatus(readingVisibleSentences, 'error')
+  const recentChapter =
+    library.selectedBook?.lastReadChapterId
+      ? library.chapters.find((chapter) => chapter.id === library.selectedBook?.lastReadChapterId) ?? null
+      : null
+
+  const handleChapterRangeChange = (nextRange: SentenceRange) => {
+    if (effectiveWorkspaceSource !== 'chapter' || !activeChapter) {
+      return
+    }
+
+    setChapterRangeOverrides((current) => ({
+      ...current,
+      [activeChapter.id]: getSafeChapterRange(workspaceSentences, nextRange),
+    }))
+  }
+
+  const handleUseNextChapterRange = () => {
+    if (effectiveWorkspaceSource !== 'chapter' || !activeChapter) {
+      return
+    }
+
+    setChapterRangeOverrides((current) => ({
+      ...current,
+      [activeChapter.id]: getNextSentenceRange(
+        workspaceSentences.length,
+        activeChapter.lastReadEnd ?? -1,
+        activeChapter.activeRange ?? null,
+      ),
+    }))
+  }
 
   const handleRunAnalysis = async () => {
     const nextPage = await analysis.runAnalysis()
@@ -133,6 +272,14 @@ function App() {
 
     setWorkspaceSource('chapter')
     setActivePage('reading')
+  }
+
+  const handleOpenRecentChapter = async () => {
+    if (!library.selectedBook?.lastReadChapterId) {
+      return
+    }
+
+    await handleOpenChapterReading(library.selectedBook.lastReadChapterId)
   }
 
   const handleOpenAdjacentChapter = async (chapterId: string | null) => {
@@ -199,8 +346,10 @@ function App() {
           onImportFile={handleImportFile}
           onOpenChapterReading={handleOpenChapterReading}
           onOpenChapterWorkspace={handleOpenChapterWorkspace}
+          onOpenRecentChapter={() => void handleOpenRecentChapter()}
           onOpenManualWorkspace={handleOpenManualWorkspace}
           onOpenSettings={openSettings}
+          recentChapterTitle={recentChapter?.title}
           onSelectBook={(bookId) => void library.selectBook(bookId)}
           selectedBook={library.selectedBook}
           selectedChapterId={library.selection.chapterId}
@@ -222,33 +371,49 @@ function App() {
           onOpenSettingsAi={openSettingsAi}
           onRestoreSession={analysis.restoreSession}
           onRetrySentence={analysis.retrySingleSentence}
+          onSelectNextRange={handleUseNextChapterRange}
+          onUpdateRange={handleChapterRangeChange}
           onRunAnalysis={() => void handleRunAnalysis()}
           onSegment={analysis.handleSegment}
           onSentenceChange={analysis.handleSentenceChange}
           onSourceTextChange={setWorkspaceSourceText}
+          rangeSize={DEFAULT_CHAPTER_RANGE_SIZE}
           progressPercent={progressPercent}
           progressTotal={progressTotal}
           queuedCount={queuedCount}
-          readingDisabled={workspaceSentences.length === 0}
+          readingDisabled={
+            effectiveWorkspaceSource === 'chapter'
+              ? readingVisibleSentences.length === 0 ||
+                !selectedChapterRange ||
+                !activeReadingRange ||
+                !areRangesEqual(selectedChapterRange, activeReadingRange)
+              : workspaceSentences.length === 0
+          }
           runningCount={runningCount}
-          sentences={workspaceSentences}
+          selectedRange={selectedChapterRange}
+          sentences={workspaceVisibleSentences}
+          sentenceStartIndex={selectedChapterRange?.start ?? 0}
           sourceText={workspaceSourceText}
           successCount={successCount}
+          totalSentenceCount={workspaceSentences.length}
           workspaceSource={effectiveWorkspaceSource}
         />
       ) : (
         <ReadingPage
+          activeRange={activeReadingRange}
           adjacentChapterIds={effectiveWorkspaceSource === 'chapter' ? library.adjacentChapterIds : undefined}
           contextTitle={currentContextTitle}
-          errorCount={errorCount}
+          errorCount={readingErrorCount}
           globalError={analysis.globalError}
           notice={analysis.notice}
           onBackToLibrary={() => setActivePage('library')}
           onBackToWorkspace={() => setActivePage('workspace')}
           onOpenAdjacentChapter={handleOpenAdjacentChapter}
           results={workspaceResults}
-          sentences={workspaceSentences}
-          successCount={successCount}
+          sentenceIndices={readingSentenceIndices}
+          sentenceStartIndex={activeReadingRange?.start ?? 0}
+          sentences={readingVisibleSentences}
+          successCount={readingSuccessCount}
           workspaceSource={effectiveWorkspaceSource}
         />
       )}

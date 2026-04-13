@@ -1,5 +1,5 @@
 import { formatTime, statusLabelMap } from '../lib/appState'
-import type { ApiConfig, RunSession, SentenceItem, WorkspaceSource } from '../types'
+import type { ApiConfig, RunSession, SentenceItem, SentenceRange, WorkspaceSource } from '../types'
 
 type WorkspacePageProps = {
   apiConfig: ApiConfig
@@ -20,18 +20,24 @@ type WorkspacePageProps = {
   onOpenSettingsAi: () => void
   onRestoreSession: (session: RunSession) => void
   onRetrySentence: (sentenceId: string) => void
+  onSelectNextRange: () => void
   onRunAnalysis: () => void
   onSegment: () => void
   onSentenceChange: (id: string, value: string) => void
   onSourceTextChange: (value: string) => void
+  onUpdateRange: (range: SentenceRange) => void
+  rangeSize: number
   progressPercent: number
   progressTotal: number
   queuedCount: number
   readingDisabled: boolean
   runningCount: number
+  selectedRange: SentenceRange | null
   sentences: SentenceItem[]
+  sentenceStartIndex: number
   sourceText: string
   successCount: number
+  totalSentenceCount: number
   workspaceSource: WorkspaceSource
 }
 
@@ -51,21 +57,28 @@ function WorkspacePage({
   onOpenSettingsAi,
   onRestoreSession,
   onRetrySentence,
+  onSelectNextRange,
   onRunAnalysis,
   onSegment,
   onSentenceChange,
   onSourceTextChange,
+  onUpdateRange,
+  rangeSize,
   progressPercent,
   progressTotal,
   queuedCount,
   readingDisabled,
   runningCount,
+  selectedRange,
   sentences,
+  sentenceStartIndex,
   sourceText,
   successCount,
+  totalSentenceCount,
   workspaceSource,
 }: WorkspacePageProps) {
   const isChapterMode = workspaceSource === 'chapter'
+  const currentSentenceCount = isChapterMode ? totalSentenceCount : sentences.length
 
   return (
     <>
@@ -103,7 +116,7 @@ function WorkspacePage({
         <div className="hero-metrics">
           <div className="metric-card">
             <span className="metric-label">当前句数</span>
-            <strong>{sentences.length}</strong>
+            <strong>{currentSentenceCount}</strong>
           </div>
           <div className="metric-card">
             <span className="metric-label">成功</span>
@@ -144,7 +157,8 @@ function WorkspacePage({
           </label>
 
           <div className="status-strip">
-            <span>{sentences.length} 句</span>
+            <span>{currentSentenceCount} 句</span>
+            {isChapterMode && selectedRange ? <span>当前区间 {selectedRange.start}-{selectedRange.end}</span> : null}
             <span>{runningCount} 句解析中</span>
             <span>{errorCount} 句待重试</span>
           </div>
@@ -161,17 +175,67 @@ function WorkspacePage({
             </div>
             <p className="panel-meta">
               {isChapterMode
-                ? '章节模式会默认跳过已经成功的句子，只补齐未完成的批注。'
+                ? '章节模式会只解析当前选中区间里尚未完成的句子，沉浸阅读也只展示这一段。'
                 : '手动草稿模式会重新跑整段文本，并在本地历史里保存最近结果。'}
             </p>
           </div>
 
+          {isChapterMode ? (
+            <div className="range-card">
+              <div className="range-card-header">
+                <span>本章共 {totalSentenceCount} 句</span>
+                <span>{selectedRange ? `当前区间 ${selectedRange.start}-${selectedRange.end}` : '先选择一个区间'}</span>
+              </div>
+
+              <div className="range-grid">
+                <label className="field">
+                  <span>起始句（从 0 开始）</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={Math.max(0, totalSentenceCount - 1)}
+                    value={selectedRange?.start ?? 0}
+                    onChange={(event) =>
+                      onUpdateRange({
+                        start: Number(event.target.value),
+                        end: selectedRange?.end ?? Math.max(0, totalSentenceCount - 1),
+                      })
+                    }
+                  />
+                </label>
+
+                <label className="field">
+                  <span>结束句（从 0 开始）</span>
+                  <input
+                    type="number"
+                    min={selectedRange?.start ?? 0}
+                    max={Math.max(0, totalSentenceCount - 1)}
+                    value={selectedRange?.end ?? Math.max(0, totalSentenceCount - 1)}
+                    onChange={(event) =>
+                      onUpdateRange({
+                        start: selectedRange?.start ?? 0,
+                        end: Number(event.target.value),
+                      })
+                    }
+                  />
+                </label>
+              </div>
+
+              <div className="range-card-actions">
+                <button className="secondary-button" type="button" onClick={onSelectNextRange}>
+                  下一段 {rangeSize} 句
+                </button>
+                <span>选择新段时，默认视为前一段已经读完。</span>
+              </div>
+            </div>
+          ) : null}
+
           <div className="analysis-actions">
             <button className="primary-button" type="button" onClick={onRunAnalysis} disabled={isRunning}>
-              {isRunning ? '解析中...' : '开始整章解析'}
+              {isRunning ? '解析中...' : isChapterMode ? '开始当前区间解析' : '开始整章解析'}
             </button>
             <button className="ghost-button" type="button" disabled={readingDisabled} onClick={onOpenReading}>
-              打开沉浸阅读页
+              {isChapterMode ? '打开当前区间阅读' : '打开沉浸阅读页'}
             </button>
           </div>
 
@@ -180,7 +244,7 @@ function WorkspacePage({
               <div className="analysis-progress-header">
                 <div>
                   <p className="analysis-progress-label">
-                    {isRunning ? '整章解析进度' : '当前章节解析状态'}
+                    {isChapterMode ? (isRunning ? '当前区间解析进度' : '当前区间解析状态') : isRunning ? '整章解析进度' : '当前章节解析状态'}
                   </p>
                   <strong>
                     {finishedCount}/{progressTotal || 0} 句
@@ -215,19 +279,27 @@ function WorkspacePage({
               <p className="section-kicker">Step 3</p>
               <h2>逐句校对</h2>
             </div>
-            <p className="panel-meta">你可以直接改每一句，AI 会以编辑后的内容为准。</p>
+            <p className="panel-meta">
+              {isChapterMode ? '这里只显示当前选中区间的句子，索引从 0 开始。' : '你可以直接改每一句，AI 会以编辑后的内容为准。'}
+            </p>
           </div>
 
           <div className="sentence-list">
             {sentences.length === 0 ? (
               <div className="empty-state">
-                <p>{isChapterMode ? '这个章节目前还没有可解析的句子。' : '先粘贴一段西语并点击“重新分句”，这里就会出现可编辑句子。'}</p>
+                <p>
+                  {isChapterMode
+                    ? selectedRange
+                      ? '当前区间还没有可编辑的句子。'
+                      : '先在 Step 2 选择一个句子区间，这里会显示对应内容。'
+                    : '先粘贴一段西语并点击“重新分句”，这里就会出现可编辑句子。'}
+                </p>
               </div>
             ) : (
               sentences.map((sentence, index) => (
                 <article className="sentence-card" key={sentence.id}>
                   <div className="sentence-card-header">
-                    <span className="sentence-index">#{index + 1}</span>
+                    <span className="sentence-index">#{isChapterMode ? sentenceStartIndex + index : index + 1}</span>
                     <span className={`status-badge status-${sentence.status}`}>
                       {statusLabelMap[sentence.status]}
                     </span>

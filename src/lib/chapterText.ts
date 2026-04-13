@@ -8,6 +8,7 @@ import type {
   SentenceItem,
 } from '../types'
 import { createSentenceItem } from './appState'
+import { normalizeSentenceRange } from './chapterRange'
 import { segmentSpanishText } from './segment'
 
 const PARAGRAPH_SEPARATOR = '\n\n'
@@ -89,6 +90,11 @@ export function normalizeChapterRecord(
 
   return {
     ...nextChapter,
+    activeRange: normalizeSentenceRange(nextChapter.activeRange, nextChapter.sentences.length),
+    lastReadEnd:
+      nextChapter.sentences.length === 0
+        ? -1
+        : Math.max(-1, Math.min(nextChapter.lastReadEnd ?? -1, nextChapter.sentences.length - 1)),
     analysisState: deriveChapterAnalysisState(nextChapter.sentences, nextChapter.results),
   }
 }

@@ -1,7 +1,8 @@
 import { statusLabelMap } from '../lib/appState'
-import type { AnalysisResult, SentenceItem, WorkspaceSource } from '../types'
+import type { AnalysisResult, SentenceItem, SentenceRange, WorkspaceSource } from '../types'
 
 type ReadingPageProps = {
+  activeRange?: SentenceRange | null
   adjacentChapterIds?: {
     previousId: string | null
     nextId: string | null
@@ -17,12 +18,15 @@ type ReadingPageProps = {
   onBackToWorkspace: () => void
   onOpenAdjacentChapter: (chapterId: string | null) => void
   results: Record<string, AnalysisResult>
+  sentenceIndices?: number[]
+  sentenceStartIndex: number
   sentences: SentenceItem[]
   successCount: number
   workspaceSource: WorkspaceSource
 }
 
 function ReadingPage({
+  activeRange,
   adjacentChapterIds,
   contextTitle,
   errorCount,
@@ -32,6 +36,8 @@ function ReadingPage({
   onBackToWorkspace,
   onOpenAdjacentChapter,
   results,
+  sentenceIndices,
+  sentenceStartIndex,
   sentences,
   successCount,
   workspaceSource,
@@ -58,14 +64,19 @@ function ReadingPage({
         </div>
 
         <p className="reading-intro">
-          这里会把整章解释集中排版到一条居中的阅读流里，方便你像读批注版小说一样顺着往下读。
+          {isChapterMode
+            ? activeRange
+              ? `这里会只展示当前阅读段 ${activeRange.start}-${activeRange.end} 中已经解析完成的句子，方便你按段推进。`
+              : '先在工作区完成一个句子区间的解析，这里才会出现对应的沉浸阅读内容。'
+            : '这里会把整章解释集中排版到一条居中的阅读流里，方便你像读批注版小说一样顺着往下读。'}
         </p>
 
         {notice ? <p className="notice success">{notice}</p> : null}
         {globalError ? <p className="notice error">{globalError}</p> : null}
 
         <div className="reading-summary">
-          <span>总句数 {sentences.length}</span>
+          {isChapterMode && activeRange ? <span>当前区间 {activeRange.start}-{activeRange.end}</span> : null}
+          <span>已展示 {sentences.length}</span>
           <span>已完成 {successCount}</span>
           <span>失败 {errorCount}</span>
         </div>
@@ -103,7 +114,9 @@ function ReadingPage({
               return (
                 <article className="result-card reading-result-card" key={sentence.id}>
                   <div className="result-card-header">
-                    <span className="sentence-index">#{index + 1}</span>
+                    <span className="sentence-index">
+                      #{isChapterMode ? sentenceIndices?.[index] ?? sentenceStartIndex + index : index + 1}
+                    </span>
                     <span className={`status-badge status-${sentence.status}`}>
                       {statusLabelMap[sentence.status]}
                     </span>

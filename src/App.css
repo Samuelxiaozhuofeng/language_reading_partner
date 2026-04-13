@@ -148,6 +148,30 @@
   background: rgba(255, 255, 255, 0.56);
 }
 
+.metric-card-action {
+  border: none;
+  text-align: left;
+}
+
+.metric-card-action p {
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+
+.metric-card-action.is-clickable {
+  cursor: pointer;
+}
+
+.metric-card-action.is-clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(69, 72, 82, 0.12);
+}
+
+.metric-card-action:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
 .metric-label {
   display: block;
   font-size: 0.7rem;
@@ -295,6 +319,47 @@ textarea:focus {
   border-radius: 24px;
   border: 1px solid rgba(69, 72, 82, 0.12);
   background: rgba(255, 255, 255, 0.64);
+}
+
+.range-card {
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(69, 72, 82, 0.12);
+  background: rgba(255, 255, 255, 0.64);
+}
+
+.range-card-header,
+.range-card-actions,
+.range-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.range-card-header,
+.range-card-actions {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.range-card-header {
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.range-grid {
+  margin-bottom: 14px;
+}
+
+.range-grid .field {
+  flex: 1 1 220px;
+}
+
+.range-card-actions {
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .analysis-progress-header,
@@ -854,6 +919,8 @@ blockquote {
   .chapter-card-actions,
   .prompt-toolbar,
   .sentence-actions,
+  .range-card-header,
+  .range-card-actions,
   .analysis-progress-header,
   .analysis-progress-meta {
     flex-direction: column;

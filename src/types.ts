@@ -3,6 +3,10 @@ export type AppPage = 'library' | 'workspace' | 'reading'
 export type SettingsTab = 'ai' | 'prompt'
 export type WorkspaceSource = 'draft' | 'chapter'
 export type ChapterAnalysisState = 'idle' | 'partial' | 'running' | 'analyzed'
+export type SentenceRange = {
+  start: number
+  end: number
+}
 
 export type ApiConfig = {
   baseUrl: string
@@ -67,6 +71,8 @@ export type BookChapterRecord = {
   sentences: SentenceItem[]
   results: Record<string, AnalysisResult>
   analysisState: ChapterAnalysisState
+  activeRange: SentenceRange | null
+  lastReadEnd: number
   lastOpenedAt?: string
 }
 

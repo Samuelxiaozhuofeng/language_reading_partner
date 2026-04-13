@@ -8,6 +8,7 @@ import {
   MAX_HISTORY_ITEMS,
   updateSentenceState,
 } from '../lib/appState'
+import { getSentencesInRange } from '../lib/chapterRange'
 import { analyzeSentence, runConcurrentAnalysis, toUserFacingError } from '../lib/openai'
 import { segmentSpanishText } from '../lib/segment'
 import type {
@@ -16,12 +17,16 @@ import type {
   PromptConfig,
   RunSession,
   SentenceItem,
+  SentenceRange,
   WorkspaceSource,
 } from '../types'
 
 type UseAnalysisRunnerArgs = {
   apiConfig: ApiConfig
+  chapterRange?: SentenceRange | null
   initialNotice: string
+  onChapterRangeCommitted?: (range: SentenceRange) => void | Promise<unknown>
+  onChapterSegmentReset?: (sentenceCount: number) => void
   promptConfig: PromptConfig
   results: Record<string, AnalysisResult>
   sentences: SentenceItem[]
@@ -35,7 +40,10 @@ type UseAnalysisRunnerArgs = {
 
 export function useAnalysisRunner({
   apiConfig,
+  chapterRange,
   initialNotice,
+  onChapterRangeCommitted,
+  onChapterSegmentReset,
   promptConfig,
   results,
   sentences,
@@ -55,6 +63,11 @@ export function useAnalysisRunner({
     setNotice(initialNotice)
   }, [initialNotice])
 
+  const trimmedSentences = sentences.map((sentence) => ({
+    ...sentence,
+    editedText: sentence.editedText.trim(),
+  }))
+
   const validateBeforeRun = () => {
     if (!apiConfig.baseUrl.trim() || !apiConfig.apiKey.trim() || !apiConfig.model.trim()) {
       setNotice('')
@@ -62,7 +75,24 @@ export function useAnalysisRunner({
       return false
     }
 
-    const usableSentences = cleanSentences(sentences)
+    if (workspaceSource === 'chapter') {
+      const rangedSentences = getSentencesInRange(trimmedSentences, chapterRange)
+      if (!chapterRange || rangedSentences.length === 0) {
+        setNotice('')
+        setGlobalError('请先选择一个有效的句子区间。')
+        return false
+      }
+
+      if (rangedSentences.every((sentence) => !sentence.editedText.length)) {
+        setNotice('')
+        setGlobalError('当前区间内没有可解析的句子，请调整范围或补全文本后再试。')
+        return false
+      }
+
+      return true
+    }
+
+    const usableSentences = cleanSentences(trimmedSentences)
     if (usableSentences.length === 0) {
       setNotice('')
       setGlobalError('请先分句，或确保至少保留一句非空内容。')
@@ -99,6 +129,9 @@ export function useAnalysisRunner({
     const nextSentences = pieces.map(createSentenceItem)
     setSentences(nextSentences)
     setResults({})
+    if (workspaceSource === 'chapter') {
+      onChapterSegmentReset?.(nextSentences.length)
+    }
     setGlobalError('')
     setNotice(
       workspaceSource === 'chapter'
@@ -133,29 +166,82 @@ export function useAnalysisRunner({
       return
     }
 
-    const sanitized = cleanSentences(sentences)
-    const pendingSentences =
+    const sanitized =
+      workspaceSource === 'chapter' ? trimmedSentences : cleanSentences(trimmedSentences)
+    const selectedSentences =
+      workspaceSource === 'chapter' ? getSentencesInRange(sanitized, chapterRange) : sanitized
+    const selectedRangeStart = workspaceSource === 'chapter' ? chapterRange?.start ?? 0 : 0
+    const pendingEntries =
       workspaceSource === 'chapter'
-        ? sanitized.filter((sentence) => !results[sentence.id])
-        : sanitized
-
-    if (workspaceSource === 'chapter' && pendingSentences.length === 0) {
-      setGlobalError('')
-      setNotice('这一章已经全部解析完成，可以直接进入阅读。')
-      return 'reading' as const
-    }
-
-    const pendingIds = new Set(pendingSentences.map((sentence) => sentence.id))
+        ? selectedSentences
+            .map((sentence, index) => ({
+              absoluteIndex: selectedRangeStart + index,
+              sentence,
+            }))
+            .filter(({ sentence }) => sentence.editedText.length > 0 && !results[sentence.id])
+        : sanitized.map((sentence, index) => ({
+            absoluteIndex: index,
+            sentence,
+          }))
+    const pendingIds = new Set(pendingEntries.map(({ sentence }) => sentence.id))
     const nextResults: Record<string, AnalysisResult> =
       workspaceSource === 'chapter' ? { ...results } : {}
+
+    if (workspaceSource === 'chapter' && pendingEntries.length === 0) {
+      setGlobalError('')
+      if (chapterRange) {
+        await onChapterRangeCommitted?.(chapterRange)
+        setNotice(`区间 ${chapterRange.start}-${chapterRange.end} 已经解析完成，可以直接进入阅读。`)
+      } else {
+        setNotice('这一章已经全部解析完成，可以直接进入阅读。')
+      }
+      return 'reading' as const
+    }
 
     runTokenRef.current += 1
     const runToken = runTokenRef.current
     setIsRunning(true)
     setGlobalError('')
-    setNotice(`正在并发解析 ${pendingSentences.length} 句，结果会按原顺序回填。`)
+    setNotice(
+      workspaceSource === 'chapter' && chapterRange
+        ? `正在解析区间 ${chapterRange.start}-${chapterRange.end}，共 ${pendingEntries.length} 句。`
+        : `正在并发解析 ${pendingEntries.length} 句，结果会按原顺序回填。`,
+    )
     setSentences(
-      sanitized.map((sentence) => {
+      sanitized.map((sentence, index) => {
+        if (workspaceSource === 'chapter') {
+          const isInRange =
+            chapterRange &&
+            index >= chapterRange.start &&
+            index <= chapterRange.end
+
+          if (!isInRange) {
+            return sentence
+          }
+
+          if (!sentence.editedText.length) {
+            return {
+              ...sentence,
+              status: 'idle',
+              error: undefined,
+            }
+          }
+
+          if (!pendingIds.has(sentence.id)) {
+            return {
+              ...sentence,
+              status: nextResults[sentence.id] ? 'success' : sentence.status,
+              error: undefined,
+            }
+          }
+
+          return {
+            ...sentence,
+            status: 'queued',
+            error: undefined,
+          }
+        }
+
         if (!pendingIds.has(sentence.id)) {
           return {
             ...sentence,
@@ -179,11 +265,11 @@ export function useAnalysisRunner({
       await runConcurrentAnalysis(
         apiConfig,
         promptConfig,
-        pendingSentences.map((sentence, index) => ({
+        pendingEntries.map(({ absoluteIndex, sentence }) => ({
           sentenceId: sentence.id,
           sentence: sentence.editedText,
-          previousSentence: pendingSentences[index - 1]?.editedText,
-          nextSentence: pendingSentences[index + 1]?.editedText,
+          previousSentence: sanitized[absoluteIndex - 1]?.editedText,
+          nextSentence: sanitized[absoluteIndex + 1]?.editedText,
         })),
         {
           onStart: ({ sentenceId }) => {
@@ -238,7 +324,26 @@ export function useAnalysisRunner({
       }
 
       setSentences((current) =>
-        current.map((sentence) => {
+        current.map((sentence, index) => {
+          if (workspaceSource === 'chapter') {
+            const isInRange =
+              chapterRange &&
+              index >= chapterRange.start &&
+              index <= chapterRange.end
+
+            if (!isInRange) {
+              return sentence
+            }
+
+            if (!sentence.editedText.trim().length) {
+              return {
+                ...sentence,
+                status: 'idle',
+                error: undefined,
+              }
+            }
+          }
+
           if (!pendingIds.has(sentence.id)) {
             return {
               ...sentence,
@@ -265,7 +370,15 @@ export function useAnalysisRunner({
         }),
       )
 
-      setNotice('本轮解析已完成，已自动切换到沉浸阅读页。')
+      if (workspaceSource === 'chapter' && chapterRange) {
+        await onChapterRangeCommitted?.(chapterRange)
+      }
+
+      setNotice(
+        workspaceSource === 'chapter' && chapterRange
+          ? `区间 ${chapterRange.start}-${chapterRange.end} 解析完成，已切换到沉浸阅读页。`
+          : '本轮解析已完成，已自动切换到沉浸阅读页。',
+      )
       if (workspaceSource === 'draft') {
         saveRunToHistory(sourceText, sanitized, nextResults)
       }

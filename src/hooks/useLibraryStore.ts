@@ -61,11 +61,12 @@ export function useLibraryStore() {
   }, [chapters, currentChapter])
 
   const hydrateBook = useCallback(async (bookId: string, preferredChapterId?: string | null) => {
-    const [nextBook, nextChapters] = await Promise.all([getBook(bookId), getChaptersByBook(bookId)])
+    const [nextBook, nextChaptersRaw] = await Promise.all([getBook(bookId), getChaptersByBook(bookId)])
     if (!nextBook) {
       return
     }
 
+    const nextChapters = nextChaptersRaw.map((chapter) => normalizeChapterRecord(chapter))
     setBooks((current) => updateBookInList(current, nextBook))
     setChapters(nextChapters)
     setSelection({
@@ -175,12 +176,13 @@ export function useLibraryStore() {
 
   const openChapter = useCallback(
     async (chapterId: string) => {
-      const chapter = await getChapter(chapterId)
-      if (!chapter) {
+      const chapterRecord = await getChapter(chapterId)
+      if (!chapterRecord) {
         setLibraryError('章节不存在，可能已经被删除。')
         return null
       }
 
+      const chapter = normalizeChapterRecord(chapterRecord)
       setSelection({ bookId: chapter.bookId, chapterId })
       setCurrentChapter(chapter)
       await hydrateBook(chapter.bookId, chapterId)
@@ -198,16 +200,20 @@ export function useLibraryStore() {
 
     try {
       const payload = await importEpubBook(file)
-      await saveImportedBook(payload.book, payload.chapters)
+      const normalizedChapters = payload.chapters.map((chapter) => normalizeChapterRecord(chapter))
+      await saveImportedBook(payload.book, normalizedChapters)
       setBooks((current) => updateBookInList(current, payload.book))
-      setChapters(payload.chapters)
+      setChapters(normalizedChapters)
       setSelection({
         bookId: payload.book.id,
-        chapterId: payload.chapters[0]?.id ?? null,
+        chapterId: normalizedChapters[0]?.id ?? null,
       })
-      setCurrentChapter(payload.chapters[0] ?? null)
+      setCurrentChapter(normalizedChapters[0] ?? null)
       setLibraryNotice(`已导入《${payload.book.title}》，共 ${payload.book.chapterCount} 章。`)
-      return payload
+      return {
+        ...payload,
+        chapters: normalizedChapters,
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'EPUB 导入失败。'
       setLibraryError(message)

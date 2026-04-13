@@ -17,7 +17,15 @@ import {
 
 type ImportedChapterDraft = Pick<
   BookChapterRecord,
-  'title' | 'order' | 'originalText' | 'sourceText' | 'paragraphBlocks' | 'sentences' | 'results'
+  | 'title'
+  | 'order'
+  | 'originalText'
+  | 'sourceText'
+  | 'paragraphBlocks'
+  | 'sentences'
+  | 'results'
+  | 'activeRange'
+  | 'lastReadEnd'
 >
 
 type ImportedBookPayload = {
@@ -86,6 +94,8 @@ async function sectionToDraft(
     paragraphBlocks,
     sentences,
     results: {},
+    activeRange: null,
+    lastReadEnd: -1,
   } satisfies ImportedChapterDraft
 }
 

@@ -12,8 +12,10 @@ type LibraryPageProps = {
   onImportFile: (file: File) => void | Promise<void>
   onOpenChapterReading: (chapterId: string) => void
   onOpenChapterWorkspace: (chapterId: string) => void
+  onOpenRecentChapter: () => void
   onOpenManualWorkspace: () => void
   onOpenSettings: () => void
+  recentChapterTitle?: string
   onSelectBook: (bookId: string) => void
   selectedBook: BookRecord | null
   selectedChapterId: string | null
@@ -30,12 +32,16 @@ function LibraryPage({
   onImportFile,
   onOpenChapterReading,
   onOpenChapterWorkspace,
+  onOpenRecentChapter,
   onOpenManualWorkspace,
   onOpenSettings,
+  recentChapterTitle,
   onSelectBook,
   selectedBook,
   selectedChapterId,
 }: LibraryPageProps) {
+  const hasRecentChapter = Boolean(selectedBook?.lastReadChapterId && recentChapterTitle)
+
   return (
     <>
       <header className="hero-panel library-hero">
@@ -93,10 +99,16 @@ function LibraryPage({
             <strong>{selectedBook ? selectedBook.chapterCount : 0}</strong>
             <p>{selectedBook ? '章节' : '等待导入'}</p>
           </div>
-          <div className="metric-card">
+          <button
+            className={`metric-card metric-card-action ${hasRecentChapter ? 'is-clickable' : ''}`}
+            type="button"
+            onClick={onOpenRecentChapter}
+            disabled={!hasRecentChapter}
+          >
             <span className="metric-label">最近阅读</span>
             <strong>{selectedBook?.lastOpenedAt ? formatTime(selectedBook.lastOpenedAt) : '--'}</strong>
-          </div>
+            <p>{recentChapterTitle ?? '还没有最近阅读章节'}</p>
+          </button>
         </div>
       </header>
 
