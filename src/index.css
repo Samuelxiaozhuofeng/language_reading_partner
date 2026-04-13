@@ -1,0 +1,95 @@
+:root {
+  --paper: #f7f1e5;
+  --paper-deep: #ebdcc8;
+  --ink: #3d3a38;
+  --ink-strong: #1f1d1c;
+  --muted: #72685f;
+  --line: rgba(61, 58, 56, 0.16);
+  --accent-strong: #0e7d78;
+  --accent-deep: #1f5c7a;
+  --panel-shadow: 0 22px 48px rgba(94, 76, 58, 0.12);
+
+  --serif:
+    'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', 'URW Palladio L', serif;
+  --sans: 'Avenir Next', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  --display: 'IBM Plex Sans', 'Avenir Next', 'Segoe UI', sans-serif;
+
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(14, 125, 120, 0.14), transparent 28%),
+    radial-gradient(circle at top right, rgba(164, 69, 35, 0.14), transparent 22%),
+    linear-gradient(180deg, #f9f6ef 0%, #f2e9db 100%);
+  font-family: var(--sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.48), transparent 78%);
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--ink-strong);
+  font-family: var(--serif);
+  line-height: 1.12;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2.35rem, 5vw, 4.9rem);
+  letter-spacing: -0.04em;
+}
+
+h2 {
+  font-size: clamp(1.35rem, 2vw, 1.85rem);
+}
+
+h3 {
+  font-size: 1rem;
+}
+
+p {
+  font-size: 1rem;
+}
+
+#root {
+  min-height: 100vh;
+}
