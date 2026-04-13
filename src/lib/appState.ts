@@ -15,6 +15,7 @@ export const PROMPT_STORAGE_KEY = 'spanish-reading-assistant/prompt'
 export const DRAFT_STORAGE_KEY = 'spanish-reading-assistant/draft'
 export const HISTORY_STORAGE_KEY = 'spanish-reading-assistant/history'
 export const MAX_HISTORY_ITEMS = 6
+export const MAX_CONCURRENCY = 99
 
 export const defaultConfig: ApiConfig = {
   baseUrl: 'https://api.openai.com/v1',
@@ -129,7 +130,7 @@ export function clampConcurrency(value: unknown): number {
     return defaultConfig.concurrency
   }
 
-  return Math.min(8, Math.max(1, Math.round(numeric)))
+  return Math.min(MAX_CONCURRENCY, Math.max(1, Math.round(numeric)))
 }
 
 export function restoreConfig(): ApiConfig {

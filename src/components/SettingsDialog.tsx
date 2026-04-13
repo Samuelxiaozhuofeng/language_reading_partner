@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   type ConfigChangeHandler,
+  MAX_CONCURRENCY,
   type ModelFetchStatus,
   type PromptChangeHandler,
   type SettingsTab,
@@ -206,12 +207,17 @@ function SettingsDialog({
                 <input
                   type="number"
                   min={1}
-                  max={8}
+                  max={MAX_CONCURRENCY}
                   value={apiConfig.concurrency}
                   onChange={(event) => onConfigChange('concurrency', Number(event.target.value))}
                 />
               </label>
             </div>
+
+            <p className="panel-tip">
+              可设置范围为 1-{MAX_CONCURRENCY}。这里控制的是同时发出的请求数，不是模型官方承诺的可用并发上限。
+              值越大越快，但更容易触发服务商或中转站的 RPM/TPM 限流；一般建议先从 4-8 开始，稳定后再逐步加大。
+            </p>
 
             <div className={`fetch-status fetch-${modelFetchStatus}`}>
               <p>{modelFetchMessage}</p>
