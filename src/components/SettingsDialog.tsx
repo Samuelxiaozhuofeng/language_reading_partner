@@ -251,27 +251,18 @@ function SettingsDialog({
             </div>
 
             <label className="field field-block">
-              <span>System Prompt</span>
-              <textarea
-                className="settings-textarea"
-                value={promptConfig.systemPrompt}
-                onChange={(event) => onPromptChange('systemPrompt', event.target.value)}
-                placeholder="定义模型的角色与输出约束..."
-              />
-            </label>
-
-            <label className="field field-block">
-              <span>User Prompt Template</span>
+              <span>统一 Prompt 模板</span>
               <textarea
                 className="settings-textarea settings-textarea-large"
-                value={promptConfig.userPromptTemplate}
-                onChange={(event) => onPromptChange('userPromptTemplate', event.target.value)}
-                placeholder="使用占位符拼接每一句的上下文..."
+                value={promptConfig.template}
+                onChange={(event) => onPromptChange(event.target.value)}
+                placeholder="直接填写会完整发送给模型的唯一 Prompt 模板..."
               />
             </label>
 
             <p className="panel-tip">
-              可以通过修改 Prompt 来优化解释风格、细节密度或输出约束。模板会在每句请求前自动替换占位符。
+              这里只有一个 Prompt 输入框。你在这里写的全部内容会原样作为单条用户消息发送给模型，请保留
+              `{'{sentence}'}`、`{'{previousSentence}'}`、`{'{nextSentence}'}` 这些占位符。
             </p>
           </div>
         )}

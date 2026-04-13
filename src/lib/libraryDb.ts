@@ -1,8 +1,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { BookChapterRecord, BookRecord } from '../types'
+import type { BookChapterRecord, BookRecord, SavedKnowledgeResource } from '../types'
 
 const DB_NAME = 'spanish-reading-assistant/library'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 interface LibraryDbSchema extends DBSchema {
   books: {
@@ -15,6 +15,16 @@ interface LibraryDbSchema extends DBSchema {
     indexes: {
       'by-book': string
       'by-book-order': [string, number]
+    }
+  }
+  resources: {
+    key: string
+    value: SavedKnowledgeResource
+    indexes: {
+      'by-saved-at': string
+      'by-kind': string
+      'by-book': string
+      'by-signature': string
     }
   }
 }
@@ -33,6 +43,14 @@ function getDb() {
           const chapterStore = database.createObjectStore('chapters', { keyPath: 'id' })
           chapterStore.createIndex('by-book', 'bookId')
           chapterStore.createIndex('by-book-order', ['bookId', 'order'])
+        }
+
+        if (!database.objectStoreNames.contains('resources')) {
+          const resourceStore = database.createObjectStore('resources', { keyPath: 'id' })
+          resourceStore.createIndex('by-saved-at', 'savedAt')
+          resourceStore.createIndex('by-kind', 'kind')
+          resourceStore.createIndex('by-book', 'bookId')
+          resourceStore.createIndex('by-signature', 'signature', { unique: true })
         }
       },
     })
@@ -89,13 +107,39 @@ export async function saveChapter(chapter: BookChapterRecord) {
   await db.put('chapters', chapter)
 }
 
+export async function getSavedResources() {
+  const db = await getDb()
+  const resources = await db.getAll('resources')
+  return resources.sort((left, right) => right.savedAt.localeCompare(left.savedAt))
+}
+
+export async function getSavedResourceBySignature(signature: string) {
+  const db = await getDb()
+  return db.getFromIndex('resources', 'by-signature', signature)
+}
+
+export async function saveKnowledgeResource(resource: SavedKnowledgeResource) {
+  const db = await getDb()
+  await db.put('resources', resource)
+}
+
+export async function deleteKnowledgeResource(resourceId: string) {
+  const db = await getDb()
+  await db.delete('resources', resourceId)
+}
+
 export async function deleteBookCascade(bookId: string) {
   const db = await getDb()
-  const tx = db.transaction(['books', 'chapters'], 'readwrite')
+  const tx = db.transaction(['books', 'chapters', 'resources'], 'readwrite')
   const chapters = await tx.objectStore('chapters').index('by-book').getAll(bookId)
+  const resources = await tx.objectStore('resources').index('by-book').getAll(bookId)
 
   for (const chapter of chapters) {
     await tx.objectStore('chapters').delete(chapter.id)
+  }
+
+  for (const resource of resources) {
+    await tx.objectStore('resources').delete(resource.id)
   }
 
   await tx.objectStore('books').delete(bookId)
@@ -104,9 +148,9 @@ export async function deleteBookCascade(bookId: string) {
 
 export async function clearLibraryDb() {
   const db = await getDb()
-  const tx = db.transaction(['books', 'chapters'], 'readwrite')
+  const tx = db.transaction(['books', 'chapters', 'resources'], 'readwrite')
   await tx.objectStore('books').clear()
   await tx.objectStore('chapters').clear()
+  await tx.objectStore('resources').clear()
   await tx.done
 }
-

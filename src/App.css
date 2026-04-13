@@ -641,9 +641,14 @@ blockquote {
 }
 
 .analysis-stack p,
+.analysis-paragraph,
 .result-placeholder p,
 .empty-state p {
   margin: 0;
+}
+
+.analysis-paragraph {
+  line-height: 1.8;
 }
 
 .result-placeholder {
@@ -678,6 +683,11 @@ blockquote {
   justify-content: center;
 }
 
+.resources-page {
+  display: grid;
+  gap: 24px;
+}
+
 .reading-breadcrumb {
   margin: 8px 0 0;
   color: var(--muted);
@@ -708,6 +718,95 @@ blockquote {
 
 .reading-result-card {
   padding: 22px 24px;
+}
+
+.inline-knowledge-link,
+.knowledge-chip {
+  border: none;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.inline-knowledge-link {
+  display: inline;
+  margin: 0;
+  padding: 0 3px;
+  border-radius: 10px;
+  background: rgba(14, 125, 120, 0.12);
+  color: var(--accent-deep);
+}
+
+.inline-knowledge-link:hover,
+.knowledge-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 14px rgba(69, 72, 82, 0.12);
+}
+
+.inline-knowledge-link.is-active,
+.knowledge-chip.is-active {
+  background: linear-gradient(135deg, #0e7d78 0%, #1f5c7a 100%);
+  color: #fffdf7;
+}
+
+.inline-knowledge-link.is-saved:not(.is-active),
+.knowledge-chip.is-saved:not(.is-active) {
+  background: rgba(31, 92, 122, 0.12);
+  color: var(--accent-deep);
+}
+
+.knowledge-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.knowledge-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--ink);
+}
+
+.knowledge-chip span:last-child {
+  font-size: 0.72rem;
+  opacity: 0.78;
+}
+
+.knowledge-detail-card {
+  margin-top: 14px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(69, 72, 82, 0.12);
+  background: rgba(248, 244, 235, 0.88);
+  display: grid;
+  gap: 12px;
+}
+
+.knowledge-detail-header,
+.knowledge-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.knowledge-detail-header h4 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--ink-strong);
+}
+
+.knowledge-detail-card p {
+  margin: 0;
 }
 
 .reading-empty {
@@ -930,5 +1029,10 @@ blockquote {
   .panel-actions,
   .hero-actions {
     justify-content: flex-start;
+  }
+
+  .knowledge-detail-header,
+  .knowledge-detail-actions {
+    align-items: flex-start;
   }
 }

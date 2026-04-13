@@ -1,4 +1,5 @@
 import type { AnalysisJob, AnalysisResult, ApiConfig, PromptConfig } from '../types'
+import { sanitizeHighlights } from './knowledge'
 
 type ChatCompletionResponse = {
   choices?: Array<{
@@ -102,11 +103,13 @@ function parseStructuredResult(text: string): AnalysisResult {
       grammar?: unknown
       meaning?: unknown
       content?: unknown
+      highlights?: unknown
     }
 
     const grammar = typeof parsed.grammar === 'string' ? parsed.grammar.trim() : ''
     const meaningSource = typeof parsed.meaning === 'string' ? parsed.meaning : parsed.content
     const meaning = typeof meaningSource === 'string' ? meaningSource.trim() : ''
+    const highlights = sanitizeHighlights(parsed.highlights)
 
     if (!grammar && !meaning) {
       throw new Error('empty')
@@ -116,6 +119,7 @@ function parseStructuredResult(text: string): AnalysisResult {
       sentenceId: '',
       grammar,
       meaning,
+      highlights,
       isPartial: !grammar || !meaning,
       rawText: normalized,
     }
@@ -134,6 +138,7 @@ function parseStructuredResult(text: string): AnalysisResult {
       sentenceId: '',
       grammar,
       meaning,
+      highlights: [],
       isPartial: !grammar || !meaning,
       rawText: normalized,
     }
@@ -146,12 +151,8 @@ function buildRequestBody(config: ApiConfig, promptConfig: PromptConfig, job: An
     temperature: 0.2,
     messages: [
       {
-        role: 'system',
-        content: promptConfig.systemPrompt,
-      },
-      {
         role: 'user',
-        content: interpolatePrompt(promptConfig.userPromptTemplate, job),
+        content: interpolatePrompt(promptConfig.template, job),
       },
     ],
   }

@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import './App.css'
 import LibraryPage from './components/LibraryPage'
 import ReadingPage from './components/ReadingPage'
+import ResourcesPage from './components/ResourcesPage'
 import SettingsDialog from './components/SettingsDialog'
 import WorkspacePage from './components/WorkspacePage'
 import { countByStatus } from './lib/appState'
@@ -13,12 +14,14 @@ import {
   getSentencesInRange,
   normalizeSentenceRange,
 } from './lib/chapterRange'
+import { buildKnowledgeSignature } from './lib/knowledge'
 import { useAnalysisRunner } from './hooks/useAnalysisRunner'
 import { useLibraryStore } from './hooks/useLibraryStore'
 import { usePersistentConfig } from './hooks/usePersistentConfig'
 import type {
   AnalysisResult,
   AppPage,
+  KnowledgeKind,
   SettingsTab,
   SentenceItem,
   SentenceRange,
@@ -46,6 +49,7 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>('ai')
   const [chapterRangeOverrides, setChapterRangeOverrides] = useState<Record<string, SentenceRange | null>>({})
+  const [resourceFilter, setResourceFilter] = useState<KnowledgeKind | 'all'>('all')
 
   const persistent = usePersistentConfig()
   const library = useLibraryStore()
@@ -215,6 +219,8 @@ function App() {
     library.selectedBook?.lastReadChapterId
       ? library.chapters.find((chapter) => chapter.id === library.selectedBook?.lastReadChapterId) ?? null
       : null
+  const savedResourceSignatures = new Set(library.savedResources.map((resource) => resource.signature))
+  const canBackToReading = readingVisibleSentences.length > 0
 
   const handleChapterRangeChange = (nextRange: SentenceRange) => {
     if (effectiveWorkspaceSource !== 'chapter' || !activeChapter) {
@@ -323,6 +329,41 @@ function App() {
     setIsSettingsOpen(true)
   }
 
+  const openResources = () => {
+    setActivePage('resources')
+  }
+
+  const handleSaveHighlight = async (
+    sentence: SentenceItem,
+    result: AnalysisResult,
+    highlight: {
+      text: string
+      kind: KnowledgeKind
+      explanation: string
+    },
+  ) => {
+    await library.upsertKnowledgeResource({
+      id: crypto.randomUUID(),
+      signature: buildKnowledgeSignature(highlight.kind, highlight.text),
+      text: highlight.text,
+      kind: highlight.kind,
+      explanation: highlight.explanation,
+      grammarText: result.grammar,
+      meaning: result.meaning,
+      sentenceId: sentence.id,
+      sentenceText: sentence.editedText || sentence.text,
+      savedAt: new Date().toISOString(),
+      bookId: activeChapter?.bookId,
+      bookTitle: library.selectedBook?.title,
+      chapterId: activeChapter?.id,
+      chapterTitle: activeChapter?.title,
+    })
+  }
+
+  const handleRemoveHighlight = async (signature: string) => {
+    await library.removeKnowledgeResourceBySignature(signature)
+  }
+
   const manualHistory = effectiveWorkspaceSource === 'draft' ? persistent.history : []
   const currentContextTitle =
     effectiveWorkspaceSource === 'chapter'
@@ -347,6 +388,7 @@ function App() {
           onOpenChapterReading={handleOpenChapterReading}
           onOpenChapterWorkspace={handleOpenChapterWorkspace}
           onOpenRecentChapter={() => void handleOpenRecentChapter()}
+          onOpenResources={openResources}
           onOpenManualWorkspace={handleOpenManualWorkspace}
           onOpenSettings={openSettings}
           recentChapterTitle={recentChapter?.title}
@@ -398,7 +440,7 @@ function App() {
           totalSentenceCount={workspaceSentences.length}
           workspaceSource={effectiveWorkspaceSource}
         />
-      ) : (
+      ) : activePage === 'reading' ? (
         <ReadingPage
           activeRange={activeReadingRange}
           adjacentChapterIds={effectiveWorkspaceSource === 'chapter' ? library.adjacentChapterIds : undefined}
@@ -409,12 +451,28 @@ function App() {
           onBackToLibrary={() => setActivePage('library')}
           onBackToWorkspace={() => setActivePage('workspace')}
           onOpenAdjacentChapter={handleOpenAdjacentChapter}
+          onOpenResources={openResources}
+          onRemoveHighlight={(signature) => void handleRemoveHighlight(signature)}
+          onSaveHighlight={(sentence, result, highlight) =>
+            void handleSaveHighlight(sentence, result, highlight)
+          }
           results={workspaceResults}
+          savedHighlightSignatures={savedResourceSignatures}
           sentenceIndices={readingSentenceIndices}
           sentenceStartIndex={activeReadingRange?.start ?? 0}
           sentences={readingVisibleSentences}
           successCount={readingSuccessCount}
           workspaceSource={effectiveWorkspaceSource}
+        />
+      ) : (
+        <ResourcesPage
+          activeKind={resourceFilter}
+          canBackToReading={canBackToReading}
+          onBackToLibrary={() => setActivePage('library')}
+          onBackToReading={canBackToReading ? () => setActivePage('reading') : undefined}
+          onDeleteResource={(resourceId) => void library.removeKnowledgeResourceById(resourceId)}
+          onKindChange={setResourceFilter}
+          resources={library.savedResources}
         />
       )}
 

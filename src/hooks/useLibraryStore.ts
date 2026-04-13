@@ -1,16 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { BookChapterRecord, BookRecord, LibrarySelection } from '../types'
+import type {
+  BookChapterRecord,
+  BookRecord,
+  LibrarySelection,
+  SavedKnowledgeResource,
+} from '../types'
 import { deriveBookAnalysisState, normalizeChapterRecord } from '../lib/chapterText'
 import { importEpubBook } from '../lib/epub'
+import { sortSavedResources } from '../lib/knowledge'
 import {
   clearLibraryDb,
+  deleteKnowledgeResource,
   deleteBookCascade,
   getBook,
   getBooks,
   getChapter,
   getChaptersByBook,
+  getSavedResourceBySignature,
+  getSavedResources,
   saveBook,
   saveChapter,
+  saveKnowledgeResource,
   saveImportedBook,
 } from '../lib/libraryDb'
 
@@ -31,6 +41,7 @@ function updateBookInList(books: BookRecord[], nextBook: BookRecord) {
 export function useLibraryStore() {
   const [books, setBooks] = useState<BookRecord[]>([])
   const [chapters, setChapters] = useState<BookChapterRecord[]>([])
+  const [savedResources, setSavedResources] = useState<SavedKnowledgeResource[]>([])
   const [selection, setSelection] = useState<LibrarySelection>({ bookId: null, chapterId: null })
   const [currentChapter, setCurrentChapter] = useState<BookChapterRecord | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -80,12 +91,13 @@ export function useLibraryStore() {
 
     async function bootstrap() {
       try {
-        const nextBooks = await getBooks()
+        const [nextBooks, nextResources] = await Promise.all([getBooks(), getSavedResources()])
         if (isCancelled) {
           return
         }
 
         setBooks(nextBooks)
+        setSavedResources(sortSavedResources(nextResources))
 
         if (nextBooks[0]) {
           await hydrateBook(nextBooks[0].id, nextBooks[0].lastReadChapterId)
@@ -229,6 +241,7 @@ export function useLibraryStore() {
 
       const nextBooks = books.filter((book) => book.id !== bookId)
       setBooks(nextBooks)
+      setSavedResources((current) => current.filter((resource) => resource.bookId !== bookId))
 
       if (selection.bookId === bookId) {
         setChapters([])
@@ -244,11 +257,56 @@ export function useLibraryStore() {
     [books, hydrateBook, selection.bookId],
   )
 
+  const upsertKnowledgeResource = useCallback(async (resource: SavedKnowledgeResource) => {
+    const existing = await getSavedResourceBySignature(resource.signature)
+    const nextResource = existing
+      ? {
+          ...existing,
+          ...resource,
+          id: existing.id,
+        }
+      : resource
+
+    await saveKnowledgeResource(nextResource)
+    setSavedResources((current) =>
+      sortSavedResources(
+        current.filter(
+          (item) => item.id !== nextResource.id && item.signature !== nextResource.signature,
+        ).concat(nextResource),
+      ),
+    )
+    setLibraryNotice(`已收藏「${nextResource.text}」到学习资源。`)
+    setLibraryError('')
+    return nextResource
+  }, [])
+
+  const removeKnowledgeResourceById = useCallback(async (resourceId: string) => {
+    const target = savedResources.find((resource) => resource.id === resourceId)
+    if (!target) {
+      return
+    }
+
+    await deleteKnowledgeResource(resourceId)
+    setSavedResources((current) => current.filter((resource) => resource.id !== resourceId))
+    setLibraryNotice(`已从学习资源移除「${target.text}」。`)
+    setLibraryError('')
+  }, [savedResources])
+
+  const removeKnowledgeResourceBySignature = useCallback(async (signature: string) => {
+    const target = savedResources.find((resource) => resource.signature === signature)
+    if (!target) {
+      return
+    }
+
+    await removeKnowledgeResourceById(target.id)
+  }, [removeKnowledgeResourceById, savedResources])
+
   const clearLibrary = useCallback(async () => {
     await clearLibraryDb()
     setBooks([])
     setChapters([])
     setCurrentChapter(null)
+    setSavedResources([])
     setSelection({ bookId: null, chapterId: null })
     setLibraryNotice('书架数据已清空。')
     setLibraryError('')
@@ -259,6 +317,7 @@ export function useLibraryStore() {
     chapters,
     clearLibrary,
     currentChapter,
+    savedResources,
     importBook,
     isImporting,
     isLoading,
@@ -269,7 +328,10 @@ export function useLibraryStore() {
     removeBook,
     selectedBook,
     selection,
+    removeKnowledgeResourceById,
+    removeKnowledgeResourceBySignature,
     selectBook,
+    upsertKnowledgeResource,
     setCurrentChapter,
     setLibraryError,
     setLibraryNotice,

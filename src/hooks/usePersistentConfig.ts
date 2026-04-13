@@ -79,11 +79,10 @@ export function usePersistentConfig(): PersistentConfigState {
     }))
   }, [])
 
-  const handlePromptChange: PromptChangeHandler = useCallback((key, value) => {
-    setPromptConfig((current) => ({
-      ...current,
-      [key]: value,
-    }))
+  const handlePromptChange: PromptChangeHandler = useCallback((value) => {
+    setPromptConfig({
+      template: value,
+    })
   }, [])
 
   const resetPromptConfig = useCallback(() => {

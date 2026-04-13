@@ -24,13 +24,37 @@ export const defaultConfig: ApiConfig = {
 }
 
 export const defaultPromptConfig: PromptConfig = {
-  systemPrompt:
-    '你是一名帮助中文母语者阅读西班牙语文学文本的老师。你必须使用中文回答，并始终输出 JSON 对象，字段固定为 grammar 和 meaning。不要输出 Markdown，不要输出额外字段。',
-  userPromptTemplate: [
-    '请严格围绕当前句子进行解释。',
-    'grammar：解释关键语法、时态、搭配、从句结构、语气或修辞，尽量具体但不要冗长。',
-    'meaning：用自然中文说明这句话在上下文中的含义、叙述作用或人物心理。',
-    '如果信息不足，也要尽量根据上下文给出谨慎解释。',
+  template: [
+    '你是一名帮助中文母语者阅读西班牙语文学文本的老师。请严格围绕当前句子进行解释，并且必须只输出一个 JSON 对象，不要输出 Markdown，不要输出额外说明。',
+    '',
+    'JSON 结构固定为：',
+    '{',
+    '  "grammar": "string",',
+    '  "meaning": "string",',
+    '  "highlights": [',
+    '    {',
+    '      "text": "string",',
+    '      "kind": "grammar | phrase | vocabulary",',
+    '      "explanation": "string"',
+    '    }',
+    '  ]',
+    '}',
+    '',
+    '要求：',
+    '1. 必须使用中文回答。',
+    '2. grammar：只解释当前句子里最值得讲的 B1 及以上语法点、固定搭配、习语表达或有学习价值的结构。要简洁，不要长篇大论。',
+    '3. meaning：用自然中文说明这句话在上下文中的含义、叙述作用或人物心理。',
+    '4. highlights：返回 0 到 4 个最值得收藏的知识点。',
+    '5. highlights 里的 text 必须是西语原词、短语或结构片段，例如 "Has pronunciado"、"tan... como..."。',
+    '6. kind 只能是 grammar、phrase、vocabulary 三选一。',
+    '7. explanation 必须是简短中文解释，适合后续复习。',
+    '8. 如果句子没有明显值得收藏的点，highlights 返回空数组 []。',
+    '9. grammar 和 meaning 即使很短也要尽量给出，不要留空。',
+    '',
+    '参考风格：',
+    '- había pensado（过去完成时）表示在见到她之前，这些念头早已存在。',
+    '- en caso de 表示“万一……；如果发生……”。',
+    '- estar condenado a 表示“注定……；被迫一直……”。',
     '',
     '上文：{previousSentence}',
     '当前句：{sentence}',
@@ -56,10 +80,31 @@ export type ConfigChangeHandler = <Key extends keyof ApiConfig>(
   value: ApiConfig[Key],
 ) => void
 
-export type PromptChangeHandler = <Key extends keyof PromptConfig>(
-  key: Key,
-  value: PromptConfig[Key],
-) => void
+export type PromptChangeHandler = (value: string) => void
+
+function convertLegacyPromptConfig(parsed: Partial<PromptConfig> & {
+  systemPrompt?: unknown
+  userPromptTemplate?: unknown
+}) {
+  if (typeof parsed.template === 'string' && parsed.template.trim()) {
+    return {
+      template: parsed.template,
+    } satisfies PromptConfig
+  }
+
+  const systemPrompt =
+    typeof parsed.systemPrompt === 'string' ? parsed.systemPrompt.trim() : ''
+  const userPromptTemplate =
+    typeof parsed.userPromptTemplate === 'string' ? parsed.userPromptTemplate.trim() : ''
+
+  if (!systemPrompt && !userPromptTemplate) {
+    return defaultPromptConfig
+  }
+
+  return {
+    template: [systemPrompt, userPromptTemplate].filter(Boolean).join('\n\n'),
+  } satisfies PromptConfig
+}
 
 export function createSentenceItem(text: string): SentenceItem {
   return {
@@ -112,11 +157,13 @@ export function restorePromptConfig(): PromptConfig {
   }
 
   try {
-    const parsed = JSON.parse(saved) as Partial<PromptConfig>
-    return {
-      ...defaultPromptConfig,
-      ...parsed,
+    const parsed = JSON.parse(saved) as Partial<PromptConfig> & {
+      systemPrompt?: unknown
+      userPromptTemplate?: unknown
     }
+    const migrated = convertLegacyPromptConfig(parsed)
+    localStorage.setItem(PROMPT_STORAGE_KEY, JSON.stringify(migrated))
+    return migrated
   } catch {
     return defaultPromptConfig
   }

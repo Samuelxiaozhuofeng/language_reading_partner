@@ -1,8 +1,9 @@
 export type SentenceStatus = 'idle' | 'queued' | 'running' | 'success' | 'error'
-export type AppPage = 'library' | 'workspace' | 'reading'
+export type AppPage = 'library' | 'workspace' | 'reading' | 'resources'
 export type SettingsTab = 'ai' | 'prompt'
 export type WorkspaceSource = 'draft' | 'chapter'
 export type ChapterAnalysisState = 'idle' | 'partial' | 'running' | 'analyzed'
+export type KnowledgeKind = 'grammar' | 'phrase' | 'vocabulary'
 export type SentenceRange = {
   start: number
   end: number
@@ -16,8 +17,7 @@ export type ApiConfig = {
 }
 
 export type PromptConfig = {
-  systemPrompt: string
-  userPromptTemplate: string
+  template: string
 }
 
 export type SentenceItem = {
@@ -28,10 +28,18 @@ export type SentenceItem = {
   error?: string
 }
 
+export type AnalysisHighlight = {
+  id: string
+  text: string
+  kind: KnowledgeKind
+  explanation: string
+}
+
 export type AnalysisResult = {
   sentenceId: string
   grammar: string
   meaning: string
+  highlights?: AnalysisHighlight[]
   isPartial?: boolean
   rawText?: string
 }
@@ -98,4 +106,21 @@ export type RunSession = {
   sourceText: string
   sentences: SentenceItem[]
   results: Record<string, AnalysisResult>
+}
+
+export type SavedKnowledgeResource = {
+  id: string
+  signature: string
+  text: string
+  kind: KnowledgeKind
+  explanation: string
+  grammarText: string
+  meaning?: string
+  sentenceId: string
+  sentenceText: string
+  savedAt: string
+  bookId?: string
+  bookTitle?: string
+  chapterId?: string
+  chapterTitle?: string
 }

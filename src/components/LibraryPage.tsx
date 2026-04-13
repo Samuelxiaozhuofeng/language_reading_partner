@@ -13,6 +13,7 @@ type LibraryPageProps = {
   onOpenChapterReading: (chapterId: string) => void
   onOpenChapterWorkspace: (chapterId: string) => void
   onOpenRecentChapter: () => void
+  onOpenResources: () => void
   onOpenManualWorkspace: () => void
   onOpenSettings: () => void
   recentChapterTitle?: string
@@ -33,6 +34,7 @@ function LibraryPage({
   onOpenChapterReading,
   onOpenChapterWorkspace,
   onOpenRecentChapter,
+  onOpenResources,
   onOpenManualWorkspace,
   onOpenSettings,
   recentChapterTitle,
@@ -51,6 +53,9 @@ function LibraryPage({
             <div className="hero-actions">
               <button className="page-tab is-active" type="button">
                 书架首页
+              </button>
+              <button className="page-tab" type="button" onClick={onOpenResources}>
+                学习资源
               </button>
               <button className="ghost-button settings-button" type="button" onClick={onOpenSettings}>
                 设置
