@@ -107,6 +107,30 @@ export async function saveChapter(chapter: BookChapterRecord) {
   await db.put('chapters', chapter)
 }
 
+export async function deleteChapterCascade(chapterId: string) {
+  const db = await getDb()
+  const tx = db.transaction(['chapters', 'resources'], 'readwrite')
+  const chapterStore = tx.objectStore('chapters')
+  const resourceStore = tx.objectStore('resources')
+  const chapter = await chapterStore.get(chapterId)
+
+  if (!chapter) {
+    await tx.done
+    return null
+  }
+
+  const resources = await resourceStore.getAll()
+  for (const resource of resources) {
+    if (resource.chapterId === chapterId) {
+      await resourceStore.delete(resource.id)
+    }
+  }
+
+  await chapterStore.delete(chapterId)
+  await tx.done
+  return chapter
+}
+
 export async function getSavedResources() {
   const db = await getDb()
   const resources = await db.getAll('resources')

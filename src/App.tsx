@@ -306,6 +306,18 @@ function App() {
     }
   }
 
+  const handleDeleteChapter = async (chapterId: string) => {
+    const result = await library.removeChapter(chapterId)
+
+    if (!result) {
+      return
+    }
+
+    if (result.removedCurrentChapter && !result.nextCurrentChapterId) {
+      setWorkspaceSource('draft')
+    }
+  }
+
   const handleImportFile = async (file: File) => {
     const payload = await library.importBook(file)
     if (payload.chapters[0]) {
@@ -384,6 +396,7 @@ function App() {
           libraryError={library.libraryError}
           libraryNotice={library.libraryNotice}
           onDeleteBook={handleDeleteBook}
+          onDeleteChapter={handleDeleteChapter}
           onImportFile={handleImportFile}
           onOpenChapterReading={handleOpenChapterReading}
           onOpenChapterWorkspace={handleOpenChapterWorkspace}

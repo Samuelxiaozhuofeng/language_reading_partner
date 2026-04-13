@@ -10,6 +10,7 @@ import { importEpubBook } from '../lib/epub'
 import { sortSavedResources } from '../lib/knowledge'
 import {
   clearLibraryDb,
+  deleteChapterCascade,
   deleteKnowledgeResource,
   deleteBookCascade,
   getBook,
@@ -26,6 +27,11 @@ import {
 
 type PersistChapterOptions = {
   markOpened?: boolean
+}
+
+type RemoveChapterResult = {
+  nextCurrentChapterId: string | null
+  removedCurrentChapter: boolean
 }
 
 function updateBookInList(books: BookRecord[], nextBook: BookRecord) {
@@ -257,6 +263,106 @@ export function useLibraryStore() {
     [books, hydrateBook, selection.bookId],
   )
 
+  const removeChapter = useCallback(
+    async (chapterId: string): Promise<RemoveChapterResult | null> => {
+      const chapterRecord = chapters.find((chapter) => chapter.id === chapterId) ?? (await getChapter(chapterId))
+      if (!chapterRecord) {
+        setLibraryError('章节不存在，可能已经被删除。')
+        return null
+      }
+
+      const targetChapter = normalizeChapterRecord(chapterRecord)
+
+      await deleteChapterCascade(chapterId)
+
+      const siblingChapters =
+        selection.bookId === targetChapter.bookId
+          ? chapters
+          : (await getChaptersByBook(targetChapter.bookId)).map((chapter) =>
+              normalizeChapterRecord(chapter),
+            )
+
+      const nextChapters = siblingChapters
+        .filter((chapter) => chapter.id !== chapterId)
+        .map((chapter, index) =>
+          normalizeChapterRecord(
+            chapter.order === index
+              ? chapter
+              : {
+                  ...chapter,
+                  order: index,
+                },
+          ),
+        )
+
+      await Promise.all(
+        nextChapters.map((chapter) =>
+          siblingChapters.some(
+            (currentChapterItem) =>
+              currentChapterItem.id === chapter.id && currentChapterItem.order !== chapter.order,
+          )
+            ? saveChapter(chapter)
+            : Promise.resolve(),
+        ),
+      )
+
+      const currentBook = await getBook(targetChapter.bookId)
+      if (currentBook) {
+        const fallbackChapter =
+          nextChapters[targetChapter.order] ?? nextChapters[targetChapter.order - 1] ?? null
+        const nextLastReadChapterId =
+          currentBook.lastReadChapterId === chapterId
+            ? fallbackChapter?.id
+            : currentBook.lastReadChapterId
+
+        const nextBook: BookRecord = {
+          ...currentBook,
+          chapterCount: nextChapters.length,
+          lastReadChapterId: nextLastReadChapterId,
+          analysisState: deriveBookAnalysisState(nextChapters),
+        }
+
+        await saveBook(nextBook)
+        setBooks((current) => updateBookInList(current, nextBook))
+      }
+
+      const removedCurrentChapter = currentChapterRef.current?.id === chapterId
+      const nextCurrentChapter =
+        currentChapterRef.current?.bookId === targetChapter.bookId
+          ? nextChapters.find((chapter) => chapter.id === currentChapterRef.current?.id) ??
+            nextChapters[targetChapter.order] ??
+            nextChapters[targetChapter.order - 1] ??
+            null
+          : currentChapterRef.current
+
+      currentChapterRef.current = nextCurrentChapter
+      setCurrentChapter(nextCurrentChapter)
+      setSavedResources((current) => current.filter((resource) => resource.chapterId !== chapterId))
+
+      if (selection.bookId === targetChapter.bookId) {
+        const nextSelectedChapterId =
+          selection.chapterId === chapterId
+            ? nextChapters[targetChapter.order]?.id ?? nextChapters[targetChapter.order - 1]?.id ?? null
+            : selection.chapterId
+
+        setChapters(nextChapters)
+        setSelection({
+          bookId: targetChapter.bookId,
+          chapterId: nextSelectedChapterId,
+        })
+      }
+
+      setLibraryNotice(`已删除章节《${targetChapter.title}》。`)
+      setLibraryError('')
+
+      return {
+        nextCurrentChapterId: nextCurrentChapter?.id ?? null,
+        removedCurrentChapter,
+      }
+    },
+    [chapters, selection.bookId, selection.chapterId],
+  )
+
   const upsertKnowledgeResource = useCallback(async (resource: SavedKnowledgeResource) => {
     const existing = await getSavedResourceBySignature(resource.signature)
     const nextResource = existing
@@ -326,6 +432,7 @@ export function useLibraryStore() {
     openChapter,
     persistChapter,
     removeBook,
+    removeChapter,
     selectedBook,
     selection,
     removeKnowledgeResourceById,

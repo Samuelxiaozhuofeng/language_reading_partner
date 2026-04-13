@@ -9,6 +9,7 @@ type LibraryPageProps = {
   libraryError: string
   libraryNotice: string
   onDeleteBook: (bookId: string) => void
+  onDeleteChapter: (chapterId: string) => void
   onImportFile: (file: File) => void | Promise<void>
   onOpenChapterReading: (chapterId: string) => void
   onOpenChapterWorkspace: (chapterId: string) => void
@@ -30,6 +31,7 @@ function LibraryPage({
   libraryError,
   libraryNotice,
   onDeleteBook,
+  onDeleteChapter,
   onImportFile,
   onOpenChapterReading,
   onOpenChapterWorkspace,
@@ -213,6 +215,9 @@ function LibraryPage({
                     </button>
                     <button className="ghost-button" type="button" onClick={() => onOpenChapterReading(chapter.id)}>
                       进入阅读
+                    </button>
+                    <button className="ghost-button danger-button" type="button" onClick={() => onDeleteChapter(chapter.id)}>
+                      删除章节
                     </button>
                   </div>
                 </article>
