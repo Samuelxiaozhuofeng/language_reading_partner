@@ -12,6 +12,7 @@ import {
   clearLibraryDb,
   deleteChapterCascade,
   deleteKnowledgeResource,
+  deleteKnowledgeResources,
   deleteBookCascade,
   getBook,
   getBooks,
@@ -407,6 +408,22 @@ export function useLibraryStore() {
     await removeKnowledgeResourceById(target.id)
   }, [removeKnowledgeResourceById, savedResources])
 
+  const removeKnowledgeResourcesByIds = useCallback(async (resourceIds: string[]) => {
+    if (resourceIds.length === 0) {
+      return
+    }
+
+    const targets = savedResources.filter((resource) => resourceIds.includes(resource.id))
+    if (targets.length === 0) {
+      return
+    }
+
+    await deleteKnowledgeResources(targets.map((resource) => resource.id))
+    setSavedResources((current) => current.filter((resource) => !resourceIds.includes(resource.id)))
+    setLibraryNotice(`已从学习资源移除 ${targets.length} 条知识点。`)
+    setLibraryError('')
+  }, [savedResources])
+
   const clearLibrary = useCallback(async () => {
     await clearLibraryDb()
     setBooks([])
@@ -436,6 +453,7 @@ export function useLibraryStore() {
     selectedBook,
     selection,
     removeKnowledgeResourceById,
+    removeKnowledgeResourcesByIds,
     removeKnowledgeResourceBySignature,
     selectBook,
     upsertKnowledgeResource,

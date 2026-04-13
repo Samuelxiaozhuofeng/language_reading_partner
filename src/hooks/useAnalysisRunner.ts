@@ -171,6 +171,14 @@ export function useAnalysisRunner({
     const selectedSentences =
       workspaceSource === 'chapter' ? getSentencesInRange(sanitized, chapterRange) : sanitized
     const selectedRangeStart = workspaceSource === 'chapter' ? chapterRange?.start ?? 0 : 0
+    const rerunIds =
+      workspaceSource === 'chapter'
+        ? new Set(
+            selectedSentences
+              .filter((sentence) => sentence.editedText.length > 0)
+              .map((sentence) => sentence.id),
+          )
+        : null
     const pendingEntries =
       workspaceSource === 'chapter'
         ? selectedSentences
@@ -178,24 +186,28 @@ export function useAnalysisRunner({
               absoluteIndex: selectedRangeStart + index,
               sentence,
             }))
-            .filter(({ sentence }) => sentence.editedText.length > 0 && !results[sentence.id])
+            .filter(({ sentence }) => sentence.editedText.length > 0)
         : sanitized.map((sentence, index) => ({
             absoluteIndex: index,
             sentence,
           }))
     const pendingIds = new Set(pendingEntries.map(({ sentence }) => sentence.id))
     const nextResults: Record<string, AnalysisResult> =
-      workspaceSource === 'chapter' ? { ...results } : {}
+      workspaceSource === 'chapter'
+        ? Object.fromEntries(
+            Object.entries(results).filter(([sentenceId]) => !rerunIds?.has(sentenceId)),
+          )
+        : {}
 
     if (workspaceSource === 'chapter' && pendingEntries.length === 0) {
       setGlobalError('')
       if (chapterRange) {
         await onChapterRangeCommitted?.(chapterRange)
-        setNotice(`区间 ${chapterRange.start}-${chapterRange.end} 已经解析完成，可以直接进入阅读。`)
+        setNotice(`当前区间 ${chapterRange.start}-${chapterRange.end} 没有可解析句子，请调整范围或补全文本后重试。`)
       } else {
-        setNotice('这一章已经全部解析完成，可以直接进入阅读。')
+        setNotice('当前章节没有可解析句子，请补全文本后重试。')
       }
-      return 'reading' as const
+      return
     }
 
     runTokenRef.current += 1
@@ -257,6 +269,9 @@ export function useAnalysisRunner({
         }
       }),
     )
+    if (workspaceSource === 'chapter') {
+      setResults(nextResults)
+    }
     if (workspaceSource === 'draft') {
       setResults({})
     }

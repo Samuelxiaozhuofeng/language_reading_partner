@@ -152,6 +152,21 @@ export async function deleteKnowledgeResource(resourceId: string) {
   await db.delete('resources', resourceId)
 }
 
+export async function deleteKnowledgeResources(resourceIds: string[]) {
+  if (resourceIds.length === 0) {
+    return
+  }
+
+  const db = await getDb()
+  const tx = db.transaction('resources', 'readwrite')
+
+  for (const resourceId of resourceIds) {
+    await tx.store.delete(resourceId)
+  }
+
+  await tx.done
+}
+
 export async function deleteBookCascade(bookId: string) {
   const db = await getDb()
   const tx = db.transaction(['books', 'chapters', 'resources'], 'readwrite')

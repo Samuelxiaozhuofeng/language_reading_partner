@@ -484,6 +484,7 @@ function App() {
           onBackToLibrary={() => setActivePage('library')}
           onBackToReading={canBackToReading ? () => setActivePage('reading') : undefined}
           onDeleteResource={(resourceId) => void library.removeKnowledgeResourceById(resourceId)}
+          onDeleteResources={(resourceIds) => void library.removeKnowledgeResourcesByIds(resourceIds)}
           onKindChange={setResourceFilter}
           resources={library.savedResources}
         />

@@ -688,6 +688,61 @@ blockquote {
   gap: 24px;
 }
 
+.export-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.export-options-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.export-option-group {
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px;
+  border: 1px solid rgba(69, 72, 82, 0.12);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.export-option-group > span {
+  font-size: 0.96rem;
+  color: var(--ink-strong);
+  font-weight: 600;
+}
+
+.export-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.export-checkbox input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 auto;
+  border-radius: 6px;
+}
+
+.export-checkbox span {
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
 .reading-breadcrumb {
   margin: 8px 0 0;
   color: var(--muted);

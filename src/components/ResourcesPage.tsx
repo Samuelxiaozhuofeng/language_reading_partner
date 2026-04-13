@@ -1,6 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { formatTime } from '../lib/appState'
 import { knowledgeKindLabelMap } from '../lib/knowledge'
+import {
+  downloadMarkdownFile,
+  renderResourcesAsMarkdown,
+  type ResourceExportOptions,
+} from '../lib/resourceExport'
 import type { KnowledgeKind, SavedKnowledgeResource } from '../types'
 
 export type ResourcesPageProps = {
@@ -9,6 +14,7 @@ export type ResourcesPageProps = {
   onBackToLibrary: () => void
   onBackToReading?: () => void
   onDeleteResource: (resourceId: string) => void
+  onDeleteResources: (resourceIds: string[]) => void | Promise<void>
   onKindChange: (kind: KnowledgeKind | 'all') => void
   resources: SavedKnowledgeResource[]
   subtitle?: string
@@ -21,11 +27,21 @@ function ResourcesPage({
   onBackToLibrary,
   onBackToReading,
   onDeleteResource,
+  onDeleteResources,
   onKindChange,
   resources,
   subtitle = '把你在阅读中遇到的语法点、词汇搭配和表达整理成一个可回看、可筛选的学习清单。',
   title = '学习资源',
 }: ResourcesPageProps) {
+  const [exportOptions, setExportOptions] = useState<ResourceExportOptions>({
+    includeBookTitle: true,
+    includeChapterTitle: true,
+    includeSavedAt: true,
+  })
+  const [removeAfterExport, setRemoveAfterExport] = useState(false)
+  const [exportMessage, setExportMessage] = useState('')
+  const [exportError, setExportError] = useState('')
+
   const availableKinds = useMemo(() => {
     const counts = new Map<KnowledgeKind, number>()
 
@@ -58,6 +74,45 @@ function ResourcesPage({
 
   const totalKinds = availableKinds.length
   const backToReadingDisabled = !onBackToReading || !canBackToReading
+
+  const renderCheckbox = (
+    checked: boolean,
+    label: string,
+    onChange: (checked: boolean) => void,
+  ) => (
+    <label className="export-checkbox">
+      <input checked={checked} type="checkbox" onChange={(event) => onChange(event.target.checked)} />
+      <span>{label}</span>
+    </label>
+  )
+
+  const handleExport = async () => {
+    if (resources.length === 0) {
+      setExportMessage('')
+      setExportError('当前没有可导出的知识点。')
+      return
+    }
+
+    try {
+      const markdown = renderResourcesAsMarkdown(resources, exportOptions)
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+      downloadMarkdownFile(markdown, `学习资源导出-${timestamp}.md`)
+
+      if (removeAfterExport) {
+        await onDeleteResources(resources.map((resource) => resource.id))
+      }
+
+      setExportError('')
+      setExportMessage(
+        removeAfterExport
+          ? `已导出 ${resources.length} 条知识点，并按你的设置从本地学习资源中删除。`
+          : `已导出 ${resources.length} 条知识点为 Markdown 文件。`,
+      )
+    } catch (error) {
+      setExportMessage('')
+      setExportError(error instanceof Error ? error.message : '导出失败，请稍后重试。')
+    }
+  }
 
   return (
     <main className="resources-page">
@@ -116,6 +171,57 @@ function ResourcesPage({
           </div>
         </div>
       </header>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="section-kicker">Export</p>
+            <h2>导出全部知识点</h2>
+          </div>
+          <p className="panel-meta">导出会生成结构化 Markdown 文件，不受当前筛选影响，默认包含全部收藏内容。</p>
+        </div>
+
+        <div className="export-panel">
+          <div className="export-options-grid">
+            <div className="export-option-group">
+              <span>导出字段</span>
+              {renderCheckbox(exportOptions.includeBookTitle, '书籍', (checked) =>
+                setExportOptions((current) => ({
+                  ...current,
+                  includeBookTitle: checked,
+                })),
+              )}
+              {renderCheckbox(exportOptions.includeChapterTitle, '章节', (checked) =>
+                setExportOptions((current) => ({
+                  ...current,
+                  includeChapterTitle: checked,
+                })),
+              )}
+              {renderCheckbox(exportOptions.includeSavedAt, '收藏时间', (checked) =>
+                setExportOptions((current) => ({
+                  ...current,
+                  includeSavedAt: checked,
+                })),
+              )}
+            </div>
+
+            <div className="export-option-group">
+              <span>导出后处理</span>
+              {renderCheckbox(removeAfterExport, '导出后删除知识点', setRemoveAfterExport)}
+            </div>
+          </div>
+
+          <div className="export-actions">
+            <button className="primary-button" type="button" onClick={() => void handleExport()}>
+              导出 Markdown
+            </button>
+            <span className="panel-meta">导出的文件会下载到浏览器默认下载目录。</span>
+          </div>
+
+          {exportMessage ? <p className="notice success">{exportMessage}</p> : null}
+          {exportError ? <p className="notice error">{exportError}</p> : null}
+        </div>
+      </section>
 
       <section className="panel">
         <div className="panel-header">
