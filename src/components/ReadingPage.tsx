@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { buildKnowledgeSignature, knowledgeKindLabelMap } from '../lib/knowledge'
 import { statusLabelMap } from '../lib/appState'
+import { buildKnowledgeSignature, knowledgeKindLabelMap } from '../lib/knowledge'
+import { buildChapterReadingParagraphs } from '../lib/readingFlow'
 import type {
   AnalysisHighlight,
   AnalysisResult,
+  ChapterParagraphBlock,
   SentenceItem,
   SentenceRange,
   WorkspaceSource,
@@ -38,13 +40,28 @@ type ReadingPageProps = {
     result: AnalysisResult,
     highlight: AnalysisHighlight,
   ) => void
+  paragraphBlocks?: ChapterParagraphBlock[]
   results: Record<string, AnalysisResult>
   savedHighlightSignatures: Set<string>
-  sentenceIndices?: number[]
   sentenceStartIndex: number
   sentences: SentenceItem[]
   successCount: number
   workspaceSource: WorkspaceSource
+}
+
+type SentenceDetailPanelProps = {
+  activeSelection: HighlightSelection | null
+  onOpenResources: () => void
+  onRemoveHighlight: (signature: string) => void
+  onSaveHighlight: (
+    sentence: SentenceItem,
+    result: AnalysisResult,
+    highlight: AnalysisHighlight,
+  ) => void
+  onSelectHighlight: (sentenceId: string, highlightId: string) => void
+  result?: AnalysisResult
+  savedHighlightSignatures: Set<string>
+  sentence: SentenceItem
 }
 
 function buildSelectionKey(sentenceId: string, highlightId: string) {
@@ -138,6 +155,134 @@ function renderGrammarText(
   return segments
 }
 
+function SentenceDetailPanel({
+  activeSelection,
+  onOpenResources,
+  onRemoveHighlight,
+  onSaveHighlight,
+  onSelectHighlight,
+  result,
+  savedHighlightSignatures,
+  sentence,
+}: SentenceDetailPanelProps) {
+  if (!result) {
+    return (
+      <div className="result-placeholder">
+        <p>
+          {sentence.status === 'error'
+            ? '这句解析失败了，请回工作区重试本句。'
+            : sentence.status === 'running' || sentence.status === 'queued'
+              ? 'AI 正在处理中...'
+              : '这句还没有开始解析。'}
+        </p>
+      </div>
+    )
+  }
+
+  const highlights = result.highlights ?? []
+  const selectedHighlight = highlights.find(
+    (highlight) =>
+      activeSelection?.sentenceId === sentence.id &&
+      activeSelection.highlightId === highlight.id,
+  )
+  const selectedSignature = selectedHighlight
+    ? buildKnowledgeSignature(selectedHighlight.kind, selectedHighlight.text)
+    : null
+  const isSelectedSaved = selectedSignature
+    ? savedHighlightSignatures.has(selectedSignature)
+    : false
+
+  return (
+    <div className="analysis-stack">
+      <section>
+        <h3>语法</h3>
+        <div className="analysis-paragraph">
+          {result.grammar
+            ? renderGrammarText(
+                result.grammar,
+                highlights,
+                activeSelection,
+                sentence.id,
+                savedHighlightSignatures,
+                (highlightId) => onSelectHighlight(sentence.id, highlightId),
+              )
+            : '模型未稳定返回语法说明。'}
+        </div>
+
+        {highlights.length > 0 ? (
+          <>
+            <div className="knowledge-chip-list">
+              {highlights.map((highlight) => {
+                const signature = buildKnowledgeSignature(highlight.kind, highlight.text)
+                const isSaved = savedHighlightSignatures.has(signature)
+                const isActive =
+                  activeSelection?.sentenceId === sentence.id &&
+                  activeSelection.highlightId === highlight.id
+
+                return (
+                  <button
+                    className={`knowledge-chip ${isActive ? 'is-active' : ''} ${isSaved ? 'is-saved' : ''}`}
+                    key={highlight.id}
+                    type="button"
+                    onClick={() => onSelectHighlight(sentence.id, highlight.id)}
+                  >
+                    <span>{highlight.text}</span>
+                    <span>{knowledgeKindLabelMap[highlight.kind]}</span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {selectedHighlight ? (
+              <div className="knowledge-detail-card">
+                <div className="knowledge-detail-header">
+                  <div>
+                    <p className="section-kicker">Knowledge Point</p>
+                    <h4>{selectedHighlight.text}</h4>
+                  </div>
+                  <span className="status-pill">
+                    {knowledgeKindLabelMap[selectedHighlight.kind]}
+                  </span>
+                </div>
+
+                <p>{selectedHighlight.explanation}</p>
+
+                <div className="panel-actions knowledge-detail-actions">
+                  {isSelectedSaved && selectedSignature ? (
+                    <button
+                      className="ghost-button danger-button"
+                      type="button"
+                      onClick={() => onRemoveHighlight(selectedSignature)}
+                    >
+                      取消收藏
+                    </button>
+                  ) : (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => onSaveHighlight(sentence, result, selectedHighlight)}
+                    >
+                      保存到学习资源
+                    </button>
+                  )}
+
+                  <button className="ghost-button" type="button" onClick={onOpenResources}>
+                    打开学习资源页
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </section>
+      <section>
+        <h3>内容</h3>
+        <p>{result.meaning || '模型未稳定返回内容解读。'}</p>
+      </section>
+    </div>
+  )
+}
+
 function ReadingPage({
   activeRange,
   adjacentChapterIds,
@@ -151,9 +296,9 @@ function ReadingPage({
   onOpenResources,
   onRemoveHighlight,
   onSaveHighlight,
+  paragraphBlocks,
   results,
   savedHighlightSignatures,
-  sentenceIndices,
   sentenceStartIndex,
   sentences,
   successCount,
@@ -161,9 +306,40 @@ function ReadingPage({
 }: ReadingPageProps) {
   const isChapterMode = workspaceSource === 'chapter'
   const [activeSelection, setActiveSelection] = useState<HighlightSelection | null>(null)
+  const [activeSentenceId, setActiveSentenceId] = useState<string | null>(null)
   const [expandedSentenceIds, setExpandedSentenceIds] = useState<Set<string>>(() => new Set())
+  const validSentenceIdSet = useMemo(
+    () => new Set(sentences.map((sentence) => sentence.id)),
+    [sentences],
+  )
+  const effectiveActiveSelection =
+    activeSelection && validSentenceIdSet.has(activeSelection.sentenceId)
+      ? activeSelection
+      : null
+  const effectiveActiveSentenceId =
+    activeSentenceId && validSentenceIdSet.has(activeSentenceId) ? activeSentenceId : null
+  const effectiveExpandedSentenceIds = useMemo(
+    () => new Set([...expandedSentenceIds].filter((sentenceId) => validSentenceIdSet.has(sentenceId))),
+    [expandedSentenceIds, validSentenceIdSet],
+  )
   const areAllSentencesExpanded =
-    sentences.length > 0 && sentences.every((sentence) => expandedSentenceIds.has(sentence.id))
+    !isChapterMode &&
+    sentences.length > 0 &&
+    sentences.every((sentence) => effectiveExpandedSentenceIds.has(sentence.id))
+  const chapterParagraphs = useMemo(
+    () =>
+      isChapterMode
+        ? buildChapterReadingParagraphs(paragraphBlocks ?? [], sentences, activeRange)
+        : [],
+    [activeRange, isChapterMode, paragraphBlocks, sentences],
+  )
+  const activeSentence = useMemo(
+    () => sentences.find((sentence) => sentence.id === effectiveActiveSentenceId) ?? null,
+    [effectiveActiveSentenceId, sentences],
+  )
+  const activeSentenceIndex = activeSentence
+    ? sentenceStartIndex + sentences.findIndex((sentence) => sentence.id === activeSentence.id)
+    : null
 
   const handleSelectHighlight = (sentenceId: string, highlightId: string) => {
     setActiveSelection((current) =>
@@ -173,7 +349,21 @@ function ReadingPage({
     )
   }
 
+  const handleOpenSentence = (sentenceId: string) => {
+    setActiveSelection(null)
+    setActiveSentenceId((current) => (current === sentenceId ? null : sentenceId))
+  }
+
+  const handleCloseSentence = () => {
+    setActiveSentenceId(null)
+    setActiveSelection(null)
+  }
+
   const handleToggleSentence = (sentenceId: string) => {
+    if (effectiveActiveSelection?.sentenceId === sentenceId) {
+      setActiveSelection(null)
+    }
+
     setExpandedSentenceIds((current) => {
       const next = new Set(current)
       if (next.has(sentenceId)) {
@@ -186,9 +376,13 @@ function ReadingPage({
   }
 
   const handleToggleAllSentences = () => {
-    setExpandedSentenceIds(
-      areAllSentencesExpanded ? new Set() : new Set(sentences.map((sentence) => sentence.id)),
-    )
+    if (areAllSentencesExpanded) {
+      setActiveSelection(null)
+      setExpandedSentenceIds(new Set())
+      return
+    }
+
+    setExpandedSentenceIds(new Set(sentences.map((sentence) => sentence.id)))
   }
 
   return (
@@ -216,7 +410,7 @@ function ReadingPage({
         <p className="reading-intro">
           {isChapterMode
             ? activeRange
-              ? `这里会只展示当前阅读段 ${activeRange.start}-${activeRange.end} 中已经解析完成的句子，方便你按段推进。`
+              ? `这里会把当前阅读段 ${activeRange.start}-${activeRange.end} 排成连续正文流；阅读时只需点一下句子，就会弹出解释。`
               : '先在工作区完成一个句子区间的解析，这里才会出现对应的沉浸阅读内容。'
             : '这里会把整章解释集中排版到一条居中的阅读流里，方便你像读批注版小说一样顺着往下读。'}
         </p>
@@ -229,7 +423,7 @@ function ReadingPage({
           <span>已展示 {sentences.length}</span>
           <span>已完成 {successCount}</span>
           <span>失败 {errorCount}</span>
-          {sentences.length > 0 ? (
+          {!isChapterMode && sentences.length > 0 ? (
             <button
               className="ghost-button reading-toggle-all-button"
               type="button"
@@ -261,156 +455,127 @@ function ReadingPage({
           </div>
         ) : null}
 
-        <div className="reading-result-list">
-          {sentences.length === 0 ? (
+        {isChapterMode ? (
+          chapterParagraphs.length === 0 ? (
             <div className="empty-state reading-empty">
-              <p>先准备一个章节或手动草稿并启动解析，这里会自动显示阅读结果。</p>
+              <p>这一段暂时还没有可供阅读的正文内容，请先回工作区完成解析。</p>
             </div>
           ) : (
-            sentences.map((sentence, index) => {
-              const result = results[sentence.id]
-              const highlights = result?.highlights ?? []
-              const isExpanded = expandedSentenceIds.has(sentence.id)
-              const selectedHighlight = highlights.find(
-                (highlight) =>
-                  activeSelection?.sentenceId === sentence.id &&
-                  activeSelection.highlightId === highlight.id,
-              )
-              const selectedSignature = selectedHighlight
-                ? buildKnowledgeSignature(selectedHighlight.kind, selectedHighlight.text)
-                : null
-              const isSelectedSaved = selectedSignature
-                ? savedHighlightSignatures.has(selectedSignature)
-                : false
+            <div className="reading-flow">
+              {chapterParagraphs.map((paragraph) => (
+                <p className="reading-paragraph" key={paragraph.id}>
+                  {paragraph.sentences.map((sentence) => (
+                    <button
+                      className={`reading-inline-sentence ${effectiveActiveSentenceId === sentence.id ? 'is-active' : ''}`}
+                      key={sentence.id}
+                      type="button"
+                      onClick={() => handleOpenSentence(sentence.id)}
+                    >
+                      {sentence.editedText || sentence.text}
+                    </button>
+                  ))}
+                </p>
+              ))}
+            </div>
+          )
+        ) : (
+          <div className="reading-result-list">
+            {sentences.length === 0 ? (
+              <div className="empty-state reading-empty">
+                <p>先准备一个章节或手动草稿并启动解析，这里会自动显示阅读结果。</p>
+              </div>
+            ) : (
+              sentences.map((sentence, index) => {
+                const isExpanded = effectiveExpandedSentenceIds.has(sentence.id)
 
-              return (
-                <article className="result-card reading-result-card" key={sentence.id}>
-                  <div className="result-card-header">
-                    <span className="sentence-index">
-                      #{isChapterMode ? sentenceIndices?.[index] ?? sentenceStartIndex + index : index + 1}
-                    </span>
-                    <span className={`status-badge status-${sentence.status}`}>
-                      {statusLabelMap[sentence.status]}
-                    </span>
-                  </div>
-
-                  <button
-                    aria-expanded={isExpanded}
-                    className={`reading-sentence-toggle ${isExpanded ? 'is-expanded' : ''}`}
-                    type="button"
-                    onClick={() => handleToggleSentence(sentence.id)}
-                  >
-                    <span className="reading-sentence-quote">{sentence.editedText || sentence.text}</span>
-                    <span className="reading-sentence-toggle-hint">
-                      {isExpanded ? '收起解释' : '点击展开解释'}
-                    </span>
-                  </button>
-
-                  {isExpanded && result ? (
-                    <div className="analysis-stack">
-                      <section>
-                        <h3>语法</h3>
-                        <div className="analysis-paragraph">
-                          {result.grammar
-                            ? renderGrammarText(
-                                result.grammar,
-                                highlights,
-                                activeSelection,
-                                sentence.id,
-                                savedHighlightSignatures,
-                                (highlightId) => handleSelectHighlight(sentence.id, highlightId),
-                              )
-                            : '模型未稳定返回语法说明。'}
-                        </div>
-
-                        {highlights.length > 0 ? (
-                          <>
-                            <div className="knowledge-chip-list">
-                              {highlights.map((highlight) => {
-                                const signature = buildKnowledgeSignature(highlight.kind, highlight.text)
-                                const isSaved = savedHighlightSignatures.has(signature)
-                                const isActive =
-                                  activeSelection?.sentenceId === sentence.id &&
-                                  activeSelection.highlightId === highlight.id
-
-                                return (
-                                  <button
-                                    className={`knowledge-chip ${isActive ? 'is-active' : ''} ${isSaved ? 'is-saved' : ''}`}
-                                    key={highlight.id}
-                                    type="button"
-                                    onClick={() => handleSelectHighlight(sentence.id, highlight.id)}
-                                  >
-                                    <span>{highlight.text}</span>
-                                    <span>{knowledgeKindLabelMap[highlight.kind]}</span>
-                                  </button>
-                                )
-                              })}
-                            </div>
-
-                            {selectedHighlight ? (
-                              <div className="knowledge-detail-card">
-                                <div className="knowledge-detail-header">
-                                  <div>
-                                    <p className="section-kicker">Knowledge Point</p>
-                                    <h4>{selectedHighlight.text}</h4>
-                                  </div>
-                                  <span className="status-pill">
-                                    {knowledgeKindLabelMap[selectedHighlight.kind]}
-                                  </span>
-                                </div>
-
-                                <p>{selectedHighlight.explanation}</p>
-
-                                <div className="panel-actions knowledge-detail-actions">
-                                  {isSelectedSaved && selectedSignature ? (
-                                    <button
-                                      className="ghost-button danger-button"
-                                      type="button"
-                                      onClick={() => onRemoveHighlight(selectedSignature)}
-                                    >
-                                      取消收藏
-                                    </button>
-                                  ) : (
-                                    <button
-                                      className="secondary-button"
-                                      type="button"
-                                      onClick={() => onSaveHighlight(sentence, result, selectedHighlight)}
-                                    >
-                                      保存到学习资源
-                                    </button>
-                                  )}
-
-                                  <button className="ghost-button" type="button" onClick={onOpenResources}>
-                                    打开学习资源页
-                                  </button>
-                                </div>
-                              </div>
-                            ) : null}
-                          </>
-                        ) : null}
-                      </section>
-                      <section>
-                        <h3>内容</h3>
-                        <p>{result.meaning || '模型未稳定返回内容解读。'}</p>
-                      </section>
+                return (
+                  <article className="result-card reading-result-card" key={sentence.id}>
+                    <div className="result-card-header">
+                      <span className="sentence-index">#{index + 1}</span>
+                      <span className={`status-badge status-${sentence.status}`}>
+                        {statusLabelMap[sentence.status]}
+                      </span>
                     </div>
-                  ) : isExpanded ? (
-                    <div className="result-placeholder">
-                      <p>
-                        {sentence.status === 'error'
-                          ? '这句解析失败了，请回工作区重试本句。'
-                          : sentence.status === 'running' || sentence.status === 'queued'
-                            ? 'AI 正在处理中...'
-                            : '这句还没有开始解析。'}
-                      </p>
-                    </div>
-                  ) : null}
-                </article>
-              )
-            })
-          )}
-        </div>
+
+                    <button
+                      aria-expanded={isExpanded}
+                      className={`reading-sentence-toggle ${isExpanded ? 'is-expanded' : ''}`}
+                      type="button"
+                      onClick={() => handleToggleSentence(sentence.id)}
+                    >
+                      <span className="reading-sentence-quote">{sentence.editedText || sentence.text}</span>
+                      <span className="reading-sentence-toggle-hint">
+                        {isExpanded ? '收起解释' : '点击展开解释'}
+                      </span>
+                    </button>
+
+                    {isExpanded ? (
+                      <SentenceDetailPanel
+                        activeSelection={effectiveActiveSelection}
+                        onOpenResources={onOpenResources}
+                        onRemoveHighlight={onRemoveHighlight}
+                        onSaveHighlight={onSaveHighlight}
+                        onSelectHighlight={handleSelectHighlight}
+                        result={results[sentence.id]}
+                        savedHighlightSignatures={savedHighlightSignatures}
+                        sentence={sentence}
+                      />
+                    ) : null}
+                  </article>
+                )
+              })
+            )}
+          </div>
+        )}
       </section>
+
+      {isChapterMode && activeSentence ? (
+        <div className="reading-overlay" role="presentation" onClick={handleCloseSentence}>
+          <section
+            aria-label="句子解释"
+            aria-modal="true"
+            className="reading-inspector"
+            role="dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="reading-inspector-header">
+              <div>
+                <p className="section-kicker">Sentence Note</p>
+                <h3>句子解释</h3>
+              </div>
+              <button
+                className="ghost-button reading-inspector-close"
+                type="button"
+                onClick={handleCloseSentence}
+              >
+                关闭
+              </button>
+            </div>
+
+            <div className="reading-inspector-meta">
+              {activeSentenceIndex !== null ? <span>句子 #{activeSentenceIndex}</span> : null}
+              <span className={`status-badge status-${activeSentence.status}`}>
+                {statusLabelMap[activeSentence.status]}
+              </span>
+            </div>
+
+            <p className="reading-inspector-sentence">
+              {activeSentence.editedText || activeSentence.text}
+            </p>
+
+            <SentenceDetailPanel
+              activeSelection={effectiveActiveSelection}
+              onOpenResources={onOpenResources}
+              onRemoveHighlight={onRemoveHighlight}
+              onSaveHighlight={onSaveHighlight}
+              onSelectHighlight={handleSelectHighlight}
+              result={results[activeSentence.id]}
+              savedHighlightSignatures={savedHighlightSignatures}
+              sentence={activeSentence}
+            />
+          </section>
+        </div>
+      ) : null}
     </main>
   )
 }

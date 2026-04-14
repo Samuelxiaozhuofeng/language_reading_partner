@@ -765,6 +765,104 @@ blockquote {
   margin-left: auto;
 }
 
+.reading-flow {
+  display: grid;
+  gap: 26px;
+  padding: 8px 4px 32px;
+}
+
+.reading-paragraph {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 1.14rem;
+  line-height: 2;
+}
+
+.reading-inline-sentence {
+  display: inline;
+  margin: 0;
+  padding: 0 0.12em;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.reading-inline-sentence + .reading-inline-sentence {
+  margin-left: 0.35ch;
+}
+
+.reading-inline-sentence:hover,
+.reading-inline-sentence.is-active {
+  background: rgba(14, 125, 120, 0.12);
+  box-shadow: 0 4px 16px rgba(69, 72, 82, 0.08);
+}
+
+.reading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  padding: 24px;
+  background: rgba(38, 35, 31, 0.14);
+}
+
+.reading-inspector {
+  width: min(420px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  margin-top: 72px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 252, 244, 0.98) 0%, rgba(247, 238, 224, 0.98) 100%);
+  box-shadow: 0 24px 54px rgba(35, 29, 24, 0.24);
+  padding: 20px 22px 24px;
+}
+
+.reading-inspector-header,
+.reading-inspector-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.reading-inspector-meta {
+  justify-content: flex-start;
+  margin: 0 0 14px;
+}
+
+.reading-inspector-header h3 {
+  margin: 0;
+}
+
+.reading-inspector-close {
+  flex: 0 0 auto;
+}
+
+.reading-inspector-sentence {
+  margin: 0 0 18px;
+  padding: 16px 18px;
+  border-left: 4px solid rgba(14, 125, 120, 0.3);
+  border-radius: 0 18px 18px 0;
+  background: rgba(248, 244, 235, 0.72);
+  color: var(--ink-strong);
+  font-size: 1.02rem;
+  line-height: 1.8;
+}
+
 .reading-result-list {
   gap: 20px;
 }
@@ -1139,8 +1237,35 @@ blockquote {
     align-items: flex-start;
   }
 
+  .reading-flow {
+    gap: 20px;
+    padding: 4px 0 18px;
+  }
+
+  .reading-paragraph {
+    font-size: 1.03rem;
+    line-height: 1.92;
+  }
+
   .reading-toggle-all-button {
     margin-left: 0;
+  }
+
+  .reading-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .reading-inspector {
+    width: 100%;
+    max-height: min(78vh, 680px);
+    margin-top: 0;
+    border-radius: 28px 28px 0 0;
+    padding: 18px;
+  }
+
+  .reading-inspector-header {
+    align-items: flex-start;
   }
 
   .knowledge-detail-header,

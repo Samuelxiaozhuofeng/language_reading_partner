@@ -131,12 +131,6 @@ function App() {
     effectiveWorkspaceSource === 'chapter'
       ? readingRangeSentences.filter((sentence) => workspaceResults[sentence.id])
       : workspaceSentences
-  const readingSentenceIndices =
-    effectiveWorkspaceSource === 'chapter'
-      ? readingRangeSentences.flatMap((sentence, index) =>
-          workspaceResults[sentence.id] ? [(activeReadingRange?.start ?? 0) + index] : [],
-        )
-      : []
 
   const analysis = useAnalysisRunner({
     apiConfig: persistent.apiConfig,
@@ -469,11 +463,15 @@ function App() {
           onSaveHighlight={(sentence, result, highlight) =>
             void handleSaveHighlight(sentence, result, highlight)
           }
+          paragraphBlocks={activeChapter?.paragraphBlocks}
           results={workspaceResults}
           savedHighlightSignatures={savedResourceSignatures}
-          sentenceIndices={readingSentenceIndices}
           sentenceStartIndex={activeReadingRange?.start ?? 0}
-          sentences={readingVisibleSentences}
+          sentences={
+            effectiveWorkspaceSource === 'chapter'
+              ? readingRangeSentences
+              : readingVisibleSentences
+          }
           successCount={readingSuccessCount}
           workspaceSource={effectiveWorkspaceSource}
         />
