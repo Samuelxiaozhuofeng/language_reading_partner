@@ -161,12 +161,33 @@ function ReadingPage({
 }: ReadingPageProps) {
   const isChapterMode = workspaceSource === 'chapter'
   const [activeSelection, setActiveSelection] = useState<HighlightSelection | null>(null)
+  const [expandedSentenceIds, setExpandedSentenceIds] = useState<Set<string>>(() => new Set())
+  const areAllSentencesExpanded =
+    sentences.length > 0 && sentences.every((sentence) => expandedSentenceIds.has(sentence.id))
 
   const handleSelectHighlight = (sentenceId: string, highlightId: string) => {
     setActiveSelection((current) =>
       current?.sentenceId === sentenceId && current.highlightId === highlightId
         ? null
         : { sentenceId, highlightId },
+    )
+  }
+
+  const handleToggleSentence = (sentenceId: string) => {
+    setExpandedSentenceIds((current) => {
+      const next = new Set(current)
+      if (next.has(sentenceId)) {
+        next.delete(sentenceId)
+      } else {
+        next.add(sentenceId)
+      }
+      return next
+    })
+  }
+
+  const handleToggleAllSentences = () => {
+    setExpandedSentenceIds(
+      areAllSentencesExpanded ? new Set() : new Set(sentences.map((sentence) => sentence.id)),
     )
   }
 
@@ -208,6 +229,15 @@ function ReadingPage({
           <span>已展示 {sentences.length}</span>
           <span>已完成 {successCount}</span>
           <span>失败 {errorCount}</span>
+          {sentences.length > 0 ? (
+            <button
+              className="ghost-button reading-toggle-all-button"
+              type="button"
+              onClick={handleToggleAllSentences}
+            >
+              {areAllSentencesExpanded ? '全部收起' : '全部展开'}
+            </button>
+          ) : null}
         </div>
 
         {isChapterMode ? (
@@ -240,6 +270,7 @@ function ReadingPage({
             sentences.map((sentence, index) => {
               const result = results[sentence.id]
               const highlights = result?.highlights ?? []
+              const isExpanded = expandedSentenceIds.has(sentence.id)
               const selectedHighlight = highlights.find(
                 (highlight) =>
                   activeSelection?.sentenceId === sentence.id &&
@@ -263,9 +294,19 @@ function ReadingPage({
                     </span>
                   </div>
 
-                  <blockquote>{sentence.editedText || sentence.text}</blockquote>
+                  <button
+                    aria-expanded={isExpanded}
+                    className={`reading-sentence-toggle ${isExpanded ? 'is-expanded' : ''}`}
+                    type="button"
+                    onClick={() => handleToggleSentence(sentence.id)}
+                  >
+                    <span className="reading-sentence-quote">{sentence.editedText || sentence.text}</span>
+                    <span className="reading-sentence-toggle-hint">
+                      {isExpanded ? '收起解释' : '点击展开解释'}
+                    </span>
+                  </button>
 
-                  {result ? (
+                  {isExpanded && result ? (
                     <div className="analysis-stack">
                       <section>
                         <h3>语法</h3>
@@ -353,7 +394,7 @@ function ReadingPage({
                         <p>{result.meaning || '模型未稳定返回内容解读。'}</p>
                       </section>
                     </div>
-                  ) : (
+                  ) : isExpanded ? (
                     <div className="result-placeholder">
                       <p>
                         {sentence.status === 'error'
@@ -363,7 +404,7 @@ function ReadingPage({
                             : '这句还没有开始解析。'}
                       </p>
                     </div>
-                  )}
+                  ) : null}
                 </article>
               )
             })
