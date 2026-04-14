@@ -4,31 +4,38 @@ import type {
   AnkiConfig,
   ApiConfig,
   PromptConfig,
+  ReadingPreferences,
   RunSession,
   SentenceItem,
 } from '../types'
 import {
   ANKI_STORAGE_KEY,
   clampConcurrency,
+  clampReadingContentWidth,
+  clampReadingFontSize,
   clearPersistedStorage,
   CONFIG_STORAGE_KEY,
   defaultAnkiConfig,
   defaultConfig,
   defaultPromptConfig,
+  defaultReadingPreferences,
   defaultSourceText,
   DRAFT_STORAGE_KEY,
   HISTORY_STORAGE_KEY,
   PROMPT_STORAGE_KEY,
+  READING_PREFERENCES_STORAGE_KEY,
   restoreAnkiConfig,
   restoreConfig,
   restoreDraft,
   restoreHistory,
   restorePromptConfig,
+  restoreReadingPreferences,
   type AnkiConfigChangeHandler,
   type AnkiFieldMappingChangeHandler,
   type ConfigChangeHandler,
   type PersistedDraft,
   type PromptChangeHandler,
+  type ReadingPreferencesChangeHandler,
 } from '../lib/appState'
 import type { Dispatch, SetStateAction } from 'react'
 
@@ -42,9 +49,11 @@ type PersistentConfigState = {
   history: RunSession[]
   initialNotice: string
   promptConfig: PromptConfig
+  readingPreferences: ReadingPreferences
   resetAll: () => void
   resetPromptConfig: () => void
   results: Record<string, AnalysisResult>
+  handleReadingPreferencesChange: ReadingPreferencesChangeHandler
   sentences: SentenceItem[]
   setHistory: Dispatch<SetStateAction<RunSession[]>>
   setResults: Dispatch<SetStateAction<Record<string, AnalysisResult>>>
@@ -58,6 +67,9 @@ export function usePersistentConfig(): PersistentConfigState {
   const [ankiConfig, setAnkiConfig] = useState<AnkiConfig>(restoreAnkiConfig)
   const [apiConfig, setApiConfig] = useState<ApiConfig>(restoreConfig)
   const [promptConfig, setPromptConfig] = useState<PromptConfig>(restorePromptConfig)
+  const [readingPreferences, setReadingPreferences] = useState<ReadingPreferences>(
+    restoreReadingPreferences,
+  )
   const [sourceText, setSourceText] = useState(draft.sourceText)
   const [sentences, setSentences] = useState<SentenceItem[]>(draft.sentences)
   const [results, setResults] = useState<Record<string, AnalysisResult>>(draft.results)
@@ -74,6 +86,10 @@ export function usePersistentConfig(): PersistentConfigState {
   useEffect(() => {
     localStorage.setItem(PROMPT_STORAGE_KEY, JSON.stringify(promptConfig))
   }, [promptConfig])
+
+  useEffect(() => {
+    localStorage.setItem(READING_PREFERENCES_STORAGE_KEY, JSON.stringify(readingPreferences))
+  }, [readingPreferences])
 
   useEffect(() => {
     localStorage.setItem(
@@ -116,6 +132,19 @@ export function usePersistentConfig(): PersistentConfigState {
     })
   }, [])
 
+  const handleReadingPreferencesChange: ReadingPreferencesChangeHandler = useCallback(
+    (key, value) => {
+      setReadingPreferences((current) => ({
+        ...current,
+        [key]:
+          key === 'contentWidth'
+            ? clampReadingContentWidth(value)
+            : clampReadingFontSize(value),
+      }))
+    },
+    [],
+  )
+
   const resetPromptConfig = useCallback(() => {
     setPromptConfig(defaultPromptConfig)
   }, [])
@@ -125,6 +154,7 @@ export function usePersistentConfig(): PersistentConfigState {
     setAnkiConfig(defaultAnkiConfig)
     setApiConfig(defaultConfig)
     setPromptConfig(defaultPromptConfig)
+    setReadingPreferences(defaultReadingPreferences)
     setSourceText('')
     setSentences([])
     setResults({})
@@ -141,9 +171,11 @@ export function usePersistentConfig(): PersistentConfigState {
     handleAnkiFieldMappingChange,
     handleConfigChange,
     handlePromptChange,
+    handleReadingPreferencesChange,
     history,
     initialNotice,
     promptConfig,
+    readingPreferences,
     resetAll,
     resetPromptConfig,
     results,

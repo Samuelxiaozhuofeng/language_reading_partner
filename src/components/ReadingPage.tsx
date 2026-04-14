@@ -9,6 +9,7 @@ import type {
   AnalysisHighlight,
   AnalysisResult,
   ChapterParagraphBlock,
+  ReadingPreferences,
   ReadingResumeAnchor,
   SentenceItem,
   SentenceRange,
@@ -42,6 +43,10 @@ type ReadingPageProps = {
   onBackToWorkspace: () => void
   onOpenAdjacentChapter: (chapterId: string | null) => void
   onOpenResources: () => void
+  onReadingPreferencesChange: <Key extends keyof ReadingPreferences>(
+    key: Key,
+    value: ReadingPreferences[Key],
+  ) => void
   onRemoveHighlight: (signature: string) => void
   onSaveHighlight: (
     sentence: SentenceItem,
@@ -50,6 +55,7 @@ type ReadingPageProps = {
   ) => void
   onSetResumeAnchor?: (sentence: SentenceItem, sentenceIndex: number) => void
   paragraphBlocks?: ChapterParagraphBlock[]
+  readingPreferences: ReadingPreferences
   resumeAnchor?: ReadingResumeAnchor | null
   results: Record<string, AnalysisResult>
   savedHighlightSignatures: Set<string>
@@ -79,57 +85,66 @@ type SentenceDetailPanelProps = {
   sentence: SentenceItem
 }
 
-type DesktopPopoverPosition = {
-  left: number
-  maxHeight: number
-  placement: 'top' | 'bottom'
-  top: number
+type InspectorMode = 'docked' | 'sheet'
+
+type SentenceInspectorProps = {
+  activeSelection: HighlightSelection | null
+  activeSentence: SentenceItem | null
+  activeSentenceIndex: number | null
+  mode: InspectorMode
+  onAddToAnki: (
+    sentence: SentenceItem,
+    result: AnalysisResult,
+    highlight: AnalysisHighlight,
+  ) => Promise<void>
+  onCloseSentence: () => void
+  onOpenResources: () => void
+  onRemoveHighlight: (signature: string) => void
+  onSaveHighlight: (
+    sentence: SentenceItem,
+    result: AnalysisResult,
+    highlight: AnalysisHighlight,
+  ) => void
+  onSelectHighlight: (sentenceId: string, highlightId: string) => void
+  onSetCurrentResumeAnchor: () => void
+  resolveStatusLabel: (status: SentenceItem['status']) => string
+  results: Record<string, AnalysisResult>
+  resumeAnchorSentenceId: string | null
+  savedHighlightSignatures: Set<string>
 }
 
-type InspectorMode = 'popover' | 'sheet'
+type ReadingDisplaySettingsProps = {
+  isOpen: boolean
+  onClose: () => void
+  onReadingPreferencesChange: <Key extends keyof ReadingPreferences>(
+    key: Key,
+    value: ReadingPreferences[Key],
+  ) => void
+  onToggle: () => void
+  readingPreferences: ReadingPreferences
+}
 
-const MOBILE_READING_BREAKPOINT = 720
-const DESKTOP_POPOVER_MIN_VIEWPORT_WIDTH = 960
-const DESKTOP_POPOVER_MIN_VIEWPORT_HEIGHT = 680
-const DESKTOP_POPOVER_MIN_WIDTH = 280
-const DESKTOP_POPOVER_MAX_WIDTH = 420
-const DESKTOP_POPOVER_WIDTH_RATIO = 0.32
-const DESKTOP_POPOVER_ESTIMATED_HEIGHT = 420
-const DESKTOP_POPOVER_GAP = 12
-const DESKTOP_POPOVER_PADDING = 16
+const DOCKED_READING_BREAKPOINT = 960
 
 function getViewportSize() {
   if (typeof window === 'undefined') {
     return {
-      height: 0,
       width: 0,
     }
   }
 
   return {
-    height: window.visualViewport?.height ?? window.innerHeight,
     width: window.visualViewport?.width ?? window.innerWidth,
   }
 }
 
 function getInspectorMode(): InspectorMode {
-  const { height, width } = getViewportSize()
-  if (width <= MOBILE_READING_BREAKPOINT) {
+  const { width } = getViewportSize()
+  if (width <= DOCKED_READING_BREAKPOINT) {
     return 'sheet'
   }
 
-  if (width < DESKTOP_POPOVER_MIN_VIEWPORT_WIDTH || height < DESKTOP_POPOVER_MIN_VIEWPORT_HEIGHT) {
-    return 'sheet'
-  }
-
-  return 'popover'
-}
-
-function getDesktopPopoverWidth(viewportWidth: number) {
-  return Math.min(
-    DESKTOP_POPOVER_MAX_WIDTH,
-    Math.max(DESKTOP_POPOVER_MIN_WIDTH, viewportWidth * DESKTOP_POPOVER_WIDTH_RATIO),
-  )
+  return 'docked'
 }
 
 function buildSelectionKey(sentenceId: string, highlightId: string) {
@@ -385,7 +400,7 @@ function SentenceDetailPanel({
                     disabled={visibleAnkiStatus === 'loading'}
                     onClick={() => void handleAddToAnki()}
                   >
-                    {visibleAnkiStatus === 'loading' ? '添加到 Anki 中...' : '添加到 Anki'}
+                    {visibleAnkiStatus === 'loading' ? '📥 添加到 Anki 中...' : '📥 添加到 Anki'}
                   </button>
 
                   <button className="ghost-button" type="button" onClick={onOpenResources}>
@@ -411,6 +426,198 @@ function SentenceDetailPanel({
   )
 }
 
+function ReadingSettingsIcon() {
+  return (
+    <svg aria-hidden="true" className="reading-display-icon" viewBox="0 0 24 24">
+      <path
+        d="M4 7h10M18 7h2M4 17h3M11 17h9M14 7a2 2 0 1 0 0-4a2 2 0 0 0 0 4Zm-4 12a2 2 0 1 0 0-4a2 2 0 0 0 0 4Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  )
+}
+
+function ReadingDisplaySettings({
+  isOpen,
+  onClose,
+  onReadingPreferencesChange,
+  onToggle,
+  readingPreferences,
+}: ReadingDisplaySettingsProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        panelRef.current &&
+        event.target instanceof Node &&
+        !panelRef.current.contains(event.target)
+      ) {
+        onClose()
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => window.removeEventListener('pointerdown', handlePointerDown)
+  }, [isOpen, onClose])
+
+  return (
+    <div className={`reading-display-settings ${isOpen ? 'is-open' : ''}`} ref={panelRef}>
+      <button
+        aria-expanded={isOpen}
+        aria-label="阅读设置"
+        className="ghost-button reading-display-trigger"
+        type="button"
+        onClick={onToggle}
+      >
+        <ReadingSettingsIcon />
+        <span>阅读设置</span>
+      </button>
+
+      {isOpen ? (
+        <section className="reading-display-popover" aria-label="阅读偏好">
+          <div className="reading-display-popover-header">
+            <div>
+              <p className="section-kicker">Reader</p>
+              <h3>版面与字号</h3>
+            </div>
+            <button className="ghost-button reading-display-close" type="button" onClick={onClose}>
+              收起
+            </button>
+          </div>
+
+          <label className="reading-display-field">
+            <span>阅读容器宽度</span>
+            <strong>{readingPreferences.contentWidth}px</strong>
+            <input
+              max="1180"
+              min="720"
+              step="20"
+              type="range"
+              value={readingPreferences.contentWidth}
+              onChange={(event) =>
+                onReadingPreferencesChange('contentWidth', Number(event.currentTarget.value))
+              }
+            />
+          </label>
+
+          <label className="reading-display-field">
+            <span>文字大小</span>
+            <strong>{readingPreferences.fontSize}px</strong>
+            <input
+              max="24"
+              min="16"
+              step="1"
+              type="range"
+              value={readingPreferences.fontSize}
+              onChange={(event) =>
+                onReadingPreferencesChange('fontSize', Number(event.currentTarget.value))
+              }
+            />
+          </label>
+        </section>
+      ) : null}
+    </div>
+  )
+}
+
+function SentenceInspector({
+  activeSelection,
+  activeSentence,
+  activeSentenceIndex,
+  mode,
+  onAddToAnki,
+  onCloseSentence,
+  onOpenResources,
+  onRemoveHighlight,
+  onSaveHighlight,
+  onSelectHighlight,
+  onSetCurrentResumeAnchor,
+  resolveStatusLabel,
+  results,
+  resumeAnchorSentenceId,
+  savedHighlightSignatures,
+}: SentenceInspectorProps) {
+  if (!activeSentence) {
+    return (
+      <aside aria-label="句子解释" className="reading-inspector is-docked">
+        <div className="reading-inspector-empty">
+          <p className="section-kicker">Sentence Note</p>
+          <h3>句子解释</h3>
+          <p>点击左侧任意一句，解释会固定显示在这里，并和正文保持同一套宽度与字号节奏。</p>
+        </div>
+      </aside>
+    )
+  }
+
+  const isPinned = activeSentence.id === resumeAnchorSentenceId
+  const inspectorClassName =
+    mode === 'docked' ? 'reading-inspector is-docked' : 'reading-inspector is-sheet'
+
+  return (
+    <section
+      aria-label="句子解释"
+      aria-modal={mode === 'sheet' ? 'true' : undefined}
+      className={inspectorClassName}
+      role={mode === 'sheet' ? 'dialog' : 'region'}
+    >
+      <div className="reading-inspector-header">
+        <div>
+          <p className="section-kicker">Sentence Note</p>
+          <h3>句子解释</h3>
+        </div>
+        <div className="reading-inspector-actions">
+          <button
+            className={`ghost-button reading-resume-button ${isPinned ? 'is-pinned' : ''}`}
+            type="button"
+            onClick={onSetCurrentResumeAnchor}
+          >
+            {isPinned ? '📌 已记住位置' : '📌'}
+          </button>
+          <button
+            className="ghost-button reading-inspector-close"
+            type="button"
+            onClick={onCloseSentence}
+          >
+            {mode === 'docked' ? '清空' : '关闭'}
+          </button>
+        </div>
+      </div>
+
+      <div className="reading-inspector-meta">
+        {activeSentenceIndex !== null ? <span>句子 #{activeSentenceIndex}</span> : null}
+        <span className={`status-badge status-${activeSentence.status}`}>
+          {resolveStatusLabel(activeSentence.status)}
+        </span>
+      </div>
+
+      <p className="reading-inspector-sentence">
+        {activeSentence.editedText || activeSentence.text}
+      </p>
+
+      <SentenceDetailPanel
+        activeSelection={activeSelection}
+        onAddToAnki={onAddToAnki}
+        onOpenResources={onOpenResources}
+        onRemoveHighlight={onRemoveHighlight}
+        onSaveHighlight={onSaveHighlight}
+        onSelectHighlight={onSelectHighlight}
+        result={results[activeSentence.id]}
+        savedHighlightSignatures={savedHighlightSignatures}
+        sentence={activeSentence}
+      />
+    </section>
+  )
+}
+
 function ReadingPage({
   activeRange,
   adjacentChapterIds,
@@ -423,10 +630,12 @@ function ReadingPage({
   onBackToWorkspace,
   onOpenAdjacentChapter,
   onOpenResources,
+  onReadingPreferencesChange,
   onRemoveHighlight,
   onSaveHighlight,
   onSetResumeAnchor,
   paragraphBlocks,
+  readingPreferences,
   resumeAnchor,
   results,
   savedHighlightSignatures,
@@ -441,13 +650,13 @@ function ReadingPage({
   const [activeSentenceId, setActiveSentenceId] = useState<string | null>(null)
   const [expandedSentenceIds, setExpandedSentenceIds] = useState<Set<string>>(() => new Set())
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>(() => getInspectorMode())
-  const [desktopPopoverPosition, setDesktopPopoverPosition] = useState<DesktopPopoverPosition | null>(null)
+  const [isReadingSettingsOpen, setIsReadingSettingsOpen] = useState(false)
   const [resumeHighlightSentenceId, setResumeHighlightSentenceId] = useState<string | null>(() => {
     const resolvedAnchor = resolveReadingResumeAnchor(sentences, resumeAnchor)
     return isChapterMode ? resolvedAnchor?.sentence.id ?? null : null
   })
+  const readingShellRef = useRef<HTMLElement | null>(null)
   const sentenceButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
-  const inspectorRef = useRef<HTMLElement | null>(null)
   const validSentenceIdSet = useMemo(
     () => new Set(sentences.map((sentence) => sentence.id)),
     [sentences],
@@ -486,54 +695,19 @@ function ReadingPage({
   )
   const resumeAnchorSentenceId = resolvedResumeAnchor?.sentence.id ?? null
   const [initialResumeTargetId] = useState(() => resumeAnchorSentenceId)
-
-  const calculateDesktopPopoverPosition = (sentenceId: string): DesktopPopoverPosition | null => {
-    if (typeof window === 'undefined' || getInspectorMode() !== 'popover') {
-      return null
-    }
-
-    const anchor = sentenceButtonRefs.current[sentenceId]
-    if (!anchor) {
-      return null
-    }
-
-    const { height: viewportHeight, width: viewportWidth } = getViewportSize()
-    const anchorRect = anchor.getBoundingClientRect()
-    const inspectorWidth = Math.min(
-      inspectorRef.current?.offsetWidth ?? getDesktopPopoverWidth(viewportWidth),
-      viewportWidth - DESKTOP_POPOVER_PADDING * 2,
-    )
-    const inspectorHeight = Math.min(
-      inspectorRef.current?.offsetHeight ?? DESKTOP_POPOVER_ESTIMATED_HEIGHT,
-      viewportHeight - DESKTOP_POPOVER_PADDING * 2,
-    )
-    const spaceBelow = viewportHeight - anchorRect.bottom - DESKTOP_POPOVER_PADDING
-    const spaceAbove = anchorRect.top - DESKTOP_POPOVER_PADDING
-    const placement =
-      spaceBelow >= inspectorHeight + DESKTOP_POPOVER_GAP || spaceBelow >= spaceAbove
-        ? 'bottom'
-        : 'top'
-    const unclampedTop =
-      placement === 'bottom'
-        ? anchorRect.bottom + DESKTOP_POPOVER_GAP
-        : anchorRect.top - inspectorHeight - DESKTOP_POPOVER_GAP
-    const top = Math.min(
-      Math.max(DESKTOP_POPOVER_PADDING, unclampedTop),
-      viewportHeight - inspectorHeight - DESKTOP_POPOVER_PADDING,
-    )
-    const unclampedLeft = anchorRect.left + anchorRect.width / 2 - inspectorWidth / 2
-    const left = Math.min(
-      Math.max(DESKTOP_POPOVER_PADDING, unclampedLeft),
-      viewportWidth - inspectorWidth - DESKTOP_POPOVER_PADDING,
-    )
-
-    return {
-      left,
-      maxHeight: viewportHeight - DESKTOP_POPOVER_PADDING * 2,
-      placement,
-      top,
-    }
-  }
+  const shouldDockInspector = isChapterMode && inspectorMode === 'docked'
+  const readingShellStyle = useMemo(
+    () =>
+      ({
+        '--reading-content-width': `${readingPreferences.contentWidth}px`,
+        '--reading-body-font-size': `${readingPreferences.fontSize}px`,
+        '--reading-panel-font-size': `${Math.max(16, readingPreferences.fontSize - 1)}px`,
+        '--reading-inspector-width': `${Math.round(
+          Math.min(420, Math.max(320, readingPreferences.contentWidth * 0.42)),
+        )}px`,
+      }) as CSSProperties,
+    [readingPreferences.contentWidth, readingPreferences.fontSize],
+  )
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -552,32 +726,6 @@ function ReadingPage({
       window.visualViewport?.removeEventListener('resize', handleResize)
     }
   }, [])
-
-  useEffect(() => {
-    if (!isChapterMode || !effectiveActiveSentenceId || inspectorMode !== 'popover') {
-      return
-    }
-
-    const updatePosition = () => {
-      const nextPosition = calculateDesktopPopoverPosition(effectiveActiveSentenceId)
-      setDesktopPopoverPosition(nextPosition)
-    }
-
-    const frameId = window.requestAnimationFrame(updatePosition)
-    const visualViewport = window.visualViewport
-    window.addEventListener('resize', updatePosition)
-    window.addEventListener('scroll', updatePosition, true)
-    visualViewport?.addEventListener('resize', updatePosition)
-    visualViewport?.addEventListener('scroll', updatePosition)
-
-    return () => {
-      window.cancelAnimationFrame(frameId)
-      window.removeEventListener('resize', updatePosition)
-      window.removeEventListener('scroll', updatePosition, true)
-      visualViewport?.removeEventListener('resize', updatePosition)
-      visualViewport?.removeEventListener('scroll', updatePosition)
-    }
-  }, [effectiveActiveSelection, effectiveActiveSentenceId, inspectorMode, isChapterMode])
 
   useEffect(() => {
     if (!isChapterMode || !initialResumeTargetId) {
@@ -610,6 +758,36 @@ function ReadingPage({
     return () => window.clearTimeout(timerId)
   }, [resumeHighlightSentenceId])
 
+  useEffect(() => {
+    if (!shouldDockInspector || !activeSentence) {
+      return
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Element)) {
+        return
+      }
+
+      if (!readingShellRef.current?.contains(event.target)) {
+        return
+      }
+
+      if (
+        event.target.closest('.reading-inspector') ||
+        event.target.closest('.reading-inline-sentence') ||
+        event.target.closest('button, input, textarea, select, label')
+      ) {
+        return
+      }
+
+      setActiveSentenceId(null)
+      setActiveSelection(null)
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => window.removeEventListener('pointerdown', handlePointerDown)
+  }, [activeSentence, shouldDockInspector])
+
   const handleSelectHighlight = (sentenceId: string, highlightId: string) => {
     setActiveSelection((current) =>
       current?.sentenceId === sentenceId && current.highlightId === highlightId
@@ -620,19 +798,12 @@ function ReadingPage({
 
   const handleOpenSentence = (sentenceId: string) => {
     setActiveSelection(null)
-    const nextSentenceId = effectiveActiveSentenceId === sentenceId ? null : sentenceId
-    setActiveSentenceId(nextSentenceId)
-    setDesktopPopoverPosition(
-      nextSentenceId && inspectorMode === 'popover'
-        ? calculateDesktopPopoverPosition(nextSentenceId)
-        : null,
-    )
+    setActiveSentenceId((current) => (current === sentenceId ? null : sentenceId))
   }
 
   const handleCloseSentence = () => {
     setActiveSentenceId(null)
     setActiveSelection(null)
-    setDesktopPopoverPosition(null)
   }
 
   const handleToggleSentence = (sentenceId: string) => {
@@ -672,7 +843,11 @@ function ReadingPage({
 
   return (
     <main className="reading-page">
-      <section className="reading-shell">
+      <section
+        className={`reading-shell ${shouldDockInspector ? 'has-docked-inspector' : ''}`}
+        ref={readingShellRef}
+        style={readingShellStyle}
+      >
         <header className="reading-header">
           <div className="reading-header-top">
             <div className="reading-header-copy">
@@ -680,7 +855,14 @@ function ReadingPage({
               <h2>{readingTitle}</h2>
               {contextTitle?.bookTitle ? <p className="reading-breadcrumb">{contextTitle.bookTitle}</p> : null}
             </div>
-            <div className="panel-actions">
+            <div className="panel-actions reading-header-actions">
+              <ReadingDisplaySettings
+                isOpen={isReadingSettingsOpen}
+                onClose={() => setIsReadingSettingsOpen(false)}
+                onReadingPreferencesChange={onReadingPreferencesChange}
+                onToggle={() => setIsReadingSettingsOpen((current) => !current)}
+                readingPreferences={readingPreferences}
+              />
               <button className="ghost-button" type="button" onClick={onOpenResources}>
                 学习资源
               </button>
@@ -739,161 +921,135 @@ function ReadingPage({
           {globalError ? <p className="notice error">{globalError}</p> : null}
         </header>
 
-        {isChapterMode ? (
-          chapterParagraphs.length === 0 ? (
-            <div className="empty-state reading-empty">
-              <p>这一段暂时还没有可供阅读的正文内容，请先回工作区完成解析。</p>
-            </div>
-          ) : (
-            <div className="reading-flow">
-              {chapterParagraphs.map((paragraph) => (
-                <p className="reading-paragraph" key={paragraph.id}>
-                  {paragraph.sentences.map((sentence) => (
-                    <button
-                      className={`reading-inline-sentence ${
-                        effectiveActiveSentenceId === sentence.id ? 'is-active' : ''
-                      } ${resumeHighlightSentenceId === sentence.id ? 'is-resumed' : ''}`}
-                      key={sentence.id}
-                      ref={(node) => {
-                        sentenceButtonRefs.current[sentence.id] = node
-                      }}
-                      type="button"
-                      onClick={() => handleOpenSentence(sentence.id)}
-                    >
-                      {sentence.editedText || sentence.text}
-                    </button>
+        <div
+          className={`reading-stage ${isChapterMode ? 'is-chapter-mode' : 'is-draft-mode'} ${
+            shouldDockInspector ? 'has-docked-inspector' : ''
+          }`}
+        >
+          <div className="reading-main-column">
+            {isChapterMode ? (
+              chapterParagraphs.length === 0 ? (
+                <div className="empty-state reading-empty">
+                  <p>这一段暂时还没有可供阅读的正文内容，请先回工作区完成解析。</p>
+                </div>
+              ) : (
+                <div className="reading-flow">
+                  {chapterParagraphs.map((paragraph) => (
+                    <p className="reading-paragraph" key={paragraph.id}>
+                      {paragraph.sentences.map((sentence) => (
+                        <button
+                          className={`reading-inline-sentence ${
+                            effectiveActiveSentenceId === sentence.id ? 'is-active' : ''
+                          } ${resumeHighlightSentenceId === sentence.id ? 'is-resumed' : ''}`}
+                          key={sentence.id}
+                          ref={(node) => {
+                            sentenceButtonRefs.current[sentence.id] = node
+                          }}
+                          type="button"
+                          onClick={() => handleOpenSentence(sentence.id)}
+                        >
+                          {sentence.editedText || sentence.text}
+                        </button>
+                      ))}
+                    </p>
                   ))}
-                </p>
-              ))}
-            </div>
-          )
-        ) : (
-          <div className="reading-result-list">
-            {sentences.length === 0 ? (
-              <div className="empty-state reading-empty">
-                <p>先准备一个章节或手动草稿并启动解析，这里会自动显示阅读结果。</p>
-              </div>
+                </div>
+              )
             ) : (
-              sentences.map((sentence, index) => {
-                const isExpanded = effectiveExpandedSentenceIds.has(sentence.id)
+              <div className="reading-result-list">
+                {sentences.length === 0 ? (
+                  <div className="empty-state reading-empty">
+                    <p>先准备一个章节或手动草稿并启动解析，这里会自动显示阅读结果。</p>
+                  </div>
+                ) : (
+                  sentences.map((sentence, index) => {
+                    const isExpanded = effectiveExpandedSentenceIds.has(sentence.id)
 
-                return (
-                  <article className="result-card reading-result-card" key={sentence.id}>
-                    <div className="result-card-header">
-                      <span className="sentence-index">#{index + 1}</span>
-                      <span className={`status-badge status-${sentence.status}`}>
-                        {statusLabelMap[sentence.status]}
-                      </span>
-                    </div>
+                    return (
+                      <article className="result-card reading-result-card" key={sentence.id}>
+                        <div className="result-card-header">
+                          <span className="sentence-index">#{index + 1}</span>
+                          <span className={`status-badge status-${sentence.status}`}>
+                            {statusLabelMap[sentence.status]}
+                          </span>
+                        </div>
 
-                    <button
-                      aria-expanded={isExpanded}
-                      className={`reading-sentence-toggle ${isExpanded ? 'is-expanded' : ''}`}
-                      type="button"
-                      onClick={() => handleToggleSentence(sentence.id)}
-                    >
-                      <span className="reading-sentence-quote">{sentence.editedText || sentence.text}</span>
-                      <span className="reading-sentence-toggle-hint">
-                        {isExpanded ? '收起解释' : '点击展开解释'}
-                      </span>
-                    </button>
+                        <button
+                          aria-expanded={isExpanded}
+                          className={`reading-sentence-toggle ${isExpanded ? 'is-expanded' : ''}`}
+                          type="button"
+                          onClick={() => handleToggleSentence(sentence.id)}
+                        >
+                          <span className="reading-sentence-quote">{sentence.editedText || sentence.text}</span>
+                          <span className="reading-sentence-toggle-hint">
+                            {isExpanded ? '收起解释' : '点击展开解释'}
+                          </span>
+                        </button>
 
-                    {isExpanded ? (
-                      <SentenceDetailPanel
-                        activeSelection={effectiveActiveSelection}
-                        onAddToAnki={onAddToAnki}
-                        onOpenResources={onOpenResources}
-                        onRemoveHighlight={onRemoveHighlight}
-                        onSaveHighlight={onSaveHighlight}
-                        onSelectHighlight={handleSelectHighlight}
-                        result={results[sentence.id]}
-                        savedHighlightSignatures={savedHighlightSignatures}
-                        sentence={sentence}
-                      />
-                    ) : null}
-                  </article>
-                )
-              })
+                        {isExpanded ? (
+                          <SentenceDetailPanel
+                            activeSelection={effectiveActiveSelection}
+                            onAddToAnki={onAddToAnki}
+                            onOpenResources={onOpenResources}
+                            onRemoveHighlight={onRemoveHighlight}
+                            onSaveHighlight={onSaveHighlight}
+                            onSelectHighlight={handleSelectHighlight}
+                            result={results[sentence.id]}
+                            savedHighlightSignatures={savedHighlightSignatures}
+                            sentence={sentence}
+                          />
+                        ) : null}
+                      </article>
+                    )
+                  })
+                )}
+              </div>
             )}
           </div>
-        )}
-      </section>
 
-      {isChapterMode && activeSentence ? (
-        <div
-          className={`reading-overlay ${inspectorMode === 'popover' ? 'is-popover' : 'is-sheet'}`}
-          role="presentation"
-          onClick={inspectorMode === 'popover' ? undefined : handleCloseSentence}
-        >
-          <section
-            aria-label="句子解释"
-            aria-modal="true"
-            className={`reading-inspector ${
-              inspectorMode === 'popover' ? 'is-popover' : 'is-sheet'
-            } ${
-              desktopPopoverPosition?.placement === 'top' ? 'is-above' : 'is-below'
-            }`}
-            role="dialog"
-            ref={(node) => {
-              inspectorRef.current = node
-            }}
-            style={
-              inspectorMode === 'popover' && desktopPopoverPosition
-                ? ({
-                    left: desktopPopoverPosition.left,
-                    maxHeight: desktopPopoverPosition.maxHeight,
-                    top: desktopPopoverPosition.top,
-                  } satisfies CSSProperties)
-                : undefined
-            }
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="reading-inspector-header">
-              <div>
-                <p className="section-kicker">Sentence Note</p>
-                <h3>句子解释</h3>
-              </div>
-              <button
-                className={`ghost-button reading-resume-button ${
-                  activeSentence.id === resumeAnchorSentenceId ? 'is-pinned' : ''
-                }`}
-                type="button"
-                onClick={handleSetCurrentResumeAnchor}
-              >
-                {activeSentence.id === resumeAnchorSentenceId ? '📍 已记住位置' : '📍 标记到这里'}
-              </button>
-              <button
-                className="ghost-button reading-inspector-close"
-                type="button"
-                onClick={handleCloseSentence}
-              >
-                关闭
-              </button>
-            </div>
-
-            <div className="reading-inspector-meta">
-              {activeSentenceIndex !== null ? <span>句子 #{activeSentenceIndex}</span> : null}
-              <span className={`status-badge status-${activeSentence.status}`}>
-                {statusLabelMap[activeSentence.status]}
-              </span>
-            </div>
-
-            <p className="reading-inspector-sentence">
-              {activeSentence.editedText || activeSentence.text}
-            </p>
-
-            <SentenceDetailPanel
+          {shouldDockInspector ? (
+            <SentenceInspector
               activeSelection={effectiveActiveSelection}
+              activeSentence={activeSentence}
+              activeSentenceIndex={activeSentenceIndex}
+              mode="docked"
               onAddToAnki={onAddToAnki}
+              onCloseSentence={handleCloseSentence}
               onOpenResources={onOpenResources}
               onRemoveHighlight={onRemoveHighlight}
               onSaveHighlight={onSaveHighlight}
               onSelectHighlight={handleSelectHighlight}
-              result={results[activeSentence.id]}
+              onSetCurrentResumeAnchor={handleSetCurrentResumeAnchor}
+              resolveStatusLabel={(status) => statusLabelMap[status]}
+              results={results}
+              resumeAnchorSentenceId={resumeAnchorSentenceId}
               savedHighlightSignatures={savedHighlightSignatures}
-              sentence={activeSentence}
             />
-          </section>
+          ) : null}
+        </div>
+      </section>
+
+      {isChapterMode && !shouldDockInspector && activeSentence ? (
+        <div className="reading-overlay is-sheet" role="presentation" onClick={handleCloseSentence}>
+          <div className="reading-sheet-frame" onClick={(event) => event.stopPropagation()}>
+            <SentenceInspector
+              activeSelection={effectiveActiveSelection}
+              activeSentence={activeSentence}
+              activeSentenceIndex={activeSentenceIndex}
+              mode="sheet"
+              onAddToAnki={onAddToAnki}
+              onCloseSentence={handleCloseSentence}
+              onOpenResources={onOpenResources}
+              onRemoveHighlight={onRemoveHighlight}
+              onSaveHighlight={onSaveHighlight}
+              onSelectHighlight={handleSelectHighlight}
+              onSetCurrentResumeAnchor={handleSetCurrentResumeAnchor}
+              resolveStatusLabel={(status) => statusLabelMap[status]}
+              results={results}
+              resumeAnchorSentenceId={resumeAnchorSentenceId}
+              savedHighlightSignatures={savedHighlightSignatures}
+            />
+          </div>
         </div>
       ) : null}
     </main>

@@ -6,6 +6,7 @@ import type {
   ApiConfig,
   ChapterAnalysisState,
   PromptConfig,
+  ReadingPreferences,
   RunSession,
   SettingsTab,
   SentenceItem,
@@ -18,8 +19,13 @@ export const PROMPT_STORAGE_KEY = 'spanish-reading-assistant/prompt'
 export const ANKI_STORAGE_KEY = 'spanish-reading-assistant/anki'
 export const DRAFT_STORAGE_KEY = 'spanish-reading-assistant/draft'
 export const HISTORY_STORAGE_KEY = 'spanish-reading-assistant/history'
+export const READING_PREFERENCES_STORAGE_KEY = 'spanish-reading-assistant/reading-preferences'
 export const MAX_HISTORY_ITEMS = 6
 export const MAX_CONCURRENCY = 99
+export const MIN_READING_CONTENT_WIDTH = 720
+export const MAX_READING_CONTENT_WIDTH = 1180
+export const MIN_READING_FONT_SIZE = 16
+export const MAX_READING_FONT_SIZE = 24
 
 export const defaultConfig: ApiConfig = {
   baseUrl: 'https://api.openai.com/v1',
@@ -65,6 +71,11 @@ export const defaultPromptConfig: PromptConfig = {
     '当前句：{sentence}',
     '下文：{nextSentence}',
   ].join('\n'),
+}
+
+export const defaultReadingPreferences: ReadingPreferences = {
+  contentWidth: 940,
+  fontSize: 18,
 }
 
 const ankiFieldSources: AnkiFieldSource[] = [
@@ -126,6 +137,11 @@ export type AnkiFieldMappingChangeHandler = (
 
 export type PromptChangeHandler = (value: string) => void
 
+export type ReadingPreferencesChangeHandler = <Key extends keyof ReadingPreferences>(
+  key: Key,
+  value: ReadingPreferences[Key],
+) => void
+
 function convertLegacyPromptConfig(parsed: Partial<PromptConfig> & {
   systemPrompt?: unknown
   userPromptTemplate?: unknown
@@ -176,6 +192,27 @@ export function clampConcurrency(value: unknown): number {
   return Math.min(MAX_CONCURRENCY, Math.max(1, Math.round(numeric)))
 }
 
+export function clampReadingContentWidth(value: unknown): number {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) {
+    return defaultReadingPreferences.contentWidth
+  }
+
+  return Math.min(
+    MAX_READING_CONTENT_WIDTH,
+    Math.max(MIN_READING_CONTENT_WIDTH, Math.round(numeric)),
+  )
+}
+
+export function clampReadingFontSize(value: unknown): number {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) {
+    return defaultReadingPreferences.fontSize
+  }
+
+  return Math.min(MAX_READING_FONT_SIZE, Math.max(MIN_READING_FONT_SIZE, Math.round(numeric)))
+}
+
 export function restoreConfig(): ApiConfig {
   const saved = localStorage.getItem(CONFIG_STORAGE_KEY)
   if (!saved) {
@@ -210,6 +247,23 @@ export function restorePromptConfig(): PromptConfig {
     return migrated
   } catch {
     return defaultPromptConfig
+  }
+}
+
+export function restoreReadingPreferences(): ReadingPreferences {
+  const saved = localStorage.getItem(READING_PREFERENCES_STORAGE_KEY)
+  if (!saved) {
+    return defaultReadingPreferences
+  }
+
+  try {
+    const parsed = JSON.parse(saved) as Partial<ReadingPreferences>
+    return {
+      contentWidth: clampReadingContentWidth(parsed.contentWidth),
+      fontSize: clampReadingFontSize(parsed.fontSize),
+    }
+  } catch {
+    return defaultReadingPreferences
   }
 }
 
@@ -290,6 +344,7 @@ export function clearPersistedStorage() {
   localStorage.removeItem(ANKI_STORAGE_KEY)
   localStorage.removeItem(DRAFT_STORAGE_KEY)
   localStorage.removeItem(HISTORY_STORAGE_KEY)
+  localStorage.removeItem(READING_PREFERENCES_STORAGE_KEY)
 }
 
 export function cleanSentences(sentences: SentenceItem[]): SentenceItem[] {

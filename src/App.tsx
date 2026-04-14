@@ -552,6 +552,7 @@ function App() {
           onBackToWorkspace={() => setActivePage('workspace')}
           onOpenAdjacentChapter={handleOpenAdjacentChapter}
           onOpenResources={openResources}
+          onReadingPreferencesChange={persistent.handleReadingPreferencesChange}
           onRemoveHighlight={(signature) => void handleRemoveHighlight(signature)}
           onSaveHighlight={(sentence, result, highlight) =>
             void handleSaveHighlight(sentence, result, highlight)
@@ -560,6 +561,7 @@ function App() {
             void handleSetResumeAnchor(sentence, sentenceIndex)
           }
           paragraphBlocks={activeChapter?.paragraphBlocks}
+          readingPreferences={persistent.readingPreferences}
           resumeAnchor={activeChapter?.resumeAnchor}
           results={workspaceResults}
           savedHighlightSignatures={savedResourceSignatures}

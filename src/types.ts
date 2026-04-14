@@ -27,6 +27,11 @@ export type PromptConfig = {
   template: string
 }
 
+export type ReadingPreferences = {
+  contentWidth: number
+  fontSize: number
+}
+
 export type AnkiFieldMapping = Record<AnkiFieldSource, string>
 
 export type AnkiConfig = {
