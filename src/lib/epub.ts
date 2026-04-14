@@ -26,6 +26,7 @@ type ImportedChapterDraft = Pick<
   | 'results'
   | 'activeRange'
   | 'lastReadEnd'
+  | 'resumeAnchor'
 >
 
 type ImportedBookPayload = {
@@ -96,6 +97,7 @@ async function sectionToDraft(
     results: {},
     activeRange: null,
     lastReadEnd: -1,
+    resumeAnchor: null,
   } satisfies ImportedChapterDraft
 }
 

@@ -56,6 +56,12 @@ export type ChapterParagraphBlock = {
   text: string
 }
 
+export type ReadingResumeAnchor = {
+  sentenceId: string
+  sentenceIndex: number
+  sentenceSnippet: string
+}
+
 export type BookRecord = {
   id: string
   title: string
@@ -82,6 +88,7 @@ export type BookChapterRecord = {
   activeRange: SentenceRange | null
   lastReadEnd: number
   lastOpenedAt?: string
+  resumeAnchor?: ReadingResumeAnchor | null
 }
 
 export type LibrarySelection = {

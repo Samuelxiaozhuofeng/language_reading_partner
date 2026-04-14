@@ -37,6 +37,39 @@ export function getDefaultSentenceRange(
   }
 }
 
+export function doesRangeContainSentenceIndex(
+  range: SentenceRange | null | undefined,
+  sentenceIndex: number,
+  sentenceCount: number,
+) {
+  const normalizedRange = normalizeSentenceRange(range, sentenceCount)
+  if (!normalizedRange) {
+    return false
+  }
+
+  return sentenceIndex >= normalizedRange.start && sentenceIndex <= normalizedRange.end
+}
+
+export function getSentenceRangeAroundIndex(
+  sentenceCount: number,
+  sentenceIndex: number,
+  size = DEFAULT_CHAPTER_RANGE_SIZE,
+): SentenceRange | null {
+  if (sentenceCount <= 0) {
+    return null
+  }
+
+  const normalizedIndex = Math.max(0, Math.min(sentenceIndex, sentenceCount - 1))
+  const normalizedSize = Math.max(1, Math.min(size, sentenceCount))
+  const preferredStart = normalizedIndex - Math.floor(normalizedSize / 4)
+  const start = Math.max(0, Math.min(preferredStart, sentenceCount - normalizedSize))
+
+  return {
+    start,
+    end: Math.min(sentenceCount - 1, start + normalizedSize - 1),
+  }
+}
+
 export function getNextSentenceRange(
   sentenceCount: number,
   lastReadEnd: number,

@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { statusLabelMap } from '../lib/appState'
 import { buildKnowledgeSignature, knowledgeKindLabelMap } from '../lib/knowledge'
+import { resolveReadingResumeAnchor } from '../lib/readingAnchor'
 import { buildChapterReadingParagraphs } from '../lib/readingFlow'
 import type {
   AnalysisHighlight,
   AnalysisResult,
   ChapterParagraphBlock,
+  ReadingResumeAnchor,
   SentenceItem,
   SentenceRange,
   WorkspaceSource,
@@ -40,7 +42,9 @@ type ReadingPageProps = {
     result: AnalysisResult,
     highlight: AnalysisHighlight,
   ) => void
+  onSetResumeAnchor?: (sentence: SentenceItem, sentenceIndex: number) => void
   paragraphBlocks?: ChapterParagraphBlock[]
+  resumeAnchor?: ReadingResumeAnchor | null
   results: Record<string, AnalysisResult>
   savedHighlightSignatures: Set<string>
   sentenceStartIndex: number
@@ -309,7 +313,9 @@ function ReadingPage({
   onOpenResources,
   onRemoveHighlight,
   onSaveHighlight,
+  onSetResumeAnchor,
   paragraphBlocks,
+  resumeAnchor,
   results,
   savedHighlightSignatures,
   sentenceStartIndex,
@@ -325,6 +331,10 @@ function ReadingPage({
     () => typeof window !== 'undefined' && window.innerWidth > MOBILE_READING_BREAKPOINT,
   )
   const [desktopPopoverPosition, setDesktopPopoverPosition] = useState<DesktopPopoverPosition | null>(null)
+  const [resumeHighlightSentenceId, setResumeHighlightSentenceId] = useState<string | null>(() => {
+    const resolvedAnchor = resolveReadingResumeAnchor(sentences, resumeAnchor)
+    return isChapterMode ? resolvedAnchor?.sentence.id ?? null : null
+  })
   const sentenceButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const inspectorRef = useRef<HTMLElement | null>(null)
   const validSentenceIdSet = useMemo(
@@ -359,6 +369,12 @@ function ReadingPage({
   const activeSentenceIndex = activeSentence
     ? sentenceStartIndex + sentences.findIndex((sentence) => sentence.id === activeSentence.id)
     : null
+  const resolvedResumeAnchor = useMemo(
+    () => resolveReadingResumeAnchor(sentences, resumeAnchor),
+    [resumeAnchor, sentences],
+  )
+  const resumeAnchorSentenceId = resolvedResumeAnchor?.sentence.id ?? null
+  const [initialResumeTargetId] = useState(() => resumeAnchorSentenceId)
 
   const calculateDesktopPopoverPosition = (sentenceId: string): DesktopPopoverPosition | null => {
     if (typeof window === 'undefined' || window.innerWidth <= MOBILE_READING_BREAKPOINT) {
@@ -443,6 +459,37 @@ function ReadingPage({
     }
   }, [effectiveActiveSelection, effectiveActiveSentenceId, isChapterMode, isDesktopPopover])
 
+  useEffect(() => {
+    if (!isChapterMode || !initialResumeTargetId) {
+      return
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      sentenceButtonRefs.current[initialResumeTargetId]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [initialResumeTargetId, isChapterMode])
+
+  useEffect(() => {
+    if (!resumeHighlightSentenceId) {
+      return
+    }
+
+    const timerId = window.setTimeout(() => {
+      setResumeHighlightSentenceId((current) =>
+        current === resumeHighlightSentenceId ? null : current,
+      )
+    }, 2600)
+
+    return () => window.clearTimeout(timerId)
+  }, [resumeHighlightSentenceId])
+
   const handleSelectHighlight = (sentenceId: string, highlightId: string) => {
     setActiveSelection((current) =>
       current?.sentenceId === sentenceId && current.highlightId === highlightId
@@ -492,6 +539,15 @@ function ReadingPage({
     }
 
     setExpandedSentenceIds(new Set(sentences.map((sentence) => sentence.id)))
+  }
+
+  const handleSetCurrentResumeAnchor = () => {
+    if (!activeSentence || activeSentenceIndex === null || !onSetResumeAnchor) {
+      return
+    }
+
+    onSetResumeAnchor(activeSentence, activeSentenceIndex)
+    setResumeHighlightSentenceId(activeSentence.id)
   }
 
   return (
@@ -575,7 +631,9 @@ function ReadingPage({
                 <p className="reading-paragraph" key={paragraph.id}>
                   {paragraph.sentences.map((sentence) => (
                     <button
-                      className={`reading-inline-sentence ${effectiveActiveSentenceId === sentence.id ? 'is-active' : ''}`}
+                      className={`reading-inline-sentence ${
+                        effectiveActiveSentenceId === sentence.id ? 'is-active' : ''
+                      } ${resumeHighlightSentenceId === sentence.id ? 'is-resumed' : ''}`}
                       key={sentence.id}
                       ref={(node) => {
                         sentenceButtonRefs.current[sentence.id] = node
@@ -673,6 +731,15 @@ function ReadingPage({
                 <p className="section-kicker">Sentence Note</p>
                 <h3>句子解释</h3>
               </div>
+              <button
+                className={`ghost-button reading-resume-button ${
+                  activeSentence.id === resumeAnchorSentenceId ? 'is-pinned' : ''
+                }`}
+                type="button"
+                onClick={handleSetCurrentResumeAnchor}
+              >
+                {activeSentence.id === resumeAnchorSentenceId ? '📍 已记住位置' : '📍 标记到这里'}
+              </button>
               <button
                 className="ghost-button reading-inspector-close"
                 type="button"

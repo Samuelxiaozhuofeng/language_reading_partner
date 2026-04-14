@@ -9,12 +9,15 @@ import WorkspacePage from './components/WorkspacePage'
 import { countByStatus } from './lib/appState'
 import {
   DEFAULT_CHAPTER_RANGE_SIZE,
+  doesRangeContainSentenceIndex,
   getDefaultSentenceRange,
   getNextSentenceRange,
+  getSentenceRangeAroundIndex,
   getSentencesInRange,
   normalizeSentenceRange,
 } from './lib/chapterRange'
 import { buildKnowledgeSignature } from './lib/knowledge'
+import { buildReadingResumeAnchor, resolveReadingResumeAnchor } from './lib/readingAnchor'
 import { useAnalysisRunner } from './hooks/useAnalysisRunner'
 import { useLibraryStore } from './hooks/useLibraryStore'
 import { usePersistentConfig } from './hooks/usePersistentConfig'
@@ -270,6 +273,35 @@ function App() {
       return
     }
 
+    const resolvedResumeAnchor = resolveReadingResumeAnchor(
+      chapter.sentences,
+      chapter.resumeAnchor,
+    )
+    const activeRangeSize =
+      chapter.activeRange ? chapter.activeRange.end - chapter.activeRange.start + 1 : DEFAULT_CHAPTER_RANGE_SIZE
+
+    if (
+      resolvedResumeAnchor &&
+      !doesRangeContainSentenceIndex(
+        chapter.activeRange,
+        resolvedResumeAnchor.index,
+        chapter.sentences.length,
+      )
+    ) {
+      const nextRange = getSentenceRangeAroundIndex(
+        chapter.sentences.length,
+        resolvedResumeAnchor.index,
+        activeRangeSize,
+      )
+
+      if (nextRange) {
+        await library.updateCurrentChapter((currentChapter) => ({
+          ...currentChapter,
+          activeRange: nextRange,
+        }))
+      }
+    }
+
     setWorkspaceSource('chapter')
     setActivePage('reading')
   }
@@ -370,6 +402,17 @@ function App() {
     await library.removeKnowledgeResourceBySignature(signature)
   }
 
+  const handleSetResumeAnchor = async (sentence: SentenceItem, sentenceIndex: number) => {
+    if (effectiveWorkspaceSource !== 'chapter') {
+      return
+    }
+
+    await library.updateCurrentChapter((chapter) => ({
+      ...chapter,
+      resumeAnchor: buildReadingResumeAnchor(sentence, sentenceIndex),
+    }))
+  }
+
   const manualHistory = effectiveWorkspaceSource === 'draft' ? persistent.history : []
   const currentContextTitle =
     effectiveWorkspaceSource === 'chapter'
@@ -463,7 +506,11 @@ function App() {
           onSaveHighlight={(sentence, result, highlight) =>
             void handleSaveHighlight(sentence, result, highlight)
           }
+          onSetResumeAnchor={(sentence, sentenceIndex) =>
+            void handleSetResumeAnchor(sentence, sentenceIndex)
+          }
           paragraphBlocks={activeChapter?.paragraphBlocks}
+          resumeAnchor={activeChapter?.resumeAnchor}
           results={workspaceResults}
           savedHighlightSignatures={savedResourceSignatures}
           sentenceStartIndex={activeReadingRange?.start ?? 0}

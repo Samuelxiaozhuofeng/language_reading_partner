@@ -95,6 +95,7 @@ export function normalizeChapterRecord(
       nextChapter.sentences.length === 0
         ? -1
         : Math.max(-1, Math.min(nextChapter.lastReadEnd ?? -1, nextChapter.sentences.length - 1)),
+    resumeAnchor: nextChapter.resumeAnchor ?? null,
     analysisState: deriveChapterAnalysisState(nextChapter.sentences, nextChapter.results),
   }
 }
