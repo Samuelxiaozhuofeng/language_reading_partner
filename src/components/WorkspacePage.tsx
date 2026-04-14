@@ -13,9 +13,11 @@ type WorkspacePageProps = {
   globalError: string
   history: RunSession[]
   isRunning: boolean
+  isSavingToLibrary?: boolean
   notice: string
   onBackToLibrary: () => void
   onOpenReading: () => void
+  onSaveToLibrary?: () => void
   onOpenSettings: () => void
   onOpenSettingsAi: () => void
   onRestoreSession: (session: RunSession) => void
@@ -50,9 +52,11 @@ function WorkspacePage({
   globalError,
   history,
   isRunning,
+  isSavingToLibrary = false,
   notice,
   onBackToLibrary,
   onOpenReading,
+  onSaveToLibrary,
   onOpenSettings,
   onOpenSettingsAi,
   onRestoreSession,
@@ -137,6 +141,16 @@ function WorkspacePage({
               <h2>{isChapterMode ? '章节正文与重新分句' : '粘贴内容并分句'}</h2>
             </div>
             <div className="panel-actions">
+              {!isChapterMode && onSaveToLibrary ? (
+                <button
+                  className="ghost-button"
+                  type="button"
+                  onClick={onSaveToLibrary}
+                  disabled={isSavingToLibrary}
+                >
+                  {isSavingToLibrary ? '保存中...' : '保存到书架'}
+                </button>
+              ) : null}
               <button className="ghost-button" type="button" onClick={onOpenSettingsAi}>
                 打开设置
               </button>

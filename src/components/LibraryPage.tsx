@@ -150,7 +150,7 @@ function LibraryPage({
                         <img alt={`${book.title} 封面`} src={book.coverUrl} />
                       ) : (
                         <div className="book-cover-fallback">
-                          <span>EPUB</span>
+                          <span>{book.sourceType === 'manual' ? 'TEXT' : 'EPUB'}</span>
                         </div>
                       )}
                     </div>
@@ -163,6 +163,7 @@ function LibraryPage({
                       <p>{book.author}</p>
                       <div className="book-card-meta">
                         <span>{book.chapterCount} 章</span>
+                        <span>{book.sourceType === 'manual' ? '手动保存' : 'EPUB 导入'}</span>
                         <span>导入于 {formatTime(book.importedAt)}</span>
                       </div>
                     </div>

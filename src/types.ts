@@ -66,6 +66,7 @@ export type BookRecord = {
   id: string
   title: string
   author: string
+  sourceType?: 'epub' | 'manual'
   coverUrl?: string
   importedAt: string
   chapterCount: number

@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
+  AnalysisResult,
   BookChapterRecord,
   BookRecord,
   LibrarySelection,
   SavedKnowledgeResource,
+  SentenceItem,
 } from '../types'
-import { deriveBookAnalysisState, normalizeChapterRecord } from '../lib/chapterText'
+import {
+  createParagraphBlock,
+  deriveBookAnalysisState,
+  normalizeChapterRecord,
+} from '../lib/chapterText'
 import { importEpubBook } from '../lib/epub'
 import { sortSavedResources } from '../lib/knowledge'
 import {
@@ -35,14 +41,39 @@ type RemoveChapterResult = {
   removedCurrentChapter: boolean
 }
 
+type SaveManualDraftInput = {
+  results: Record<string, AnalysisResult>
+  sentences: SentenceItem[]
+  sourceText: string
+}
+
 function updateBookInList(books: BookRecord[], nextBook: BookRecord) {
-  return books
-    .map((book) => (book.id === nextBook.id ? nextBook : book))
+  const hasMatch = books.some((book) => book.id === nextBook.id)
+
+  return (hasMatch ? books.map((book) => (book.id === nextBook.id ? nextBook : book)) : books.concat(nextBook))
     .sort((left, right) => {
       const leftTime = left.lastOpenedAt ?? left.importedAt
       const rightTime = right.lastOpenedAt ?? right.importedAt
       return rightTime.localeCompare(leftTime)
     })
+}
+
+function buildManualBookTitle(sourceText: string, sentences: SentenceItem[]) {
+  const firstLine = sourceText
+    .split('\n')
+    .map((line) => line.trim())
+    .find(Boolean)
+
+  const fallbackSentence = sentences.find((sentence) => sentence.editedText.trim())?.editedText.trim()
+  const seed = firstLine ?? fallbackSentence ?? '手动导入内容'
+  return seed.length > 28 ? `${seed.slice(0, 28)}...` : seed
+}
+
+function buildManualParagraphBlocks(sourceText: string) {
+  return sourceText
+    .split(/\n\s*\n+/)
+    .map((paragraph) => createParagraphBlock(paragraph))
+    .filter((paragraph) => paragraph.text.length > 0)
 }
 
 export function useLibraryStore() {
@@ -239,6 +270,68 @@ export function useLibraryStore() {
       throw error
     } finally {
       setIsImporting(false)
+    }
+  }, [])
+
+  const saveManualDraftAsBook = useCallback(async ({
+    results,
+    sentences,
+    sourceText,
+  }: SaveManualDraftInput) => {
+    const trimmedSourceText = sourceText.trim()
+    if (!trimmedSourceText) {
+      setLibraryNotice('')
+      setLibraryError('请先粘贴一段完整的西语文本，再保存到书架。')
+      return null
+    }
+
+    const paragraphBlocks = buildManualParagraphBlocks(trimmedSourceText)
+    const timestamp = new Date().toISOString()
+    const bookId = crypto.randomUUID()
+    const chapterId = crypto.randomUUID()
+    const normalizedChapter = normalizeChapterRecord({
+      id: chapterId,
+      bookId,
+      title: '手动导入章节',
+      order: 0,
+      originalText: trimmedSourceText,
+      sourceText: trimmedSourceText,
+      paragraphBlocks,
+      sentences,
+      results,
+      analysisState: 'idle',
+      activeRange: null,
+      lastReadEnd: -1,
+      lastOpenedAt: timestamp,
+      resumeAnchor: null,
+    })
+    const book: BookRecord = {
+      id: bookId,
+      title: buildManualBookTitle(trimmedSourceText, sentences),
+      author: '手动导入',
+      sourceType: 'manual',
+      importedAt: timestamp,
+      chapterCount: 1,
+      lastReadChapterId: chapterId,
+      lastOpenedAt: timestamp,
+      analysisState: deriveBookAnalysisState([normalizedChapter]),
+    }
+
+    await saveImportedBook(book, [normalizedChapter])
+    setBooks((current) => updateBookInList(current, book))
+    setChapters([normalizedChapter])
+    setSelection({
+      bookId,
+      chapterId,
+    })
+    currentChapterRef.current = normalizedChapter
+    setCurrentChapter(normalizedChapter)
+    setLibraryNotice(`已将手动内容保存到书架：《${book.title}》。`)
+    setLibraryError('')
+
+    return {
+      book,
+      chapters: [normalizedChapter],
     }
   }, [])
 
@@ -442,6 +535,7 @@ export function useLibraryStore() {
     currentChapter,
     savedResources,
     importBook,
+    saveManualDraftAsBook,
     isImporting,
     isLoading,
     libraryError,

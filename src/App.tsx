@@ -53,6 +53,7 @@ function App() {
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>('ai')
   const [chapterRangeOverrides, setChapterRangeOverrides] = useState<Record<string, SentenceRange | null>>({})
   const [resourceFilter, setResourceFilter] = useState<KnowledgeKind | 'all'>('all')
+  const [isSavingManualDraft, setIsSavingManualDraft] = useState(false)
 
   const persistent = usePersistentConfig()
   const library = useLibraryStore()
@@ -352,6 +353,31 @@ function App() {
     }
   }
 
+  const handleSaveManualDraft = async () => {
+    if (effectiveWorkspaceSource !== 'draft') {
+      return
+    }
+
+    setIsSavingManualDraft(true)
+
+    try {
+      const payload = await library.saveManualDraftAsBook({
+        sourceText: workspaceSourceText,
+        sentences: workspaceSentences,
+        results: workspaceResults,
+      })
+
+      if (!payload?.chapters[0]) {
+        return
+      }
+
+      setWorkspaceSource('chapter')
+      setActivePage('workspace')
+    } finally {
+      setIsSavingManualDraft(false)
+    }
+  }
+
   const handleClearLocalData = async () => {
     analysis.clearStatus()
     persistent.resetAll()
@@ -456,9 +482,11 @@ function App() {
           globalError={analysis.globalError}
           history={manualHistory}
           isRunning={analysis.isRunning}
+          isSavingToLibrary={isSavingManualDraft}
           notice={analysis.notice}
           onBackToLibrary={() => setActivePage('library')}
           onOpenReading={() => setActivePage('reading')}
+          onSaveToLibrary={() => void handleSaveManualDraft()}
           onOpenSettings={openSettings}
           onOpenSettingsAi={openSettingsAi}
           onRestoreSession={analysis.restoreSession}

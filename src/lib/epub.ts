@@ -126,6 +126,7 @@ function buildBookRecord(metadata: PackagingMetadataObject, chapterCount: number
     id: crypto.randomUUID(),
     title: metadata.title?.trim() || '未命名 EPUB',
     author: metadata.creator?.trim() || '作者未知',
+    sourceType: 'epub',
     coverUrl,
     importedAt: new Date().toISOString(),
     chapterCount,
