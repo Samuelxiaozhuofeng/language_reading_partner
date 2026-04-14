@@ -262,12 +262,14 @@
 }
 
 input,
+select,
 textarea,
 button {
   font: inherit;
 }
 
 input,
+select,
 textarea {
   width: 100%;
   border: 1px solid rgba(69, 72, 82, 0.16);
@@ -283,6 +285,7 @@ textarea {
 }
 
 input:focus,
+select:focus,
 textarea:focus {
   outline: none;
   border-color: rgba(14, 125, 120, 0.45);
@@ -1103,6 +1106,12 @@ blockquote {
 .prompt-panel {
   display: grid;
   gap: 10px;
+}
+
+.anki-mapping-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .prompt-toolbar {

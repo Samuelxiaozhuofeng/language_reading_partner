@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { statusLabelMap } from '../lib/appState'
+import { toUserFacingAnkiError } from '../lib/anki'
 import { buildKnowledgeSignature, knowledgeKindLabelMap } from '../lib/knowledge'
 import { resolveReadingResumeAnchor } from '../lib/readingAnchor'
 import { buildChapterReadingParagraphs } from '../lib/readingFlow'
@@ -32,6 +33,11 @@ type ReadingPageProps = {
   errorCount: number
   globalError: string
   notice: string
+  onAddToAnki: (
+    sentence: SentenceItem,
+    result: AnalysisResult,
+    highlight: AnalysisHighlight,
+  ) => Promise<void>
   onBackToLibrary: () => void
   onBackToWorkspace: () => void
   onOpenAdjacentChapter: (chapterId: string | null) => void
@@ -55,6 +61,11 @@ type ReadingPageProps = {
 
 type SentenceDetailPanelProps = {
   activeSelection: HighlightSelection | null
+  onAddToAnki: (
+    sentence: SentenceItem,
+    result: AnalysisResult,
+    highlight: AnalysisHighlight,
+  ) => Promise<void>
   onOpenResources: () => void
   onRemoveHighlight: (signature: string) => void
   onSaveHighlight: (
@@ -214,6 +225,7 @@ function renderGrammarText(
 
 function SentenceDetailPanel({
   activeSelection,
+  onAddToAnki,
   onOpenResources,
   onRemoveHighlight,
   onSaveHighlight,
@@ -222,6 +234,16 @@ function SentenceDetailPanel({
   savedHighlightSignatures,
   sentence,
 }: SentenceDetailPanelProps) {
+  const [ankiSubmitState, setAnkiSubmitState] = useState<{
+    message: string
+    selectionKey: string
+    status: 'idle' | 'loading' | 'success' | 'error'
+  }>({
+    message: '',
+    selectionKey: '',
+    status: 'idle',
+  })
+
   if (!result) {
     return (
       <div className="result-placeholder">
@@ -248,6 +270,40 @@ function SentenceDetailPanel({
   const isSelectedSaved = selectedSignature
     ? savedHighlightSignatures.has(selectedSignature)
     : false
+  const selectedHighlightKey = selectedHighlight
+    ? buildSelectionKey(sentence.id, selectedHighlight.id)
+    : ''
+  const visibleAnkiStatus =
+    ankiSubmitState.selectionKey === selectedHighlightKey ? ankiSubmitState.status : 'idle'
+  const visibleAnkiMessage =
+    ankiSubmitState.selectionKey === selectedHighlightKey ? ankiSubmitState.message : ''
+
+  const handleAddToAnki = async () => {
+    if (!selectedHighlight || !selectedHighlightKey) {
+      return
+    }
+
+    setAnkiSubmitState({
+      message: '正在添加到 Anki...',
+      selectionKey: selectedHighlightKey,
+      status: 'loading',
+    })
+
+    try {
+      await onAddToAnki(sentence, result, selectedHighlight)
+      setAnkiSubmitState({
+        message: `已将「${selectedHighlight.text}」添加到 Anki。`,
+        selectionKey: selectedHighlightKey,
+        status: 'success',
+      })
+    } catch (error) {
+      setAnkiSubmitState({
+        message: toUserFacingAnkiError(error),
+        selectionKey: selectedHighlightKey,
+        status: 'error',
+      })
+    }
+  }
 
   return (
     <div className="analysis-stack">
@@ -323,10 +379,25 @@ function SentenceDetailPanel({
                     </button>
                   )}
 
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={visibleAnkiStatus === 'loading'}
+                    onClick={() => void handleAddToAnki()}
+                  >
+                    {visibleAnkiStatus === 'loading' ? '🤖 添加中...' : '🤖 添加到 Anki'}
+                  </button>
+
                   <button className="ghost-button" type="button" onClick={onOpenResources}>
                     打开学习资源页
                   </button>
                 </div>
+
+                {visibleAnkiStatus !== 'idle' ? (
+                  <p className={`notice ${visibleAnkiStatus === 'success' ? 'success' : visibleAnkiStatus === 'error' ? 'error' : ''}`}>
+                    {visibleAnkiMessage}
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </>
@@ -347,6 +418,7 @@ function ReadingPage({
   errorCount,
   globalError,
   notice,
+  onAddToAnki,
   onBackToLibrary,
   onBackToWorkspace,
   onOpenAdjacentChapter,
@@ -729,6 +801,7 @@ function ReadingPage({
                     {isExpanded ? (
                       <SentenceDetailPanel
                         activeSelection={effectiveActiveSelection}
+                        onAddToAnki={onAddToAnki}
                         onOpenResources={onOpenResources}
                         onRemoveHighlight={onRemoveHighlight}
                         onSaveHighlight={onSaveHighlight}
@@ -811,6 +884,7 @@ function ReadingPage({
 
             <SentenceDetailPanel
               activeSelection={effectiveActiveSelection}
+              onAddToAnki={onAddToAnki}
               onOpenResources={onOpenResources}
               onRemoveHighlight={onRemoveHighlight}
               onSaveHighlight={onSaveHighlight}

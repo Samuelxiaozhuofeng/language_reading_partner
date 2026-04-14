@@ -6,6 +6,7 @@ import ReadingPage from './components/ReadingPage'
 import ResourcesPage from './components/ResourcesPage'
 import SettingsDialog from './components/SettingsDialog'
 import WorkspacePage from './components/WorkspacePage'
+import { addNoteToAnki, buildAnkiNotePayload } from './lib/anki'
 import { countByStatus } from './lib/appState'
 import {
   DEFAULT_CHAPTER_RANGE_SIZE,
@@ -428,6 +429,24 @@ function App() {
     await library.removeKnowledgeResourceBySignature(signature)
   }
 
+  const handleAddHighlightToAnki = async (
+    sentence: SentenceItem,
+    result: AnalysisResult,
+    highlight: {
+      text: string
+      kind: KnowledgeKind
+      explanation: string
+    },
+  ) => {
+    await addNoteToAnki(
+      persistent.ankiConfig,
+      buildAnkiNotePayload(sentence, result, {
+        id: `${sentence.id}:${highlight.kind}:${highlight.text}`,
+        ...highlight,
+      }),
+    )
+  }
+
   const handleSetResumeAnchor = async (sentence: SentenceItem, sentenceIndex: number) => {
     if (effectiveWorkspaceSource !== 'chapter') {
       return
@@ -526,6 +545,9 @@ function App() {
           errorCount={readingErrorCount}
           globalError={analysis.globalError}
           notice={analysis.notice}
+          onAddToAnki={(sentence, result, highlight) =>
+            handleAddHighlightToAnki(sentence, result, highlight)
+          }
           onBackToLibrary={() => setActivePage('library')}
           onBackToWorkspace={() => setActivePage('workspace')}
           onOpenAdjacentChapter={handleOpenAdjacentChapter}
@@ -565,8 +587,11 @@ function App() {
 
       <SettingsDialog
         activeSettingsTab={activeSettingsTab}
+        ankiConfig={persistent.ankiConfig}
         apiConfig={persistent.apiConfig}
         isOpen={isSettingsOpen}
+        onAnkiConfigChange={persistent.handleAnkiConfigChange}
+        onAnkiFieldMappingChange={persistent.handleAnkiFieldMappingChange}
         onClearLocalData={() => void handleClearLocalData()}
         onClose={() => setIsSettingsOpen(false)}
         onConfigChange={persistent.handleConfigChange}

@@ -1,9 +1,16 @@
 export type SentenceStatus = 'idle' | 'queued' | 'running' | 'success' | 'error'
 export type AppPage = 'library' | 'workspace' | 'reading' | 'resources'
-export type SettingsTab = 'ai' | 'prompt'
+export type SettingsTab = 'ai' | 'prompt' | 'anki'
 export type WorkspaceSource = 'draft' | 'chapter'
 export type ChapterAnalysisState = 'idle' | 'partial' | 'running' | 'analyzed'
 export type KnowledgeKind = 'grammar' | 'phrase' | 'vocabulary'
+export type AnkiFieldSource =
+  | 'sentence'
+  | 'grammar'
+  | 'meaning'
+  | 'knowledge'
+  | 'knowledgeKind'
+  | 'knowledgeExplanation'
 export type SentenceRange = {
   start: number
   end: number
@@ -18,6 +25,15 @@ export type ApiConfig = {
 
 export type PromptConfig = {
   template: string
+}
+
+export type AnkiFieldMapping = Record<AnkiFieldSource, string>
+
+export type AnkiConfig = {
+  endpoint: string
+  deck: string
+  noteType: string
+  fieldMapping: AnkiFieldMapping
 }
 
 export type SentenceItem = {

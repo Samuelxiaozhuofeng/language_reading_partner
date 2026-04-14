@@ -1,18 +1,32 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  type AnkiConfigChangeHandler,
+  type AnkiFieldMappingChangeHandler,
   type ConfigChangeHandler,
   MAX_CONCURRENCY,
   type ModelFetchStatus,
   type PromptChangeHandler,
   type SettingsTab,
 } from '../lib/appState'
+import {
+  ankiFieldSourceLabelMap,
+  ankiFieldSourceOrder,
+  fetchAnkiDeckNames,
+  fetchAnkiNoteFields,
+  fetchAnkiNoteTypes,
+  fetchAnkiVersion,
+  toUserFacingAnkiError,
+} from '../lib/anki'
 import { fetchAvailableModels, toUserFacingError } from '../lib/openai'
-import type { ApiConfig, PromptConfig } from '../types'
+import type { AnkiConfig, ApiConfig, PromptConfig } from '../types'
 
 type SettingsDialogProps = {
   activeSettingsTab: SettingsTab
+  ankiConfig: AnkiConfig
   apiConfig: ApiConfig
   isOpen: boolean
+  onAnkiConfigChange: AnkiConfigChangeHandler
+  onAnkiFieldMappingChange: AnkiFieldMappingChangeHandler
   onClearLocalData: () => void
   onClose: () => void
   onConfigChange: ConfigChangeHandler
@@ -24,8 +38,11 @@ type SettingsDialogProps = {
 
 function SettingsDialog({
   activeSettingsTab,
+  ankiConfig,
   apiConfig,
   isOpen,
+  onAnkiConfigChange,
+  onAnkiFieldMappingChange,
   onClearLocalData,
   onClose,
   onConfigChange,
@@ -35,8 +52,13 @@ function SettingsDialog({
   promptConfig,
 }: SettingsDialogProps) {
   const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [availableDecks, setAvailableDecks] = useState<string[]>([])
+  const [availableNoteTypes, setAvailableNoteTypes] = useState<string[]>([])
+  const [availableNoteFields, setAvailableNoteFields] = useState<string[]>([])
   const [modelFetchStatus, setModelFetchStatus] = useState<ModelFetchStatus>('idle')
   const [modelFetchMessage, setModelFetchMessage] = useState('填写 URL 和 API Key 后会自动获取模型列表。')
+  const [ankiFetchStatus, setAnkiFetchStatus] = useState<ModelFetchStatus>('idle')
+  const [ankiFetchMessage, setAnkiFetchMessage] = useState('填写 AnkiConnect URL 后会自动检测连接并加载 deck / note type。')
 
   const runModelFetch = useCallback(async (signal?: AbortSignal) => {
     const baseUrl = apiConfig.baseUrl.trim()
@@ -80,6 +102,77 @@ function SettingsDialog({
     }
   }, [apiConfig.apiKey, apiConfig.baseUrl, apiConfig.model, onConfigChange])
 
+  const runAnkiFetch = useCallback(async (signal?: AbortSignal) => {
+    const endpoint = ankiConfig.endpoint.trim()
+
+    if (!endpoint) {
+      setAvailableDecks([])
+      setAvailableNoteTypes([])
+      setAvailableNoteFields([])
+      setAnkiFetchStatus('idle')
+      setAnkiFetchMessage('填写 AnkiConnect URL 后会自动检测连接并加载 deck / note type。')
+      return
+    }
+
+    setAnkiFetchStatus('loading')
+    setAnkiFetchMessage('正在连接 AnkiConnect...')
+
+    try {
+      const [version, decks, noteTypes] = await Promise.all([
+        fetchAnkiVersion(endpoint, signal),
+        fetchAnkiDeckNames(endpoint, signal),
+        fetchAnkiNoteTypes(endpoint, signal),
+      ])
+
+      const nextDeck = ankiConfig.deck.trim() || decks[0] || ''
+      const nextNoteType = ankiConfig.noteType.trim() || noteTypes[0] || ''
+
+      if (nextDeck && nextDeck !== ankiConfig.deck) {
+        onAnkiConfigChange('deck', nextDeck)
+      }
+
+      if (nextNoteType && nextNoteType !== ankiConfig.noteType) {
+        onAnkiConfigChange('noteType', nextNoteType)
+      }
+
+      const fields = nextNoteType
+        ? await fetchAnkiNoteFields(endpoint, nextNoteType, signal)
+        : []
+
+      for (const source of ankiFieldSourceOrder) {
+        const mappedField = ankiConfig.fieldMapping[source]
+        if (mappedField && !fields.includes(mappedField)) {
+          onAnkiFieldMappingChange(source, '')
+        }
+      }
+
+      setAvailableDecks(decks)
+      setAvailableNoteTypes(noteTypes)
+      setAvailableNoteFields(fields)
+      setAnkiFetchStatus('success')
+      setAnkiFetchMessage(
+        `已连接到 AnkiConnect v${version}，找到 ${decks.length} 个 deck、${noteTypes.length} 个 note type。`,
+      )
+    } catch (error) {
+      if (signal?.aborted) {
+        return
+      }
+
+      setAvailableDecks([])
+      setAvailableNoteTypes([])
+      setAvailableNoteFields([])
+      setAnkiFetchStatus('error')
+      setAnkiFetchMessage(toUserFacingAnkiError(error))
+    }
+  }, [
+    ankiConfig.deck,
+    ankiConfig.endpoint,
+    ankiConfig.fieldMapping,
+    ankiConfig.noteType,
+    onAnkiConfigChange,
+    onAnkiFieldMappingChange,
+  ])
+
   useEffect(() => {
     if (!isOpen || activeSettingsTab !== 'ai') {
       return
@@ -95,6 +188,22 @@ function SettingsDialog({
       window.clearTimeout(timerId)
     }
   }, [activeSettingsTab, apiConfig.apiKey, apiConfig.baseUrl, isOpen, runModelFetch])
+
+  useEffect(() => {
+    if (!isOpen || activeSettingsTab !== 'anki') {
+      return
+    }
+
+    const controller = new AbortController()
+    const timerId = window.setTimeout(() => {
+      void runAnkiFetch(controller.signal)
+    }, 400)
+
+    return () => {
+      controller.abort()
+      window.clearTimeout(timerId)
+    }
+  }, [activeSettingsTab, ankiConfig.endpoint, ankiConfig.noteType, isOpen, runAnkiFetch])
 
   if (!isOpen) {
     return null
@@ -142,6 +251,15 @@ function SettingsDialog({
             onClick={() => onSettingsTabChange('prompt')}
           >
             Prompt
+          </button>
+          <button
+            className={`settings-tab ${activeSettingsTab === 'anki' ? 'is-active' : ''}`}
+            type="button"
+            role="tab"
+            aria-selected={activeSettingsTab === 'anki'}
+            onClick={() => onSettingsTabChange('anki')}
+          >
+            Anki
           </button>
         </div>
 
@@ -243,7 +361,7 @@ function SettingsDialog({
               端点，并把返回的模型列表提供给你选择。
             </p>
           </div>
-        ) : (
+        ) : activeSettingsTab === 'prompt' ? (
           <div className="settings-panel prompt-panel">
             <div className="prompt-toolbar">
               <div className="prompt-hints">
@@ -269,6 +387,95 @@ function SettingsDialog({
             <p className="panel-tip">
               这里只有一个 Prompt 输入框。你在这里写的全部内容会原样作为单条用户消息发送给模型，请保留
               `{'{sentence}'}`、`{'{previousSentence}'}`、`{'{nextSentence}'}` 这些占位符。
+            </p>
+          </div>
+        ) : (
+          <div className="settings-panel prompt-panel">
+            <div className="panel-header settings-subheader">
+              <div>
+                <h3>AnkiConnect</h3>
+              </div>
+              <button
+                className="ghost-button"
+                type="button"
+                disabled={ankiFetchStatus === 'loading' || !ankiConfig.endpoint.trim()}
+                onClick={() => void runAnkiFetch()}
+              >
+                {ankiFetchStatus === 'loading' ? '连接中...' : '测试连接并刷新'}
+              </button>
+            </div>
+
+            <div className="form-grid">
+              <label className="field">
+                <span>AnkiConnect URL</span>
+                <input
+                  type="url"
+                  value={ankiConfig.endpoint}
+                  onChange={(event) => onAnkiConfigChange('endpoint', event.target.value)}
+                  placeholder="http://127.0.0.1:8765"
+                />
+              </label>
+
+              <label className="field">
+                <span>Deck</span>
+                <select
+                  value={ankiConfig.deck}
+                  onChange={(event) => onAnkiConfigChange('deck', event.target.value)}
+                >
+                  <option value="">请选择 deck</option>
+                  {availableDecks.map((deck) => (
+                    <option key={deck} value={deck}>
+                      {deck}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field">
+                <span>Note Type</span>
+                <select
+                  value={ankiConfig.noteType}
+                  onChange={(event) => onAnkiConfigChange('noteType', event.target.value)}
+                >
+                  <option value="">请选择 note type</option>
+                  {availableNoteTypes.map((noteType) => (
+                    <option key={noteType} value={noteType}>
+                      {noteType}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className={`fetch-status fetch-${ankiFetchStatus}`}>
+              <p>{ankiFetchMessage}</p>
+            </div>
+
+            <div className="anki-mapping-grid">
+              {ankiFieldSourceOrder.map((source) => (
+                <label className="field" key={source}>
+                  <span>{ankiFieldSourceLabelMap[source]}</span>
+                  <select
+                    value={ankiConfig.fieldMapping[source]}
+                    onChange={(event) => onAnkiFieldMappingChange(source, event.target.value)}
+                    disabled={!ankiConfig.noteType.trim() || availableNoteFields.length === 0}
+                  >
+                    <option value="">
+                      {ankiConfig.noteType.trim() ? '请选择字段' : '先选择 note type'}
+                    </option>
+                    {availableNoteFields.map((fieldName) => (
+                      <option key={fieldName} value={fieldName}>
+                        {fieldName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+
+            <p className="panel-tip">
+              当前会把 6 个内容源写进你映射的字段：句子、语法、内容、知识点、知识点类型、知识点解释。添加到
+              Anki 时允许重复卡片，失败会直接提示，不会静默跳过。
             </p>
           </div>
         )}

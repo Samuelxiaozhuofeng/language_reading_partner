@@ -1,5 +1,8 @@
 import type {
   AnalysisResult,
+  AnkiConfig,
+  AnkiFieldMapping,
+  AnkiFieldSource,
   ApiConfig,
   ChapterAnalysisState,
   PromptConfig,
@@ -12,6 +15,7 @@ import { segmentSpanishText } from './segment'
 
 export const CONFIG_STORAGE_KEY = 'spanish-reading-assistant/config'
 export const PROMPT_STORAGE_KEY = 'spanish-reading-assistant/prompt'
+export const ANKI_STORAGE_KEY = 'spanish-reading-assistant/anki'
 export const DRAFT_STORAGE_KEY = 'spanish-reading-assistant/draft'
 export const HISTORY_STORAGE_KEY = 'spanish-reading-assistant/history'
 export const MAX_HISTORY_ITEMS = 6
@@ -63,6 +67,33 @@ export const defaultPromptConfig: PromptConfig = {
   ].join('\n'),
 }
 
+const ankiFieldSources: AnkiFieldSource[] = [
+  'sentence',
+  'grammar',
+  'meaning',
+  'knowledge',
+  'knowledgeKind',
+  'knowledgeExplanation',
+]
+
+function createDefaultAnkiFieldMapping(): AnkiFieldMapping {
+  return {
+    sentence: '',
+    grammar: '',
+    meaning: '',
+    knowledge: '',
+    knowledgeKind: '',
+    knowledgeExplanation: '',
+  }
+}
+
+export const defaultAnkiConfig: AnkiConfig = {
+  endpoint: 'http://127.0.0.1:8765',
+  deck: '',
+  noteType: '',
+  fieldMapping: createDefaultAnkiFieldMapping(),
+}
+
 export const defaultSourceText = `La verdad es que muchas veces habia pensado y planeado minuciosamente mi actitud en caso de encontrarla.
 
 Desgraciadamente, estuve condenado a permanecer ajeno a la vida de cualquier mujer.`
@@ -79,6 +110,18 @@ export type { SettingsTab }
 export type ConfigChangeHandler = <Key extends keyof ApiConfig>(
   key: Key,
   value: ApiConfig[Key],
+) => void
+
+type EditableAnkiConfigKey = Exclude<keyof AnkiConfig, 'fieldMapping'>
+
+export type AnkiConfigChangeHandler = <Key extends EditableAnkiConfigKey>(
+  key: Key,
+  value: AnkiConfig[Key],
+) => void
+
+export type AnkiFieldMappingChangeHandler = (
+  source: AnkiFieldSource,
+  value: string,
 ) => void
 
 export type PromptChangeHandler = (value: string) => void
@@ -170,6 +213,36 @@ export function restorePromptConfig(): PromptConfig {
   }
 }
 
+export function restoreAnkiConfig(): AnkiConfig {
+  const saved = localStorage.getItem(ANKI_STORAGE_KEY)
+  if (!saved) {
+    return defaultAnkiConfig
+  }
+
+  try {
+    const parsed = JSON.parse(saved) as Partial<AnkiConfig> & {
+      fieldMapping?: Partial<Record<AnkiFieldSource, unknown>>
+    }
+    const fieldMapping = ankiFieldSources.reduce<AnkiFieldMapping>((mapping, source) => {
+      const value = parsed.fieldMapping?.[source]
+      return {
+        ...mapping,
+        [source]: typeof value === 'string' ? value : '',
+      }
+    }, createDefaultAnkiFieldMapping())
+
+    return {
+      endpoint:
+        typeof parsed.endpoint === 'string' ? parsed.endpoint : defaultAnkiConfig.endpoint,
+      deck: typeof parsed.deck === 'string' ? parsed.deck : '',
+      noteType: typeof parsed.noteType === 'string' ? parsed.noteType : '',
+      fieldMapping,
+    }
+  } catch {
+    return defaultAnkiConfig
+  }
+}
+
 export function restoreDraft(): PersistedDraft {
   const saved = localStorage.getItem(DRAFT_STORAGE_KEY)
   if (!saved) {
@@ -214,6 +287,7 @@ export function restoreHistory(): RunSession[] {
 export function clearPersistedStorage() {
   localStorage.removeItem(CONFIG_STORAGE_KEY)
   localStorage.removeItem(PROMPT_STORAGE_KEY)
+  localStorage.removeItem(ANKI_STORAGE_KEY)
   localStorage.removeItem(DRAFT_STORAGE_KEY)
   localStorage.removeItem(HISTORY_STORAGE_KEY)
 }
