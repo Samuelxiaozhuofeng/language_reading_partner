@@ -38,6 +38,11 @@ type SettingsDialogProps = {
 
 const MODEL_SEARCH_THRESHOLD = 30
 const MODEL_PAGE_SIZE = 30
+const settingsTabLabelMap: Record<SettingsTab, string> = {
+  ai: 'AI 配置',
+  prompt: 'Prompt',
+  anki: 'Anki',
+}
 
 function SettingsDialog({
   activeSettingsTab,
@@ -198,6 +203,21 @@ function SettingsDialog({
   ])
 
   useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
+  useEffect(() => {
     if (!isOpen || activeSettingsTab !== 'ai') {
       return
     }
@@ -243,18 +263,24 @@ function SettingsDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="panel-header settings-header">
-          <div>
+          <div className="settings-header-copy">
             <p className="section-kicker">Settings</p>
             <h2>设置</h2>
+            <p className="panel-tip settings-header-tip">配置会自动保存在当前浏览器。</p>
           </div>
-          <div className="panel-actions">
-            <button className="ghost-button" type="button" onClick={onClearLocalData}>
+          <div className="panel-actions settings-header-actions">
+            <button className="ghost-button danger-button" type="button" onClick={onClearLocalData}>
               清空本地数据
             </button>
             <button className="ghost-button" type="button" onClick={onClose}>
               关闭
             </button>
           </div>
+        </div>
+
+        <div className="settings-status-strip">
+          <span className="status-pill">当前标签 {settingsTabLabelMap[activeSettingsTab]}</span>
+          <span className="status-pill">按 Esc 可关闭</span>
         </div>
 
         <div className="settings-tabs" role="tablist" aria-label="设置标签页">

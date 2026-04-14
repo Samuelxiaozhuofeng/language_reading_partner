@@ -385,11 +385,11 @@ function SentenceDetailPanel({
                     disabled={visibleAnkiStatus === 'loading'}
                     onClick={() => void handleAddToAnki()}
                   >
-                    {visibleAnkiStatus === 'loading' ? '🤖 添加中...' : '🤖 添加到 Anki'}
+                    {visibleAnkiStatus === 'loading' ? '添加到 Anki 中...' : '添加到 Anki'}
                   </button>
 
                   <button className="ghost-button" type="button" onClick={onOpenResources}>
-                    打开学习资源页
+                    打开学习资源
                   </button>
                 </div>
 
@@ -436,6 +436,7 @@ function ReadingPage({
   workspaceSource,
 }: ReadingPageProps) {
   const isChapterMode = workspaceSource === 'chapter'
+  const readingTitle = isChapterMode ? contextTitle?.chapterTitle ?? '章节阅读' : '沉浸阅读'
   const [activeSelection, setActiveSelection] = useState<HighlightSelection | null>(null)
   const [activeSentenceId, setActiveSentenceId] = useState<string | null>(null)
   const [expandedSentenceIds, setExpandedSentenceIds] = useState<Set<string>>(() => new Set())
@@ -672,72 +673,71 @@ function ReadingPage({
   return (
     <main className="reading-page">
       <section className="reading-shell">
-        <div className="reading-page-header">
-          <div>
-            <p className="section-kicker">{isChapterMode ? 'Chapter Reading' : 'Draft Reading'}</p>
-            <h2>{isChapterMode ? contextTitle?.chapterTitle ?? '章节阅读' : '沉浸式解释结果'}</h2>
-            {contextTitle?.bookTitle ? <p className="reading-breadcrumb">{contextTitle.bookTitle}</p> : null}
+        <header className="reading-header">
+          <div className="reading-header-top">
+            <div className="reading-header-copy">
+              <p className="section-kicker">{isChapterMode ? 'Chapter Reading' : 'Draft Reading'}</p>
+              <h2>{readingTitle}</h2>
+              {contextTitle?.bookTitle ? <p className="reading-breadcrumb">{contextTitle.bookTitle}</p> : null}
+            </div>
+            <div className="panel-actions">
+              <button className="ghost-button" type="button" onClick={onOpenResources}>
+                学习资源
+              </button>
+              <button className="ghost-button" type="button" onClick={onBackToLibrary}>
+                返回书架
+              </button>
+              <button className="ghost-button" type="button" onClick={onBackToWorkspace}>
+                返回工作区
+              </button>
+            </div>
           </div>
-          <div className="panel-actions">
-            <button className="ghost-button" type="button" onClick={onOpenResources}>
-              学习资源
-            </button>
-            <button className="ghost-button" type="button" onClick={onBackToLibrary}>
-              返回书架
-            </button>
-            <button className="ghost-button" type="button" onClick={onBackToWorkspace}>
-              返回工作区
-            </button>
+
+          <div className="reading-header-bottom">
+            <div className="reading-summary">
+              {isChapterMode && activeRange ? <span>区间 {activeRange.start}-{activeRange.end}</span> : null}
+              <span>已展示 {sentences.length}</span>
+              <span>已完成 {successCount}</span>
+              <span>失败 {errorCount}</span>
+            </div>
+
+            <div className="reading-secondary-actions">
+              {isChapterMode ? (
+                <>
+                  <button
+                    className="ghost-button"
+                    disabled={!adjacentChapterIds?.previousId}
+                    type="button"
+                    onClick={() => onOpenAdjacentChapter(adjacentChapterIds?.previousId ?? null)}
+                  >
+                    上一章
+                  </button>
+                  <button
+                    className="ghost-button"
+                    disabled={!adjacentChapterIds?.nextId}
+                    type="button"
+                    onClick={() => onOpenAdjacentChapter(adjacentChapterIds?.nextId ?? null)}
+                  >
+                    下一章
+                  </button>
+                </>
+              ) : null}
+
+              {!isChapterMode && sentences.length > 0 ? (
+                <button
+                  className="ghost-button reading-toggle-all-button"
+                  type="button"
+                  onClick={handleToggleAllSentences}
+                >
+                  {areAllSentencesExpanded ? '全部收起' : '全部展开'}
+                </button>
+              ) : null}
+            </div>
           </div>
-        </div>
 
-        <p className="reading-intro">
-          {isChapterMode
-            ? activeRange
-              ? `这里会把当前阅读段 ${activeRange.start}-${activeRange.end} 排成连续正文流；阅读时只需点一下句子，就会弹出解释。`
-              : '先在工作区完成一个句子区间的解析，这里才会出现对应的沉浸阅读内容。'
-            : '这里会把整章解释集中排版到一条居中的阅读流里，方便你像读批注版小说一样顺着往下读。'}
-        </p>
-
-        {notice ? <p className="notice success">{notice}</p> : null}
-        {globalError ? <p className="notice error">{globalError}</p> : null}
-
-        <div className="reading-summary">
-          {isChapterMode && activeRange ? <span>当前区间 {activeRange.start}-{activeRange.end}</span> : null}
-          <span>已展示 {sentences.length}</span>
-          <span>已完成 {successCount}</span>
-          <span>失败 {errorCount}</span>
-          {!isChapterMode && sentences.length > 0 ? (
-            <button
-              className="ghost-button reading-toggle-all-button"
-              type="button"
-              onClick={handleToggleAllSentences}
-            >
-              {areAllSentencesExpanded ? '全部收起' : '全部展开'}
-            </button>
-          ) : null}
-        </div>
-
-        {isChapterMode ? (
-          <div className="reading-nav-card">
-            <button
-              className="ghost-button"
-              disabled={!adjacentChapterIds?.previousId}
-              type="button"
-              onClick={() => onOpenAdjacentChapter(adjacentChapterIds?.previousId ?? null)}
-            >
-              上一章
-            </button>
-            <button
-              className="ghost-button"
-              disabled={!adjacentChapterIds?.nextId}
-              type="button"
-              onClick={() => onOpenAdjacentChapter(adjacentChapterIds?.nextId ?? null)}
-            >
-              下一章
-            </button>
-          </div>
-        ) : null}
+          {notice ? <p className="notice success">{notice}</p> : null}
+          {globalError ? <p className="notice error">{globalError}</p> : null}
+        </header>
 
         {isChapterMode ? (
           chapterParagraphs.length === 0 ? (

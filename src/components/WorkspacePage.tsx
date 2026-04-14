@@ -83,62 +83,51 @@ function WorkspacePage({
 }: WorkspacePageProps) {
   const isChapterMode = workspaceSource === 'chapter'
   const currentSentenceCount = isChapterMode ? totalSentenceCount : sentences.length
+  const workspaceTitle = isChapterMode ? contextTitle?.chapterTitle ?? '章节工作区' : '手动工作区'
 
   return (
     <>
-      <header className="hero-panel workspace-hero">
-        <div className="hero-copy">
-          <div className="hero-topline">
+      <header className="panel workspace-header">
+        <div className="workspace-header-top">
+          <div className="workspace-header-copy">
             <p className="eyebrow">{isChapterMode ? 'Chapter Workspace' : 'Manual Draft'}</p>
-            <div className="hero-actions">
-              <button className="page-tab" type="button" onClick={onBackToLibrary}>
-                返回书架
-              </button>
-              <button className="ghost-button settings-button" type="button" onClick={onOpenSettings}>
-                设置
-              </button>
-            </div>
+            <h1>{workspaceTitle}</h1>
           </div>
-
-          <h1>
-            {isChapterMode ? contextTitle?.chapterTitle ?? '章节工作区' : '手动粘贴工作区'}
-          </h1>
-          <p className="hero-description">
-            {isChapterMode
-              ? `当前正在处理《${contextTitle?.bookTitle ?? '当前书籍'}》中的一个章节。你可以微调原文、重分句，并把 AI 解释持续写回本地书架。`
-              : '这里保留原来的手动粘贴模式，适合临时导入片段、试 Prompt，或快速验证 API 配置。'}
-          </p>
-
-          <div className="settings-summary">
-            <span>模型：{apiConfig.model || '未设置'}</span>
-            <span>并发：{apiConfig.concurrency}</span>
-            <span>结果：{completedResultCount} 句</span>
-            {contextTitle?.bookTitle ? <span>书籍：{contextTitle.bookTitle}</span> : null}
+          <div className="hero-actions">
+            <button className="page-tab" type="button" onClick={onBackToLibrary}>
+              返回书架
+            </button>
+            <button className="ghost-button" type="button" disabled={readingDisabled} onClick={onOpenReading}>
+              打开阅读
+            </button>
+            <button className="ghost-button settings-button" type="button" onClick={onOpenSettings}>
+              设置
+            </button>
           </div>
         </div>
 
-        <div className="hero-metrics">
-          <div className="metric-card">
-            <span className="metric-label">当前句数</span>
-            <strong>{currentSentenceCount}</strong>
-          </div>
-          <div className="metric-card">
-            <span className="metric-label">成功</span>
-            <strong>{successCount}</strong>
-          </div>
-          <div className="metric-card">
-            <span className="metric-label">失败</span>
-            <strong>{errorCount}</strong>
-          </div>
+        <div className="workspace-status-strip">
+          <span className="status-pill">模型 {apiConfig.model || '未设置'}</span>
+          <span className="status-pill">并发 {apiConfig.concurrency}</span>
+          <span className="status-pill">{currentSentenceCount} 句</span>
+          <span className="status-pill">完成 {completedResultCount}</span>
+          <span className="status-pill">失败 {errorCount}</span>
+          {contextTitle?.bookTitle ? <span className="status-pill">{contextTitle.bookTitle}</span> : null}
+          {isChapterMode && selectedRange ? (
+            <span className="status-pill">区间 {selectedRange.start}-{selectedRange.end}</span>
+          ) : null}
         </div>
+
+        {notice ? <p className="notice success">{notice}</p> : null}
+        {globalError ? <p className="notice error">{globalError}</p> : null}
       </header>
 
-      <main className="workspace-grid">
+      <main className={`workspace-grid ${isChapterMode ? 'is-chapter-mode' : 'is-draft-mode'}`}>
         <section className="panel source-panel">
           <div className="panel-header">
             <div>
-              <p className="section-kicker">Step 1</p>
-              <h2>{isChapterMode ? '章节正文与重新分句' : '粘贴内容并分句'}</h2>
+              <p className="section-kicker">Text</p>
+              <h2>{isChapterMode ? '章节正文' : '原文'}</h2>
             </div>
             <div className="panel-actions">
               {!isChapterMode && onSaveToLibrary ? (
@@ -152,7 +141,7 @@ function WorkspacePage({
                 </button>
               ) : null}
               <button className="ghost-button" type="button" onClick={onOpenSettingsAi}>
-                打开设置
+                AI 设置
               </button>
               <button className="secondary-button" type="button" onClick={onSegment}>
                 重新分句
@@ -170,27 +159,23 @@ function WorkspacePage({
             />
           </label>
 
-          <div className="status-strip">
-            <span>{currentSentenceCount} 句</span>
-            {isChapterMode && selectedRange ? <span>当前区间 {selectedRange.start}-{selectedRange.end}</span> : null}
-            <span>{runningCount} 句解析中</span>
-            <span>{errorCount} 句待重试</span>
-          </div>
-
-          {notice ? <p className="notice success">{notice}</p> : null}
-          {globalError ? <p className="notice error">{globalError}</p> : null}
+          <p className="panel-tip">
+            {isChapterMode
+              ? '修改正文后记得重新分句，当前区间会按新的文本重新解析。'
+              : '适合临时粘贴片段、试 Prompt，或快速检查模型输出。'}
+          </p>
         </section>
 
         <section className="panel analysis-panel">
           <div className="panel-header">
             <div>
-              <p className="section-kicker">Step 2</p>
-              <h2>启动解析并进入阅读</h2>
+              <p className="section-kicker">Analysis</p>
+              <h2>解析与阅读</h2>
             </div>
             <p className="panel-meta">
               {isChapterMode
-                ? '章节模式会重新生成当前选中区间的解析结果，并覆盖这一段已有内容；沉浸阅读也只展示这一段。'
-                : '手动草稿模式会重新跑整段文本，并在本地历史里保存最近结果。'}
+                ? '只会重跑当前区间，并覆盖这一段已有结果。'
+                : '会重跑当前草稿，并在本地保留最近几次结果。'}
             </p>
           </div>
 
@@ -249,7 +234,7 @@ function WorkspacePage({
               {isRunning ? '解析中...' : isChapterMode ? '开始当前区间解析' : '开始整章解析'}
             </button>
             <button className="ghost-button" type="button" disabled={readingDisabled} onClick={onOpenReading}>
-              {isChapterMode ? '打开当前区间阅读' : '打开沉浸阅读页'}
+              {isChapterMode ? '打开当前区间阅读' : '打开沉浸阅读'}
             </button>
           </div>
 
@@ -290,11 +275,11 @@ function WorkspacePage({
         <section className="panel editor-panel">
           <div className="panel-header">
             <div>
-              <p className="section-kicker">Step 3</p>
+              <p className="section-kicker">Sentences</p>
               <h2>逐句校对</h2>
             </div>
             <p className="panel-meta">
-              {isChapterMode ? '这里只显示当前选中区间的句子，索引从 0 开始。' : '你可以直接改每一句，AI 会以编辑后的内容为准。'}
+              {isChapterMode ? '这里只显示当前区间内的句子。' : 'AI 会以编辑后的句子内容为准。'}
             </p>
           </div>
 
@@ -350,7 +335,7 @@ function WorkspacePage({
             <div className="panel-header">
               <div>
                 <p className="section-kicker">Recent</p>
-                <h2>本地历史</h2>
+                <h2>最近记录</h2>
               </div>
             </div>
 

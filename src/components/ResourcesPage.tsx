@@ -74,6 +74,8 @@ function ResourcesPage({
 
   const totalKinds = availableKinds.length
   const backToReadingDisabled = !onBackToReading || !canBackToReading
+  const activeKindLabel =
+    activeKind === 'all' ? '全部' : knowledgeKindLabelMap[activeKind]
 
   const renderCheckbox = (
     checked: boolean,
@@ -116,31 +118,15 @@ function ResourcesPage({
 
   return (
     <main className="resources-page">
-      <header className="hero-panel">
-        <div className="hero-copy">
-          <div className="hero-topline">
+      <header className="panel resources-header">
+        <div className="resources-header-top">
+          <div className="resources-header-copy">
             <p className="eyebrow">Spanish Reading Copilot</p>
-            <div className="hero-actions">
-              <button className="page-tab" type="button" onClick={onBackToLibrary}>
-                返回书架
-              </button>
-              <button
-                className="ghost-button"
-                disabled={backToReadingDisabled}
-                type="button"
-                onClick={() => onBackToReading?.()}
-              >
-                返回阅读
-              </button>
-            </div>
+            <h1>{title}</h1>
           </div>
-
-          <h1>{title}</h1>
-          <p className="hero-description">{subtitle}</p>
-
-          <div className="library-hero-actions">
-            <button className="primary-button" type="button" onClick={onBackToLibrary}>
-              回到书架继续阅读
+          <div className="hero-actions">
+            <button className="page-tab" type="button" onClick={onBackToLibrary}>
+              返回书架
             </button>
             <button
               className="ghost-button"
@@ -148,32 +134,23 @@ function ResourcesPage({
               type="button"
               onClick={() => onBackToReading?.()}
             >
-              回到当前阅读位置
+              返回阅读
             </button>
           </div>
         </div>
 
-        <div className="hero-metrics library-metrics">
-          <div className="metric-card">
-            <span className="metric-label">收藏总数</span>
-            <strong>{resources.length}</strong>
-            <p>条学习资源</p>
-          </div>
-          <div className="metric-card">
-            <span className="metric-label">当前筛选</span>
-            <strong>{activeKind === 'all' ? '全部' : knowledgeKindLabelMap[activeKind]}</strong>
-            <p>{totalKinds ? `${totalKinds} 个类别` : '暂无分类'}</p>
-          </div>
-          <div className="metric-card">
-            <span className="metric-label">当前展示</span>
-            <strong>{visibleResources.length}</strong>
-            <p>条记录</p>
-          </div>
+        <p className="panel-tip resources-header-subtitle">{subtitle}</p>
+
+        <div className="resources-status-strip">
+          <span className="status-pill">{resources.length} 条收藏</span>
+          <span className="status-pill">当前筛选 {activeKindLabel}</span>
+          <span className="status-pill">显示 {visibleResources.length} 条</span>
+          <span className="status-pill">{totalKinds ? `${totalKinds} 个类别` : '暂无分类'}</span>
         </div>
       </header>
 
-      <section className="panel">
-        <div className="panel-header">
+      <section className="panel resources-export-panel">
+        <div className="panel-header library-section-header">
           <div>
             <p className="section-kicker">Export</p>
             <h2>导出全部知识点</h2>
@@ -223,8 +200,8 @@ function ResourcesPage({
         </div>
       </section>
 
-      <section className="panel">
-        <div className="panel-header">
+      <section className="panel resources-list-panel">
+        <div className="panel-header library-section-header">
           <div>
             <p className="section-kicker">Resources</p>
             <h2>按知识点类型筛选</h2>
@@ -236,9 +213,8 @@ function ResourcesPage({
 
         <div
           aria-label="资源类型筛选"
-          className="model-chip-list"
+          className="model-chip-list resources-filter-bar"
           role="tablist"
-          style={{ marginBottom: 20 }}
         >
           <button
             className={`model-chip ${activeKind === 'all' ? 'is-active' : ''}`}
@@ -246,7 +222,7 @@ function ResourcesPage({
             onClick={() => onKindChange('all')}
           >
             全部
-            <span style={{ marginLeft: 8, opacity: 0.72 }}>{resources.length}</span>
+            <span className="model-chip-count">{resources.length}</span>
           </button>
 
           {availableKinds.map((kindItem) => (
@@ -257,7 +233,7 @@ function ResourcesPage({
               onClick={() => onKindChange(kindItem.kind)}
             >
               {kindItem.label}
-              <span style={{ marginLeft: 8, opacity: 0.72 }}>{kindItem.count}</span>
+              <span className="model-chip-count">{kindItem.count}</span>
             </button>
           ))}
         </div>
@@ -267,35 +243,17 @@ function ResourcesPage({
             <p>当前筛选下还没有内容。你可以先从阅读页保存一些语法点或词汇，再回来查看。</p>
           </div>
         ) : (
-          <div className="history-list">
+          <div className="resource-list">
             {visibleResources.map((resource) => (
-              <article
-                className="history-card"
-                key={resource.id}
-                style={{
-                  display: 'grid',
-                  gap: 14,
-                  padding: 20,
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    justifyContent: 'space-between',
-                    gap: 16,
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <div style={{ display: 'grid', gap: 8, minWidth: 0, flex: 1 }}>
-                    <div className="result-card-header" style={{ marginBottom: 0 }}>
+              <article className="resource-card" key={resource.id}>
+                <div className="resource-card-header">
+                  <div className="resource-card-main">
+                    <div className="result-card-header resource-card-tags">
                       <span className="sentence-index">{knowledgeKindLabelMap[resource.kind]}</span>
                       <span className="status-pill">已收藏</span>
                     </div>
-                    <h3 style={{ margin: 0 }}>{resource.text || '未命名条目'}</h3>
-                    <p style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.7 }}>
-                      {resource.explanation || '暂无说明'}
-                    </p>
+                    <h3>{resource.text || '未命名条目'}</h3>
+                    <p className="resource-card-description">{resource.explanation || '暂无说明'}</p>
                   </div>
 
                   <button
@@ -307,51 +265,30 @@ function ResourcesPage({
                   </button>
                 </div>
 
-                <div
-                  style={{
-                    display: 'grid',
-                    gap: 10,
-                    paddingTop: 4,
-                    borderTop: '1px solid rgba(61, 58, 56, 0.12)',
-                  }}
-                >
-                  <div style={{ display: 'grid', gap: 6 }}>
-                      <span className="panel-meta" style={{ margin: 0 }}>
-                        来源句子
-                      </span>
-                      <p style={{ margin: 0, lineHeight: 1.8 }}>
+                <div className="resource-card-body">
+                  <div className="resource-source-block">
+                    <span className="panel-meta">来源句子</span>
+                    <p>
                       {resource.sentenceText || '未提供来源句子'}
-                      </p>
-                    </div>
+                    </p>
+                  </div>
 
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                      gap: 10,
-                    }}
-                  >
+                  <div className="resource-meta-grid">
                     <div>
-                      <span className="panel-meta" style={{ margin: 0 }}>
-                        书籍
-                      </span>
-                      <p style={{ margin: '6px 0 0', lineHeight: 1.6 }}>
+                      <span className="panel-meta">书籍</span>
+                      <p>
                         {resource.bookTitle || '未绑定书籍'}
                       </p>
                     </div>
                     <div>
-                      <span className="panel-meta" style={{ margin: 0 }}>
-                        章节
-                      </span>
-                      <p style={{ margin: '6px 0 0', lineHeight: 1.6 }}>
+                      <span className="panel-meta">章节</span>
+                      <p>
                         {resource.chapterTitle || '未绑定章节'}
                       </p>
                     </div>
                     <div>
-                      <span className="panel-meta" style={{ margin: 0 }}>
-                        收藏时间
-                      </span>
-                      <p style={{ margin: '6px 0 0', lineHeight: 1.6 }}>
+                      <span className="panel-meta">收藏时间</span>
+                      <p>
                         {formatTime(resource.savedAt)}
                       </p>
                     </div>
