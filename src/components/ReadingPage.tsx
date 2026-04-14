@@ -75,11 +75,51 @@ type DesktopPopoverPosition = {
   top: number
 }
 
+type InspectorMode = 'popover' | 'sheet'
+
 const MOBILE_READING_BREAKPOINT = 720
-const DESKTOP_POPOVER_WIDTH = 420
+const DESKTOP_POPOVER_MIN_VIEWPORT_WIDTH = 960
+const DESKTOP_POPOVER_MIN_VIEWPORT_HEIGHT = 680
+const DESKTOP_POPOVER_MIN_WIDTH = 280
+const DESKTOP_POPOVER_MAX_WIDTH = 420
+const DESKTOP_POPOVER_WIDTH_RATIO = 0.32
 const DESKTOP_POPOVER_ESTIMATED_HEIGHT = 420
 const DESKTOP_POPOVER_GAP = 12
 const DESKTOP_POPOVER_PADDING = 16
+
+function getViewportSize() {
+  if (typeof window === 'undefined') {
+    return {
+      height: 0,
+      width: 0,
+    }
+  }
+
+  return {
+    height: window.visualViewport?.height ?? window.innerHeight,
+    width: window.visualViewport?.width ?? window.innerWidth,
+  }
+}
+
+function getInspectorMode(): InspectorMode {
+  const { height, width } = getViewportSize()
+  if (width <= MOBILE_READING_BREAKPOINT) {
+    return 'sheet'
+  }
+
+  if (width < DESKTOP_POPOVER_MIN_VIEWPORT_WIDTH || height < DESKTOP_POPOVER_MIN_VIEWPORT_HEIGHT) {
+    return 'sheet'
+  }
+
+  return 'popover'
+}
+
+function getDesktopPopoverWidth(viewportWidth: number) {
+  return Math.min(
+    DESKTOP_POPOVER_MAX_WIDTH,
+    Math.max(DESKTOP_POPOVER_MIN_WIDTH, viewportWidth * DESKTOP_POPOVER_WIDTH_RATIO),
+  )
+}
 
 function buildSelectionKey(sentenceId: string, highlightId: string) {
   return `${sentenceId}:${highlightId}`
@@ -327,9 +367,7 @@ function ReadingPage({
   const [activeSelection, setActiveSelection] = useState<HighlightSelection | null>(null)
   const [activeSentenceId, setActiveSentenceId] = useState<string | null>(null)
   const [expandedSentenceIds, setExpandedSentenceIds] = useState<Set<string>>(() => new Set())
-  const [isDesktopPopover, setIsDesktopPopover] = useState(
-    () => typeof window !== 'undefined' && window.innerWidth > MOBILE_READING_BREAKPOINT,
-  )
+  const [inspectorMode, setInspectorMode] = useState<InspectorMode>(() => getInspectorMode())
   const [desktopPopoverPosition, setDesktopPopoverPosition] = useState<DesktopPopoverPosition | null>(null)
   const [resumeHighlightSentenceId, setResumeHighlightSentenceId] = useState<string | null>(() => {
     const resolvedAnchor = resolveReadingResumeAnchor(sentences, resumeAnchor)
@@ -377,7 +415,7 @@ function ReadingPage({
   const [initialResumeTargetId] = useState(() => resumeAnchorSentenceId)
 
   const calculateDesktopPopoverPosition = (sentenceId: string): DesktopPopoverPosition | null => {
-    if (typeof window === 'undefined' || window.innerWidth <= MOBILE_READING_BREAKPOINT) {
+    if (typeof window === 'undefined' || getInspectorMode() !== 'popover') {
       return null
     }
 
@@ -386,16 +424,17 @@ function ReadingPage({
       return null
     }
 
+    const { height: viewportHeight, width: viewportWidth } = getViewportSize()
     const anchorRect = anchor.getBoundingClientRect()
     const inspectorWidth = Math.min(
-      inspectorRef.current?.offsetWidth ?? DESKTOP_POPOVER_WIDTH,
-      window.innerWidth - DESKTOP_POPOVER_PADDING * 2,
+      inspectorRef.current?.offsetWidth ?? getDesktopPopoverWidth(viewportWidth),
+      viewportWidth - DESKTOP_POPOVER_PADDING * 2,
     )
     const inspectorHeight = Math.min(
       inspectorRef.current?.offsetHeight ?? DESKTOP_POPOVER_ESTIMATED_HEIGHT,
-      window.innerHeight - DESKTOP_POPOVER_PADDING * 2,
+      viewportHeight - DESKTOP_POPOVER_PADDING * 2,
     )
-    const spaceBelow = window.innerHeight - anchorRect.bottom - DESKTOP_POPOVER_PADDING
+    const spaceBelow = viewportHeight - anchorRect.bottom - DESKTOP_POPOVER_PADDING
     const spaceAbove = anchorRect.top - DESKTOP_POPOVER_PADDING
     const placement =
       spaceBelow >= inspectorHeight + DESKTOP_POPOVER_GAP || spaceBelow >= spaceAbove
@@ -407,17 +446,17 @@ function ReadingPage({
         : anchorRect.top - inspectorHeight - DESKTOP_POPOVER_GAP
     const top = Math.min(
       Math.max(DESKTOP_POPOVER_PADDING, unclampedTop),
-      window.innerHeight - inspectorHeight - DESKTOP_POPOVER_PADDING,
+      viewportHeight - inspectorHeight - DESKTOP_POPOVER_PADDING,
     )
     const unclampedLeft = anchorRect.left + anchorRect.width / 2 - inspectorWidth / 2
     const left = Math.min(
       Math.max(DESKTOP_POPOVER_PADDING, unclampedLeft),
-      window.innerWidth - inspectorWidth - DESKTOP_POPOVER_PADDING,
+      viewportWidth - inspectorWidth - DESKTOP_POPOVER_PADDING,
     )
 
     return {
       left,
-      maxHeight: window.innerHeight - DESKTOP_POPOVER_PADDING * 2,
+      maxHeight: viewportHeight - DESKTOP_POPOVER_PADDING * 2,
       placement,
       top,
     }
@@ -429,35 +468,43 @@ function ReadingPage({
     }
 
     const handleResize = () => {
-      setIsDesktopPopover(window.innerWidth > MOBILE_READING_BREAKPOINT)
+      setInspectorMode(getInspectorMode())
     }
 
     window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    window.visualViewport?.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      window.visualViewport?.removeEventListener('resize', handleResize)
+    }
   }, [])
 
   useEffect(() => {
-    if (!isChapterMode || !effectiveActiveSentenceId || !isDesktopPopover) {
+    if (!isChapterMode || !effectiveActiveSentenceId || inspectorMode !== 'popover') {
       return
     }
 
     const updatePosition = () => {
       const nextPosition = calculateDesktopPopoverPosition(effectiveActiveSentenceId)
-      if (nextPosition) {
-        setDesktopPopoverPosition(nextPosition)
-      }
+      setDesktopPopoverPosition(nextPosition)
     }
 
     const frameId = window.requestAnimationFrame(updatePosition)
+    const visualViewport = window.visualViewport
     window.addEventListener('resize', updatePosition)
     window.addEventListener('scroll', updatePosition, true)
+    visualViewport?.addEventListener('resize', updatePosition)
+    visualViewport?.addEventListener('scroll', updatePosition)
 
     return () => {
       window.cancelAnimationFrame(frameId)
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
+      visualViewport?.removeEventListener('resize', updatePosition)
+      visualViewport?.removeEventListener('scroll', updatePosition)
     }
-  }, [effectiveActiveSelection, effectiveActiveSentenceId, isChapterMode, isDesktopPopover])
+  }, [effectiveActiveSelection, effectiveActiveSentenceId, inspectorMode, isChapterMode])
 
   useEffect(() => {
     if (!isChapterMode || !initialResumeTargetId) {
@@ -503,7 +550,7 @@ function ReadingPage({
     const nextSentenceId = effectiveActiveSentenceId === sentenceId ? null : sentenceId
     setActiveSentenceId(nextSentenceId)
     setDesktopPopoverPosition(
-      nextSentenceId && isDesktopPopover
+      nextSentenceId && inspectorMode === 'popover'
         ? calculateDesktopPopoverPosition(nextSentenceId)
         : null,
     )
@@ -701,14 +748,16 @@ function ReadingPage({
 
       {isChapterMode && activeSentence ? (
         <div
-          className={`reading-overlay ${isDesktopPopover ? 'is-desktop' : 'is-mobile'}`}
+          className={`reading-overlay ${inspectorMode === 'popover' ? 'is-popover' : 'is-sheet'}`}
           role="presentation"
-          onClick={isDesktopPopover ? undefined : handleCloseSentence}
+          onClick={inspectorMode === 'popover' ? undefined : handleCloseSentence}
         >
           <section
             aria-label="句子解释"
             aria-modal="true"
             className={`reading-inspector ${
+              inspectorMode === 'popover' ? 'is-popover' : 'is-sheet'
+            } ${
               desktopPopoverPosition?.placement === 'top' ? 'is-above' : 'is-below'
             }`}
             role="dialog"
@@ -716,7 +765,7 @@ function ReadingPage({
               inspectorRef.current = node
             }}
             style={
-              isDesktopPopover && desktopPopoverPosition
+              inspectorMode === 'popover' && desktopPopoverPosition
                 ? ({
                     left: desktopPopoverPosition.left,
                     maxHeight: desktopPopoverPosition.maxHeight,

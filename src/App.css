@@ -830,21 +830,20 @@ blockquote {
   z-index: 30;
 }
 
-.reading-overlay.is-desktop {
+.reading-overlay.is-popover {
   pointer-events: none;
 }
 
-.reading-overlay.is-mobile {
+.reading-overlay.is-sheet {
   display: flex;
   align-items: flex-end;
-  padding: 0;
+  justify-content: center;
+  padding: 16px;
   background: rgba(38, 35, 31, 0.14);
 }
 
 .reading-inspector {
   position: fixed;
-  width: min(420px, calc(100vw - 48px));
-  max-height: calc(100vh - 48px);
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 28px;
@@ -853,6 +852,20 @@ blockquote {
   box-shadow: 0 24px 54px rgba(35, 29, 24, 0.24);
   padding: 20px 22px 24px;
   pointer-events: auto;
+}
+
+.reading-inspector.is-popover {
+  width: clamp(280px, 32vw, 420px);
+  max-height: min(72vh, calc(100vh - 32px));
+}
+
+.reading-inspector.is-sheet {
+  left: 50%;
+  bottom: 16px;
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(78vh, calc(100vh - 32px));
+  padding: 18px 20px 22px;
+  transform: translateX(-50%);
 }
 
 .reading-inspector-header,
@@ -1281,11 +1294,11 @@ blockquote {
     margin-left: 0;
   }
 
-  .reading-overlay {
+  .reading-overlay.is-sheet {
     padding: 0;
   }
 
-  .reading-inspector {
+  .reading-inspector.is-sheet {
     position: fixed;
     left: 0;
     right: 0;
@@ -1295,6 +1308,7 @@ blockquote {
     max-height: min(78vh, 680px);
     border-radius: 28px 28px 0 0;
     padding: 18px;
+    transform: none;
   }
 
   .reading-inspector-header {
