@@ -252,6 +252,10 @@
   margin-bottom: 16px;
 }
 
+.field-compact {
+  gap: 8px;
+}
+
 .settings-textarea {
   min-height: 180px;
   resize: vertical;
@@ -1101,6 +1105,46 @@ blockquote {
   border: 1px solid rgba(69, 72, 82, 0.12);
   background: rgba(255, 255, 255, 0.5);
   padding: 18px;
+}
+
+.model-picker {
+  display: grid;
+  gap: 12px;
+}
+
+.model-picker-toolbar,
+.model-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  justify-content: space-between;
+}
+
+.model-search-field {
+  flex: 1 1 280px;
+}
+
+.model-picker-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.model-picker-summary span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.56);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.model-picker-empty {
+  margin: 0;
 }
 
 .prompt-panel {

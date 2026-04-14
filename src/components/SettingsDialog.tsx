@@ -36,6 +36,9 @@ type SettingsDialogProps = {
   promptConfig: PromptConfig
 }
 
+const MODEL_SEARCH_THRESHOLD = 30
+const MODEL_PAGE_SIZE = 30
+
 function SettingsDialog({
   activeSettingsTab,
   ankiConfig,
@@ -57,8 +60,26 @@ function SettingsDialog({
   const [availableNoteFields, setAvailableNoteFields] = useState<string[]>([])
   const [modelFetchStatus, setModelFetchStatus] = useState<ModelFetchStatus>('idle')
   const [modelFetchMessage, setModelFetchMessage] = useState('填写 URL 和 API Key 后会自动获取模型列表。')
+  const [modelSearchTerm, setModelSearchTerm] = useState('')
+  const [modelPage, setModelPage] = useState(1)
   const [ankiFetchStatus, setAnkiFetchStatus] = useState<ModelFetchStatus>('idle')
   const [ankiFetchMessage, setAnkiFetchMessage] = useState('填写 AnkiConnect URL 后会自动检测连接并加载 deck / note type。')
+
+  const shouldPaginateModels = availableModels.length > MODEL_SEARCH_THRESHOLD
+  const normalizedModelSearchTerm = modelSearchTerm.trim().toLowerCase()
+  const filteredModels = availableModels.filter((model) =>
+    normalizedModelSearchTerm ? model.toLowerCase().includes(normalizedModelSearchTerm) : true,
+  )
+  const totalModelPages = shouldPaginateModels
+    ? Math.max(1, Math.ceil(filteredModels.length / MODEL_PAGE_SIZE))
+    : 1
+  const currentModelPage = Math.min(modelPage, totalModelPages)
+  const visibleModels = shouldPaginateModels
+    ? filteredModels.slice(
+        (currentModelPage - 1) * MODEL_PAGE_SIZE,
+        currentModelPage * MODEL_PAGE_SIZE,
+      )
+    : filteredModels
 
   const runModelFetch = useCallback(async (signal?: AbortSignal) => {
     const baseUrl = apiConfig.baseUrl.trim()
@@ -66,6 +87,7 @@ function SettingsDialog({
 
     if (!baseUrl || !apiKey) {
       setAvailableModels([])
+      setModelPage(1)
       setModelFetchStatus('idle')
       setModelFetchMessage('填写 URL 和 API Key 后会自动获取模型列表。')
       return
@@ -81,6 +103,7 @@ function SettingsDialog({
       )
 
       setAvailableModels(models)
+      setModelPage(1)
       setModelFetchStatus('success')
       setModelFetchMessage(
         models.length > 0
@@ -97,6 +120,7 @@ function SettingsDialog({
       }
 
       setAvailableModels([])
+      setModelPage(1)
       setModelFetchStatus('error')
       setModelFetchMessage(toUserFacingError(error))
     }
@@ -342,17 +366,70 @@ function SettingsDialog({
             </div>
 
             {availableModels.length > 0 ? (
-              <div className="model-chip-list">
-                {availableModels.slice(0, 24).map((model) => (
-                  <button
-                    className={`model-chip ${apiConfig.model === model ? 'is-active' : ''}`}
-                    key={model}
-                    type="button"
-                    onClick={() => onConfigChange('model', model)}
-                  >
-                    {model}
-                  </button>
-                ))}
+              <div className="model-picker">
+                {shouldPaginateModels ? (
+                  <div className="model-picker-toolbar">
+                    <label className="field field-compact model-search-field">
+                      <span>搜索模型</span>
+                      <input
+                        type="search"
+                        value={modelSearchTerm}
+                        onChange={(event) => {
+                          setModelSearchTerm(event.target.value)
+                          setModelPage(1)
+                        }}
+                        placeholder="输入模型名筛选"
+                      />
+                    </label>
+
+                    <div className="model-picker-summary">
+                      <span>
+                        共 {availableModels.length} 个模型，当前显示 {filteredModels.length} 个结果
+                      </span>
+                      <span>
+                        第 {currentModelPage} / {totalModelPages} 页
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+
+                {visibleModels.length > 0 ? (
+                  <div className="model-chip-list">
+                    {visibleModels.map((model) => (
+                      <button
+                        className={`model-chip ${apiConfig.model === model ? 'is-active' : ''}`}
+                        key={model}
+                        type="button"
+                        onClick={() => onConfigChange('model', model)}
+                      >
+                        {model}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="panel-tip model-picker-empty">没有匹配的模型，请换个关键词试试。</p>
+                )}
+
+                {shouldPaginateModels && filteredModels.length > 0 ? (
+                  <div className="model-pagination">
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      disabled={currentModelPage <= 1}
+                      onClick={() => setModelPage((page) => Math.max(1, page - 1))}
+                    >
+                      上一页
+                    </button>
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      disabled={currentModelPage >= totalModelPages}
+                      onClick={() => setModelPage((page) => Math.min(totalModelPages, page + 1))}
+                    >
+                      下一页
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
