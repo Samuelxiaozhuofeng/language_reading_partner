@@ -810,24 +810,31 @@ blockquote {
   position: fixed;
   inset: 0;
   z-index: 30;
+}
+
+.reading-overlay.is-desktop {
+  pointer-events: none;
+}
+
+.reading-overlay.is-mobile {
   display: flex;
-  justify-content: flex-end;
-  align-items: flex-start;
-  padding: 24px;
+  align-items: flex-end;
+  padding: 0;
   background: rgba(38, 35, 31, 0.14);
 }
 
 .reading-inspector {
+  position: fixed;
   width: min(420px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
   overflow: auto;
-  margin-top: 72px;
   border: 1px solid var(--line);
   border-radius: 28px;
   background:
     linear-gradient(180deg, rgba(255, 252, 244, 0.98) 0%, rgba(247, 238, 224, 0.98) 100%);
   box-shadow: 0 24px 54px rgba(35, 29, 24, 0.24);
   padding: 20px 22px 24px;
+  pointer-events: auto;
 }
 
 .reading-inspector-header,
@@ -1253,13 +1260,16 @@ blockquote {
 
   .reading-overlay {
     padding: 0;
-    align-items: flex-end;
   }
 
   .reading-inspector {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
     width: 100%;
     max-height: min(78vh, 680px);
-    margin-top: 0;
     border-radius: 28px 28px 0 0;
     padding: 18px;
   }

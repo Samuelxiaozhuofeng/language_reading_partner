@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { statusLabelMap } from '../lib/appState'
 import { buildKnowledgeSignature, knowledgeKindLabelMap } from '../lib/knowledge'
 import { buildChapterReadingParagraphs } from '../lib/readingFlow'
@@ -63,6 +63,19 @@ type SentenceDetailPanelProps = {
   savedHighlightSignatures: Set<string>
   sentence: SentenceItem
 }
+
+type DesktopPopoverPosition = {
+  left: number
+  maxHeight: number
+  placement: 'top' | 'bottom'
+  top: number
+}
+
+const MOBILE_READING_BREAKPOINT = 720
+const DESKTOP_POPOVER_WIDTH = 420
+const DESKTOP_POPOVER_ESTIMATED_HEIGHT = 420
+const DESKTOP_POPOVER_GAP = 12
+const DESKTOP_POPOVER_PADDING = 16
 
 function buildSelectionKey(sentenceId: string, highlightId: string) {
   return `${sentenceId}:${highlightId}`
@@ -308,6 +321,12 @@ function ReadingPage({
   const [activeSelection, setActiveSelection] = useState<HighlightSelection | null>(null)
   const [activeSentenceId, setActiveSentenceId] = useState<string | null>(null)
   const [expandedSentenceIds, setExpandedSentenceIds] = useState<Set<string>>(() => new Set())
+  const [isDesktopPopover, setIsDesktopPopover] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth > MOBILE_READING_BREAKPOINT,
+  )
+  const [desktopPopoverPosition, setDesktopPopoverPosition] = useState<DesktopPopoverPosition | null>(null)
+  const sentenceButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const inspectorRef = useRef<HTMLElement | null>(null)
   const validSentenceIdSet = useMemo(
     () => new Set(sentences.map((sentence) => sentence.id)),
     [sentences],
@@ -341,6 +360,89 @@ function ReadingPage({
     ? sentenceStartIndex + sentences.findIndex((sentence) => sentence.id === activeSentence.id)
     : null
 
+  const calculateDesktopPopoverPosition = (sentenceId: string): DesktopPopoverPosition | null => {
+    if (typeof window === 'undefined' || window.innerWidth <= MOBILE_READING_BREAKPOINT) {
+      return null
+    }
+
+    const anchor = sentenceButtonRefs.current[sentenceId]
+    if (!anchor) {
+      return null
+    }
+
+    const anchorRect = anchor.getBoundingClientRect()
+    const inspectorWidth = Math.min(
+      inspectorRef.current?.offsetWidth ?? DESKTOP_POPOVER_WIDTH,
+      window.innerWidth - DESKTOP_POPOVER_PADDING * 2,
+    )
+    const inspectorHeight = Math.min(
+      inspectorRef.current?.offsetHeight ?? DESKTOP_POPOVER_ESTIMATED_HEIGHT,
+      window.innerHeight - DESKTOP_POPOVER_PADDING * 2,
+    )
+    const spaceBelow = window.innerHeight - anchorRect.bottom - DESKTOP_POPOVER_PADDING
+    const spaceAbove = anchorRect.top - DESKTOP_POPOVER_PADDING
+    const placement =
+      spaceBelow >= inspectorHeight + DESKTOP_POPOVER_GAP || spaceBelow >= spaceAbove
+        ? 'bottom'
+        : 'top'
+    const unclampedTop =
+      placement === 'bottom'
+        ? anchorRect.bottom + DESKTOP_POPOVER_GAP
+        : anchorRect.top - inspectorHeight - DESKTOP_POPOVER_GAP
+    const top = Math.min(
+      Math.max(DESKTOP_POPOVER_PADDING, unclampedTop),
+      window.innerHeight - inspectorHeight - DESKTOP_POPOVER_PADDING,
+    )
+    const unclampedLeft = anchorRect.left + anchorRect.width / 2 - inspectorWidth / 2
+    const left = Math.min(
+      Math.max(DESKTOP_POPOVER_PADDING, unclampedLeft),
+      window.innerWidth - inspectorWidth - DESKTOP_POPOVER_PADDING,
+    )
+
+    return {
+      left,
+      maxHeight: window.innerHeight - DESKTOP_POPOVER_PADDING * 2,
+      placement,
+      top,
+    }
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const handleResize = () => {
+      setIsDesktopPopover(window.innerWidth > MOBILE_READING_BREAKPOINT)
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  useEffect(() => {
+    if (!isChapterMode || !effectiveActiveSentenceId || !isDesktopPopover) {
+      return
+    }
+
+    const updatePosition = () => {
+      const nextPosition = calculateDesktopPopoverPosition(effectiveActiveSentenceId)
+      if (nextPosition) {
+        setDesktopPopoverPosition(nextPosition)
+      }
+    }
+
+    const frameId = window.requestAnimationFrame(updatePosition)
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [effectiveActiveSelection, effectiveActiveSentenceId, isChapterMode, isDesktopPopover])
+
   const handleSelectHighlight = (sentenceId: string, highlightId: string) => {
     setActiveSelection((current) =>
       current?.sentenceId === sentenceId && current.highlightId === highlightId
@@ -351,12 +453,19 @@ function ReadingPage({
 
   const handleOpenSentence = (sentenceId: string) => {
     setActiveSelection(null)
-    setActiveSentenceId((current) => (current === sentenceId ? null : sentenceId))
+    const nextSentenceId = effectiveActiveSentenceId === sentenceId ? null : sentenceId
+    setActiveSentenceId(nextSentenceId)
+    setDesktopPopoverPosition(
+      nextSentenceId && isDesktopPopover
+        ? calculateDesktopPopoverPosition(nextSentenceId)
+        : null,
+    )
   }
 
   const handleCloseSentence = () => {
     setActiveSentenceId(null)
     setActiveSelection(null)
+    setDesktopPopoverPosition(null)
   }
 
   const handleToggleSentence = (sentenceId: string) => {
@@ -468,6 +577,9 @@ function ReadingPage({
                     <button
                       className={`reading-inline-sentence ${effectiveActiveSentenceId === sentence.id ? 'is-active' : ''}`}
                       key={sentence.id}
+                      ref={(node) => {
+                        sentenceButtonRefs.current[sentence.id] = node
+                      }}
                       type="button"
                       onClick={() => handleOpenSentence(sentence.id)}
                     >
@@ -530,12 +642,30 @@ function ReadingPage({
       </section>
 
       {isChapterMode && activeSentence ? (
-        <div className="reading-overlay" role="presentation" onClick={handleCloseSentence}>
+        <div
+          className={`reading-overlay ${isDesktopPopover ? 'is-desktop' : 'is-mobile'}`}
+          role="presentation"
+          onClick={isDesktopPopover ? undefined : handleCloseSentence}
+        >
           <section
             aria-label="句子解释"
             aria-modal="true"
-            className="reading-inspector"
+            className={`reading-inspector ${
+              desktopPopoverPosition?.placement === 'top' ? 'is-above' : 'is-below'
+            }`}
             role="dialog"
+            ref={(node) => {
+              inspectorRef.current = node
+            }}
+            style={
+              isDesktopPopover && desktopPopoverPosition
+                ? ({
+                    left: desktopPopoverPosition.left,
+                    maxHeight: desktopPopoverPosition.maxHeight,
+                    top: desktopPopoverPosition.top,
+                  } satisfies CSSProperties)
+                : undefined
+            }
             onClick={(event) => event.stopPropagation()}
           >
             <div className="reading-inspector-header">
