@@ -11,11 +11,15 @@ import {
 import {
   ankiFieldSourceLabelMap,
   ankiFieldSourceOrder,
+  createAnkiFieldMappingFromFieldNames,
+  createOrRepairSraAnkiNoteType,
+  ensureAnkiPermission,
   fetchAnkiDeckNames,
   fetchAnkiNoteFields,
   fetchAnkiNoteTypes,
   fetchAnkiVersion,
   getAnkiCompatibilityIssue,
+  SRA_NOTE_TYPE_NAME,
   toUserFacingAnkiError,
 } from '../lib/anki'
 import { fetchAvailableModels, toUserFacingError } from '../lib/openai'
@@ -88,6 +92,67 @@ function SettingsDialog({
       )
     : filteredModels
 
+  const syncAnkiFieldMapping = useCallback((nextFieldNames: string[]) => {
+    const nextMapping = createAnkiFieldMappingFromFieldNames(nextFieldNames)
+
+    for (const source of ankiFieldSourceOrder) {
+      if (ankiConfig.fieldMapping[source] !== nextMapping[source]) {
+        onAnkiFieldMappingChange(source, nextMapping[source])
+      }
+    }
+  }, [ankiConfig.fieldMapping, onAnkiFieldMappingChange])
+
+  const clearInvalidAnkiFieldMapping = useCallback((nextFieldNames: string[]) => {
+    for (const source of ankiFieldSourceOrder) {
+      const mappedField = ankiConfig.fieldMapping[source]
+      if (mappedField && !nextFieldNames.includes(mappedField)) {
+        onAnkiFieldMappingChange(source, '')
+      }
+    }
+  }, [ankiConfig.fieldMapping, onAnkiFieldMappingChange])
+
+  const applyAnkiSelection = useCallback((nextDeck: string, nextNoteType: string) => {
+    if (nextDeck && nextDeck !== ankiConfig.deck) {
+      onAnkiConfigChange('deck', nextDeck)
+    }
+
+    if (nextNoteType && nextNoteType !== ankiConfig.noteType) {
+      onAnkiConfigChange('noteType', nextNoteType)
+    }
+  }, [ankiConfig.deck, ankiConfig.noteType, onAnkiConfigChange])
+
+  const loadAnkiConnectionData = useCallback(async (
+    signal?: AbortSignal,
+    preferredNoteType?: string,
+  ) => {
+    const endpoint = ankiConfig.endpoint.trim()
+    await ensureAnkiPermission(endpoint, signal)
+
+    const [version, decks, noteTypes] = await Promise.all([
+      fetchAnkiVersion(endpoint, signal),
+      fetchAnkiDeckNames(endpoint, signal),
+      fetchAnkiNoteTypes(endpoint, signal),
+    ])
+
+    const nextDeck = ankiConfig.deck.trim() || decks[0] || ''
+    const currentNoteType = ankiConfig.noteType.trim()
+    const nextNoteType =
+      (preferredNoteType && noteTypes.includes(preferredNoteType) && preferredNoteType) ||
+      (currentNoteType && noteTypes.includes(currentNoteType) && currentNoteType) ||
+      noteTypes[0] ||
+      ''
+    const fields = nextNoteType ? await fetchAnkiNoteFields(endpoint, nextNoteType, signal) : []
+
+    return {
+      version,
+      decks,
+      noteTypes,
+      fields,
+      nextDeck,
+      nextNoteType,
+    }
+  }, [ankiConfig.deck, ankiConfig.endpoint, ankiConfig.noteType])
+
   const runModelFetch = useCallback(async (signal?: AbortSignal) => {
     const baseUrl = apiConfig.baseUrl.trim()
     const apiKey = apiConfig.apiKey.trim()
@@ -159,33 +224,11 @@ function SettingsDialog({
     setAnkiFetchMessage('正在连接 AnkiConnect...')
 
     try {
-      const [version, decks, noteTypes] = await Promise.all([
-        fetchAnkiVersion(endpoint, signal),
-        fetchAnkiDeckNames(endpoint, signal),
-        fetchAnkiNoteTypes(endpoint, signal),
-      ])
+      const { version, decks, noteTypes, fields, nextDeck, nextNoteType } =
+        await loadAnkiConnectionData(signal)
 
-      const nextDeck = ankiConfig.deck.trim() || decks[0] || ''
-      const nextNoteType = ankiConfig.noteType.trim() || noteTypes[0] || ''
-
-      if (nextDeck && nextDeck !== ankiConfig.deck) {
-        onAnkiConfigChange('deck', nextDeck)
-      }
-
-      if (nextNoteType && nextNoteType !== ankiConfig.noteType) {
-        onAnkiConfigChange('noteType', nextNoteType)
-      }
-
-      const fields = nextNoteType
-        ? await fetchAnkiNoteFields(endpoint, nextNoteType, signal)
-        : []
-
-      for (const source of ankiFieldSourceOrder) {
-        const mappedField = ankiConfig.fieldMapping[source]
-        if (mappedField && !fields.includes(mappedField)) {
-          onAnkiFieldMappingChange(source, '')
-        }
-      }
+      applyAnkiSelection(nextDeck, nextNoteType)
+      clearInvalidAnkiFieldMapping(fields)
 
       setAvailableDecks(decks)
       setAvailableNoteTypes(noteTypes)
@@ -206,12 +249,59 @@ function SettingsDialog({
       setAnkiFetchMessage(toUserFacingAnkiError(error))
     }
   }, [
-    ankiConfig.deck,
     ankiConfig.endpoint,
-    ankiConfig.fieldMapping,
-    ankiConfig.noteType,
-    onAnkiConfigChange,
-    onAnkiFieldMappingChange,
+    applyAnkiSelection,
+    clearInvalidAnkiFieldMapping,
+    loadAnkiConnectionData,
+  ])
+
+  const handleCreateSraNoteType = useCallback(async () => {
+    const endpoint = ankiConfig.endpoint.trim()
+
+    if (!endpoint) {
+      setAnkiFetchStatus('error')
+      setAnkiFetchMessage('请先填写 AnkiConnect URL。')
+      return
+    }
+
+    const compatibilityIssue = getAnkiCompatibilityIssue(endpoint)
+    if (compatibilityIssue) {
+      setAnkiFetchStatus('error')
+      setAnkiFetchMessage(compatibilityIssue.summary)
+      return
+    }
+
+    setAnkiFetchStatus('loading')
+    setAnkiFetchMessage('正在创建或修复 SRA note type...')
+
+    try {
+      const result = await createOrRepairSraAnkiNoteType(endpoint)
+      const { decks, noteTypes, fields, nextDeck } = await loadAnkiConnectionData(
+        undefined,
+        SRA_NOTE_TYPE_NAME,
+      )
+
+      applyAnkiSelection(nextDeck, SRA_NOTE_TYPE_NAME)
+      syncAnkiFieldMapping(fields)
+
+      setAvailableDecks(decks)
+      setAvailableNoteTypes(noteTypes)
+      setAvailableNoteFields(fields)
+      setAnkiFetchStatus('success')
+      setAnkiFetchMessage(
+        result.created
+          ? '已创建 SRA note type，并自动选中和映射 6 个字段。'
+          : '已修复 SRA note type，并自动选中和映射 6 个字段。',
+      )
+    } catch (error) {
+      setAnkiFetchStatus('error')
+      setAnkiFetchMessage(toUserFacingAnkiError(error))
+    }
+  }, [
+    ankiConfig.endpoint,
+    applyAnkiSelection,
+    loadAnkiConnectionData,
+    syncAnkiFieldMapping,
   ])
 
   useEffect(() => {
@@ -510,22 +600,36 @@ function SettingsDialog({
               <div>
                 <h3>AnkiConnect</h3>
               </div>
-              <button
-                className="ghost-button"
-                type="button"
-                disabled={
-                  ankiFetchStatus === 'loading' ||
-                  !ankiConfig.endpoint.trim() ||
-                  Boolean(ankiCompatibilityIssue)
-                }
-                onClick={() => void runAnkiFetch()}
-              >
-                {ankiFetchStatus === 'loading'
-                  ? '连接中...'
-                  : ankiCompatibilityIssue
-                    ? 'Safari 当前不可直连'
-                    : '测试连接并刷新'}
-              </button>
+              <div className="panel-actions">
+                <button
+                  className="ghost-button"
+                  type="button"
+                  disabled={
+                    ankiFetchStatus === 'loading' ||
+                    !ankiConfig.endpoint.trim() ||
+                    Boolean(ankiCompatibilityIssue)
+                  }
+                  onClick={() => void runAnkiFetch()}
+                >
+                  {ankiFetchStatus === 'loading'
+                    ? '连接中...'
+                    : ankiCompatibilityIssue
+                      ? 'Safari 当前不可直连'
+                      : '测试连接并刷新'}
+                </button>
+                <button
+                  className="ghost-button"
+                  type="button"
+                  disabled={
+                    ankiFetchStatus === 'loading' ||
+                    !ankiConfig.endpoint.trim() ||
+                    Boolean(ankiCompatibilityIssue)
+                  }
+                  onClick={() => void handleCreateSraNoteType()}
+                >
+                  {ankiFetchStatus === 'loading' ? '处理中...' : '创建 / 修复 SRA Note Type'}
+                </button>
+              </div>
             </div>
 
             {ankiCompatibilityIssue ? (
@@ -609,6 +713,11 @@ function SettingsDialog({
             <p className="panel-tip">
               当前会把 6 个内容源写进你映射的字段：句子、语法、内容、知识点、知识点类型、知识点解释。添加到
               Anki 时允许重复卡片，失败会直接提示，不会静默跳过。
+            </p>
+
+            <p className="panel-tip">
+              “创建 / 修复 SRA Note Type”会先请求当前页面访问 AnkiConnect 的权限，再自动创建或更新 SRA
+              模板，并把 6 个字段映射到同名字段。
             </p>
 
             <p className="panel-tip">
