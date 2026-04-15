@@ -614,6 +614,31 @@ textarea:focus {
   color: #8d3718;
 }
 
+.compatibility-callout {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(164, 69, 35, 0.18);
+  background: rgba(164, 69, 35, 0.08);
+  color: #8d3718;
+}
+
+.compatibility-callout-title {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+  font-family: var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.compatibility-callout p {
+  margin: 0;
+}
+
+.compatibility-callout p + p {
+  margin-top: 8px;
+}
+
 .sentence-list,
 .history-list,
 .reading-result-list,

@@ -15,6 +15,7 @@ import {
   fetchAnkiNoteFields,
   fetchAnkiNoteTypes,
   fetchAnkiVersion,
+  getAnkiCompatibilityIssue,
   toUserFacingAnkiError,
 } from '../lib/anki'
 import { fetchAvailableModels, toUserFacingError } from '../lib/openai'
@@ -69,6 +70,7 @@ function SettingsDialog({
   const [modelPage, setModelPage] = useState(1)
   const [ankiFetchStatus, setAnkiFetchStatus] = useState<ModelFetchStatus>('idle')
   const [ankiFetchMessage, setAnkiFetchMessage] = useState('填写 AnkiConnect URL 后会自动检测连接并加载 deck / note type。')
+  const ankiCompatibilityIssue = getAnkiCompatibilityIssue(ankiConfig.endpoint)
 
   const shouldPaginateModels = availableModels.length > MODEL_SEARCH_THRESHOLD
   const normalizedModelSearchTerm = modelSearchTerm.trim().toLowerCase()
@@ -140,6 +142,16 @@ function SettingsDialog({
       setAvailableNoteFields([])
       setAnkiFetchStatus('idle')
       setAnkiFetchMessage('填写 AnkiConnect URL 后会自动检测连接并加载 deck / note type。')
+      return
+    }
+
+    const compatibilityIssue = getAnkiCompatibilityIssue(endpoint)
+    if (compatibilityIssue) {
+      setAvailableDecks([])
+      setAvailableNoteTypes([])
+      setAvailableNoteFields([])
+      setAnkiFetchStatus('error')
+      setAnkiFetchMessage(compatibilityIssue.summary)
       return
     }
 
@@ -501,12 +513,30 @@ function SettingsDialog({
               <button
                 className="ghost-button"
                 type="button"
-                disabled={ankiFetchStatus === 'loading' || !ankiConfig.endpoint.trim()}
+                disabled={
+                  ankiFetchStatus === 'loading' ||
+                  !ankiConfig.endpoint.trim() ||
+                  Boolean(ankiCompatibilityIssue)
+                }
                 onClick={() => void runAnkiFetch()}
               >
-                {ankiFetchStatus === 'loading' ? '连接中...' : '测试连接并刷新'}
+                {ankiFetchStatus === 'loading'
+                  ? '连接中...'
+                  : ankiCompatibilityIssue
+                    ? 'Safari 当前不可直连'
+                    : '测试连接并刷新'}
               </button>
             </div>
+
+            {ankiCompatibilityIssue ? (
+              <div className="compatibility-callout" role="status" aria-live="polite">
+                <p className="compatibility-callout-title">Safari 兼容说明</p>
+                <p>{ankiCompatibilityIssue.summary}</p>
+                {ankiCompatibilityIssue.details.map((detail) => (
+                  <p key={detail}>{detail}</p>
+                ))}
+              </div>
+            ) : null}
 
             <div className="form-grid">
               <label className="field">
@@ -579,6 +609,11 @@ function SettingsDialog({
             <p className="panel-tip">
               当前会把 6 个内容源写进你映射的字段：句子、语法、内容、知识点、知识点类型、知识点解释。添加到
               Anki 时允许重复卡片，失败会直接提示，不会静默跳过。
+            </p>
+
+            <p className="panel-tip">
+              如果你在 Safari 中使用线上 HTTPS 页面，浏览器会拦截它直接访问本机 HTTP 版
+              AnkiConnect。这个限制来自浏览器安全策略，不是 Anki 配置错误。
             </p>
           </div>
         )}
