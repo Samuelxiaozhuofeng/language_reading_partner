@@ -22,6 +22,7 @@ export const HISTORY_STORAGE_KEY = 'spanish-reading-assistant/history'
 export const READING_PREFERENCES_STORAGE_KEY = 'spanish-reading-assistant/reading-preferences'
 export const MAX_HISTORY_ITEMS = 6
 export const MAX_CONCURRENCY = 99
+export const MAX_PROMPT_CONTEXT_SENTENCE_COUNT = 10
 export const MIN_READING_CONTENT_WIDTH = 720
 export const MAX_READING_CONTENT_WIDTH = 1180
 export const MIN_READING_FONT_SIZE = 16
@@ -67,10 +68,15 @@ export const defaultPromptConfig: PromptConfig = {
     '- en caso de 表示“万一……；如果发生……”。',
     '- estar condenado a 表示“注定……；被迫一直……”。',
     '',
+    '文档元信息：',
+    '{documentMetadata}',
+    '',
     '上文：{previousSentence}',
     '当前句：{sentence}',
     '下文：{nextSentence}',
   ].join('\n'),
+  previousSentenceCount: 1,
+  nextSentenceCount: 1,
 }
 
 export const defaultReadingPreferences: ReadingPreferences = {
@@ -137,6 +143,10 @@ export type AnkiFieldMappingChangeHandler = (
 ) => void
 
 export type PromptChangeHandler = (value: string) => void
+export type PromptConfigChangeHandler = <Key extends keyof PromptConfig>(
+  key: Key,
+  value: PromptConfig[Key],
+) => void
 
 export type ReadingPreferencesChangeHandler = <Key extends keyof ReadingPreferences>(
   key: Key,
@@ -150,6 +160,8 @@ function convertLegacyPromptConfig(parsed: Partial<PromptConfig> & {
   if (typeof parsed.template === 'string' && parsed.template.trim()) {
     return {
       template: parsed.template,
+      previousSentenceCount: clampPromptContextSentenceCount(parsed.previousSentenceCount),
+      nextSentenceCount: clampPromptContextSentenceCount(parsed.nextSentenceCount),
     } satisfies PromptConfig
   }
 
@@ -164,6 +176,8 @@ function convertLegacyPromptConfig(parsed: Partial<PromptConfig> & {
 
   return {
     template: [systemPrompt, userPromptTemplate].filter(Boolean).join('\n\n'),
+    previousSentenceCount: clampPromptContextSentenceCount(parsed.previousSentenceCount),
+    nextSentenceCount: clampPromptContextSentenceCount(parsed.nextSentenceCount),
   } satisfies PromptConfig
 }
 
@@ -192,6 +206,15 @@ export function clampConcurrency(value: unknown): number {
   }
 
   return Math.min(MAX_CONCURRENCY, Math.max(1, Math.round(numeric)))
+}
+
+export function clampPromptContextSentenceCount(value: unknown): number {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) {
+    return defaultPromptConfig.previousSentenceCount
+  }
+
+  return Math.min(MAX_PROMPT_CONTEXT_SENTENCE_COUNT, Math.max(0, Math.round(numeric)))
 }
 
 export function clampReadingContentWidth(value: unknown): number {

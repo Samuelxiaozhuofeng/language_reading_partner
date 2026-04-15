@@ -25,6 +25,8 @@ export type ApiConfig = {
 
 export type PromptConfig = {
   template: string
+  previousSentenceCount: number
+  nextSentenceCount: number
 }
 
 export type ReadingPreferences = {
@@ -70,6 +72,14 @@ export type AnalysisJob = {
   sentence: string
   previousSentence?: string
   nextSentence?: string
+  documentContext?: AnalysisDocumentContext
+}
+
+export type AnalysisDocumentContext = {
+  documentType: 'article' | 'chapter'
+  title?: string
+  author?: string
+  chapterTitle?: string
 }
 
 export type ChapterParagraphBlock = {

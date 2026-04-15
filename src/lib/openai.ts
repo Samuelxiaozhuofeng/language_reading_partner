@@ -1,4 +1,10 @@
-import type { AnalysisJob, AnalysisResult, ApiConfig, PromptConfig } from '../types'
+import type {
+  AnalysisDocumentContext,
+  AnalysisJob,
+  AnalysisResult,
+  ApiConfig,
+  PromptConfig,
+} from '../types'
 import { sanitizeHighlights } from './knowledge'
 
 type ChatCompletionResponse = {
@@ -28,15 +34,63 @@ type AnalysisCallbacks = {
 }
 
 const REQUEST_TIMEOUT_MS = 60_000
+const DOCUMENT_PLACEHOLDERS = [
+  '{documentMetadata}',
+  '{documentType}',
+  '{documentTitle}',
+  '{documentAuthor}',
+  '{chapterTitle}',
+]
+
+function toPromptValue(value?: string) {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : '（无）'
+}
+
+function getDocumentTypeLabel(documentContext?: AnalysisDocumentContext) {
+  if (documentContext?.documentType === 'chapter') {
+    return 'EPUB 章节'
+  }
+
+  if (documentContext?.documentType === 'article') {
+    return '文章'
+  }
+
+  return '未知'
+}
+
+function buildDocumentMetadata(documentContext?: AnalysisDocumentContext) {
+  if (!documentContext) {
+    return '文档类型：未知\n标题：（无）\n作者：（无）\n章节：（无）'
+  }
+
+  return [
+    `文档类型：${getDocumentTypeLabel(documentContext)}`,
+    `标题：${toPromptValue(documentContext.title)}`,
+    `作者：${toPromptValue(documentContext.author)}`,
+    `章节：${toPromptValue(documentContext.chapterTitle)}`,
+  ].join('\n')
+}
 
 function interpolatePrompt(
   template: string,
   job: AnalysisJob,
 ) {
-  return template
-    .replaceAll('{previousSentence}', job.previousSentence ?? '（无）')
+  const interpolated = template
+    .replaceAll('{previousSentence}', toPromptValue(job.previousSentence))
     .replaceAll('{sentence}', job.sentence)
-    .replaceAll('{nextSentence}', job.nextSentence ?? '（无）')
+    .replaceAll('{nextSentence}', toPromptValue(job.nextSentence))
+    .replaceAll('{documentMetadata}', buildDocumentMetadata(job.documentContext))
+    .replaceAll('{documentType}', getDocumentTypeLabel(job.documentContext))
+    .replaceAll('{documentTitle}', toPromptValue(job.documentContext?.title))
+    .replaceAll('{documentAuthor}', toPromptValue(job.documentContext?.author))
+    .replaceAll('{chapterTitle}', toPromptValue(job.documentContext?.chapterTitle))
+
+  if (DOCUMENT_PLACEHOLDERS.some((placeholder) => template.includes(placeholder))) {
+    return interpolated
+  }
+
+  return `${buildDocumentMetadata(job.documentContext)}\n\n${interpolated}`
 }
 
 function normalizeBaseUrl(baseUrl: string): string {

@@ -11,6 +11,7 @@ import type {
 import {
   ANKI_STORAGE_KEY,
   clampConcurrency,
+  clampPromptContextSentenceCount,
   clampReadingContentWidth,
   clampReadingFontSize,
   clearPersistedStorage,
@@ -34,7 +35,7 @@ import {
   type AnkiFieldMappingChangeHandler,
   type ConfigChangeHandler,
   type PersistedDraft,
-  type PromptChangeHandler,
+  type PromptConfigChangeHandler,
   type ReadingPreferencesChangeHandler,
 } from '../lib/appState'
 import type { Dispatch, SetStateAction } from 'react'
@@ -46,7 +47,7 @@ type PersistentConfigState = {
   handleAnkiConfigChange: AnkiConfigChangeHandler
   handleAnkiFieldMappingChange: AnkiFieldMappingChangeHandler
   handleConfigChange: ConfigChangeHandler
-  handlePromptChange: PromptChangeHandler
+  handlePromptChange: PromptConfigChangeHandler
   hasSavedDraft: boolean
   history: RunSession[]
   initialNotice: string
@@ -130,10 +131,14 @@ export function usePersistentConfig(): PersistentConfigState {
     }))
   }, [])
 
-  const handlePromptChange: PromptChangeHandler = useCallback((value) => {
-    setPromptConfig({
-      template: value,
-    })
+  const handlePromptChange: PromptConfigChangeHandler = useCallback((key, value) => {
+    setPromptConfig((current) => ({
+      ...current,
+      [key]:
+        key === 'previousSentenceCount' || key === 'nextSentenceCount'
+          ? clampPromptContextSentenceCount(value)
+          : value,
+    }))
   }, [])
 
   const handleReadingPreferencesChange: ReadingPreferencesChangeHandler = useCallback(

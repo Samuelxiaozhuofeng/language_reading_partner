@@ -12,6 +12,7 @@ import { getSentencesInRange } from '../lib/chapterRange'
 import { analyzeSentence, runConcurrentAnalysis, toUserFacingError } from '../lib/openai'
 import { segmentSpanishText } from '../lib/segment'
 import type {
+  AnalysisDocumentContext,
   AnalysisResult,
   ApiConfig,
   PromptConfig,
@@ -23,6 +24,7 @@ import type {
 
 type UseAnalysisRunnerArgs = {
   apiConfig: ApiConfig
+  documentContext?: AnalysisDocumentContext
   onChapterAnalysisCompleted?: (range: SentenceRange) => void | Promise<unknown>
   chapterRange?: SentenceRange | null
   initialNotice: string
@@ -41,6 +43,7 @@ type UseAnalysisRunnerArgs = {
 
 export function useAnalysisRunner({
   apiConfig,
+  documentContext,
   chapterRange,
   initialNotice,
   onChapterAnalysisCompleted,
@@ -69,6 +72,31 @@ export function useAnalysisRunner({
     ...sentence,
     editedText: sentence.editedText.trim(),
   }))
+
+  const collectContextSentences = (
+    sentenceIndex: number,
+    count: number,
+    direction: 'previous' | 'next',
+  ) => {
+    if (count <= 0) {
+      return ''
+    }
+
+    const step = direction === 'previous' ? -1 : 1
+    const collected: string[] = []
+    let cursor = sentenceIndex + step
+
+    while (cursor >= 0 && cursor < trimmedSentences.length && collected.length < count) {
+      const text = trimmedSentences[cursor]?.editedText.trim()
+      if (text) {
+        collected.push(text)
+      }
+      cursor += step
+    }
+
+    const ordered = direction === 'previous' ? collected.reverse() : collected
+    return ordered.length > 0 ? ordered.join('\n') : ''
+  }
 
   const validateBeforeRun = () => {
     if (!apiConfig.baseUrl.trim() || !apiConfig.apiKey.trim() || !apiConfig.model.trim()) {
@@ -170,8 +198,11 @@ export function useAnalysisRunner({
 
     const sanitized =
       workspaceSource === 'chapter' ? trimmedSentences : cleanSentences(trimmedSentences)
+    const contextSentences = trimmedSentences
     const selectedSentences =
-      workspaceSource === 'chapter' ? getSentencesInRange(sanitized, chapterRange) : sanitized
+      workspaceSource === 'chapter'
+        ? getSentencesInRange(contextSentences, chapterRange)
+        : contextSentences
     const selectedRangeStart = workspaceSource === 'chapter' ? chapterRange?.start ?? 0 : 0
     const rerunIds =
       workspaceSource === 'chapter'
@@ -189,10 +220,12 @@ export function useAnalysisRunner({
               sentence,
             }))
             .filter(({ sentence }) => sentence.editedText.length > 0)
-        : sanitized.map((sentence, index) => ({
-            absoluteIndex: index,
-            sentence,
-          }))
+        : selectedSentences
+            .map((sentence, index) => ({
+              absoluteIndex: index,
+              sentence,
+            }))
+            .filter(({ sentence }) => sentence.editedText.length > 0)
     const pendingIds = new Set(pendingEntries.map(({ sentence }) => sentence.id))
     const nextResults: Record<string, AnalysisResult> =
       workspaceSource === 'chapter'
@@ -285,8 +318,17 @@ export function useAnalysisRunner({
         pendingEntries.map(({ absoluteIndex, sentence }) => ({
           sentenceId: sentence.id,
           sentence: sentence.editedText,
-          previousSentence: sanitized[absoluteIndex - 1]?.editedText,
-          nextSentence: sanitized[absoluteIndex + 1]?.editedText,
+          previousSentence: collectContextSentences(
+            absoluteIndex,
+            promptConfig.previousSentenceCount,
+            'previous',
+          ),
+          nextSentence: collectContextSentences(
+            absoluteIndex,
+            promptConfig.nextSentenceCount,
+            'next',
+          ),
+          documentContext,
         })),
         {
           onStart: ({ sentenceId }) => {
@@ -443,8 +485,17 @@ export function useAnalysisRunner({
       const result = await analyzeSentence(apiConfig, promptConfig, {
         sentenceId,
         sentence: target.editedText.trim(),
-        previousSentence: sentences[sentenceIndex - 1]?.editedText.trim(),
-        nextSentence: sentences[sentenceIndex + 1]?.editedText.trim(),
+        previousSentence: collectContextSentences(
+          sentenceIndex,
+          promptConfig.previousSentenceCount,
+          'previous',
+        ),
+        nextSentence: collectContextSentences(
+          sentenceIndex,
+          promptConfig.nextSentenceCount,
+          'next',
+        ),
+        documentContext,
       })
 
       setResults((current) => ({

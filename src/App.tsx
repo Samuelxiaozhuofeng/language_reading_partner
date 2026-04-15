@@ -139,10 +139,23 @@ function App() {
     effectiveWorkspaceSource === 'chapter'
       ? readingRangeSentences.filter((sentence) => workspaceResults[sentence.id])
       : workspaceSentences
+  const analysisDocumentContext =
+    effectiveWorkspaceSource === 'chapter'
+      ? {
+          documentType: 'chapter' as const,
+          title: library.selectedBook?.title,
+          author: library.selectedBook?.author,
+          chapterTitle: activeChapter?.title,
+        }
+      : {
+          documentType: 'article' as const,
+          title: persistent.articleTitle,
+        }
 
   const analysis = useAnalysisRunner({
     apiConfig: persistent.apiConfig,
     chapterRange: selectedChapterRange,
+    documentContext: analysisDocumentContext,
     initialNotice,
     onChapterAnalysisCompleted: (range) => {
       if (effectiveWorkspaceSource !== 'chapter' || !activeChapter) {
