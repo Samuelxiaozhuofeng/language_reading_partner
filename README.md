@@ -1,73 +1,96 @@
-# React + TypeScript + Vite
+# 西语阅读助手
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+一个给西语学习者用的本地阅读 app：导入 EPUB 或直接粘贴文章，自动分句，调用大模型逐句解析，并把语法点、词汇和表达整理成可复习的学习资源。
 
-Currently, two official plugins are available:
+## 适合拿它做什么
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- 导入西语 EPUB，在章节里边读边解析
+- 粘贴文章、短篇或课文，快速生成逐句讲解
+- 从阅读结果里收藏知识点，后续集中复习
+- 可选把重点内容发送到 Anki
 
-## React Compiler
+## 如何启动
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+先安装依赖：
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+启动开发环境：
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+打开终端里提示的本地地址，一般是 `http://localhost:5173`。
+
+## 第一次使用
+
+1. 打开 app 后，先点右上角“设置”
+2. 在“AI 配置”里填写：
+   - `API URL`：例如 `https://api.openai.com/v1`
+   - `API Key`
+   - `Model`：例如 `gpt-4.1-mini`
+   - `并发数`：建议先从 `4-8` 开始
+3. 保存后回到书架首页开始使用
+
+说明：
+
+- 模型列表会在填写好 URL 和 Key 后自动尝试获取
+- 配置和草稿会保存在浏览器本地
+- Anki 配置是可选的，不配也可以正常阅读和解析
+
+## 两种使用方式
+
+### 1. 导入 EPUB 阅读
+
+1. 在书架首页点击“导入 EPUB 图书”
+2. 选择一本 `.epub` 文件
+3. 在右侧章节列表里打开某一章的“工作区”
+4. 如有需要可先微调章节文本，然后点“重新分句”
+5. 选择当前要处理的句子区间，点击“运行解析”
+6. 解析完成后点“打开阅读”，进入阅读模式查看结果
+7. 在阅读页可以收藏语法点、词汇、搭配，并跳转到“学习资源”统一复习
+
+### 2. 直接粘贴文章
+
+1. 在书架首页点击“粘贴文章解析”或“继续编辑草稿”
+2. 输入文章标题，把正文粘贴到工作区
+3. 点击“重新分句”
+4. 点击“运行解析”
+5. 解析后可直接阅读，也可以把这篇内容“加入书架”
+
+## 阅读与复习
+
+- 阅读页会展示逐句解析结果
+- 可以从句子里保存知识点，沉淀到“学习资源”
+- 学习资源页支持按类型筛选
+- 全部知识点可以一键导出为 Markdown
+- 如果配置了 Anki，可把高亮知识点发送到卡片
+
+## 常用命令
+
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run preview
+```
+
+## 构建前建议检查
+
+至少运行这两个命令：
+
+```bash
+npm run lint
+npm run build
+```
+
+## 技术栈
+
+- React
+- TypeScript
+- Vite
+- 本地浏览器存储
+- OpenAI 兼容接口
