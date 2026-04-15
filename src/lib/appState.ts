@@ -110,6 +110,7 @@ export const defaultSourceText = `La verdad es que muchas veces habia pensado y 
 Desgraciadamente, estuve condenado a permanecer ajeno a la vida de cualquier mujer.`
 
 export type PersistedDraft = {
+  articleTitle: string
   sourceText: string
   sentences: SentenceItem[]
   results: Record<string, AnalysisResult>
@@ -177,6 +178,7 @@ export function createSentenceItem(text: string): SentenceItem {
 
 export function createDefaultDraft(): PersistedDraft {
   return {
+    articleTitle: '',
     sourceText: defaultSourceText,
     sentences: segmentSpanishText(defaultSourceText).map(createSentenceItem),
     results: {},
@@ -315,6 +317,7 @@ export function restoreDraft(): PersistedDraft {
       : []
 
     return {
+      articleTitle: typeof parsed.articleTitle === 'string' ? parsed.articleTitle : '',
       sourceText: parsed.sourceText ?? defaultSourceText,
       sentences: restoredSentences,
       results,

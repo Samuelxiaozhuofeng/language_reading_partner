@@ -8,6 +8,7 @@ type LibraryPageProps = {
   isLoading: boolean
   libraryError: string
   libraryNotice: string
+  manualWorkspaceLabel: string
   onDeleteBook: (bookId: string) => void
   onDeleteChapter: (chapterId: string) => void
   onImportFile: (file: File) => void | Promise<void>
@@ -30,6 +31,7 @@ function LibraryPage({
   isLoading,
   libraryError,
   libraryNotice,
+  manualWorkspaceLabel,
   onDeleteBook,
   onDeleteChapter,
   onImportFile,
@@ -90,7 +92,7 @@ function LibraryPage({
               />
             </label>
             <button className="ghost-button" type="button" onClick={onOpenManualWorkspace}>
-              继续手动粘贴解析
+              {manualWorkspaceLabel}
             </button>
             {hasRecentChapter ? (
               <button className="ghost-button" type="button" onClick={onOpenRecentChapter}>
@@ -127,7 +129,7 @@ function LibraryPage({
             </div>
           ) : books.length === 0 ? (
             <div className="empty-state">
-              <p>书架还是空的。先导入一本 EPUB，或者继续使用手动粘贴模式。</p>
+              <p>书架还是空的。先导入一本 EPUB，或者粘贴一篇文章开始解析。</p>
             </div>
           ) : (
             <div className="book-grid">

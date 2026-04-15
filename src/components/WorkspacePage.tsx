@@ -3,6 +3,7 @@ import type { ApiConfig, RunSession, SentenceItem, SentenceRange, WorkspaceSourc
 
 type WorkspacePageProps = {
   apiConfig: ApiConfig
+  articleTitle: string
   chapterProgressPercent: number
   chapterResolvedCount: number
   completedResultCount: number
@@ -16,7 +17,10 @@ type WorkspacePageProps = {
   history: RunSession[]
   isRunning: boolean
   isSavingToLibrary?: boolean
+  libraryError?: string
+  libraryNotice?: string
   notice: string
+  onArticleTitleChange: (value: string) => void
   onBackToLibrary: () => void
   onOpenReading: () => void
   onSaveToLibrary?: () => void
@@ -47,6 +51,7 @@ type WorkspacePageProps = {
 
 function WorkspacePage({
   apiConfig,
+  articleTitle,
   chapterProgressPercent,
   chapterResolvedCount,
   completedResultCount,
@@ -57,7 +62,10 @@ function WorkspacePage({
   history,
   isRunning,
   isSavingToLibrary = false,
+  libraryError,
+  libraryNotice,
   notice,
+  onArticleTitleChange,
   onBackToLibrary,
   onOpenReading,
   onSaveToLibrary,
@@ -87,14 +95,16 @@ function WorkspacePage({
 }: WorkspacePageProps) {
   const isChapterMode = workspaceSource === 'chapter'
   const currentSentenceCount = isChapterMode ? totalSentenceCount : sentences.length
-  const workspaceTitle = isChapterMode ? contextTitle?.chapterTitle ?? '章节工作区' : '手动工作区'
+  const workspaceTitle = isChapterMode
+    ? contextTitle?.chapterTitle ?? '章节工作区'
+    : articleTitle.trim() || '文章解析工作区'
 
   return (
     <>
       <header className="panel workspace-header">
         <div className="workspace-header-top">
           <div className="workspace-header-copy">
-            <p className="eyebrow">{isChapterMode ? 'Chapter Workspace' : 'Manual Draft'}</p>
+            <p className="eyebrow">{isChapterMode ? 'Chapter Workspace' : 'Article Draft'}</p>
             <h1>{workspaceTitle}</h1>
           </div>
           <div className="hero-actions">
@@ -123,7 +133,9 @@ function WorkspacePage({
         </div>
 
         {notice ? <p className="notice success">{notice}</p> : null}
+        {libraryNotice ? <p className="notice success">{libraryNotice}</p> : null}
         {globalError ? <p className="notice error">{globalError}</p> : null}
+        {libraryError ? <p className="notice error">{libraryError}</p> : null}
       </header>
 
       <main className={`workspace-grid ${isChapterMode ? 'is-chapter-mode' : 'is-draft-mode'}`}>
@@ -141,7 +153,7 @@ function WorkspacePage({
                   onClick={onSaveToLibrary}
                   disabled={isSavingToLibrary}
                 >
-                  {isSavingToLibrary ? '保存中...' : '保存到书架'}
+                  {isSavingToLibrary ? '保存中...' : '加入书架'}
                 </button>
               ) : null}
               <button className="ghost-button" type="button" onClick={onOpenSettingsAi}>
@@ -153,20 +165,36 @@ function WorkspacePage({
             </div>
           </div>
 
+          {!isChapterMode ? (
+            <label className="field field-block">
+              <span>文章标题</span>
+              <input
+                type="text"
+                value={articleTitle}
+                onChange={(event) => onArticleTitleChange(event.target.value)}
+                placeholder="例如：El Sur / 第三章 / 本周阅读文章"
+              />
+            </label>
+          ) : null}
+
           <label className="field field-block">
             <span>{isChapterMode ? '章节工作文本' : '原文'}</span>
             <textarea
               className="source-textarea"
               value={sourceText}
               onChange={(event) => onSourceTextChange(event.target.value)}
-              placeholder={isChapterMode ? '你可以在这里微调当前章节再重新分句...' : '把一整章西语内容粘贴到这里...'}
+              placeholder={
+                isChapterMode
+                  ? '你可以在这里微调当前章节再重新分句...'
+                  : '把整篇文章、章节或短篇故事粘贴到这里...'
+              }
             />
           </label>
 
           <p className="panel-tip">
             {isChapterMode
               ? '修改正文后记得重新分句，当前区间会按新的文本重新解析。'
-              : '适合临时粘贴片段、试 Prompt，或快速检查模型输出。'}
+              : '适合粘贴整篇文章、章节或短篇，解析后可加入书架。'}
           </p>
         </section>
 

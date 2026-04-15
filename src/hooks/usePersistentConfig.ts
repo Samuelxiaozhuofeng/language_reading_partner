@@ -41,11 +41,13 @@ import type { Dispatch, SetStateAction } from 'react'
 
 type PersistentConfigState = {
   ankiConfig: AnkiConfig
+  articleTitle: string
   apiConfig: ApiConfig
   handleAnkiConfigChange: AnkiConfigChangeHandler
   handleAnkiFieldMappingChange: AnkiFieldMappingChangeHandler
   handleConfigChange: ConfigChangeHandler
   handlePromptChange: PromptChangeHandler
+  hasSavedDraft: boolean
   history: RunSession[]
   initialNotice: string
   promptConfig: PromptConfig
@@ -56,6 +58,7 @@ type PersistentConfigState = {
   handleReadingPreferencesChange: ReadingPreferencesChangeHandler
   sentences: SentenceItem[]
   setHistory: Dispatch<SetStateAction<RunSession[]>>
+  setArticleTitle: Dispatch<SetStateAction<string>>
   setResults: Dispatch<SetStateAction<Record<string, AnalysisResult>>>
   setSentences: Dispatch<SetStateAction<SentenceItem[]>>
   setSourceText: Dispatch<SetStateAction<string>>
@@ -70,6 +73,7 @@ export function usePersistentConfig(): PersistentConfigState {
   const [readingPreferences, setReadingPreferences] = useState<ReadingPreferences>(
     restoreReadingPreferences,
   )
+  const [articleTitle, setArticleTitle] = useState(draft.articleTitle)
   const [sourceText, setSourceText] = useState(draft.sourceText)
   const [sentences, setSentences] = useState<SentenceItem[]>(draft.sentences)
   const [results, setResults] = useState<Record<string, AnalysisResult>>(draft.results)
@@ -94,9 +98,9 @@ export function usePersistentConfig(): PersistentConfigState {
   useEffect(() => {
     localStorage.setItem(
       DRAFT_STORAGE_KEY,
-      JSON.stringify({ sourceText, sentences, results } satisfies PersistedDraft),
+      JSON.stringify({ articleTitle, sourceText, sentences, results } satisfies PersistedDraft),
     )
-  }, [results, sentences, sourceText])
+  }, [articleTitle, results, sentences, sourceText])
 
   useEffect(() => {
     localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history))
@@ -155,23 +159,31 @@ export function usePersistentConfig(): PersistentConfigState {
     setApiConfig(defaultConfig)
     setPromptConfig(defaultPromptConfig)
     setReadingPreferences(defaultReadingPreferences)
+    setArticleTitle('')
     setSourceText('')
     setSentences([])
     setResults({})
     setHistory([])
   }, [])
 
+  const hasSavedDraft =
+    articleTitle.trim().length > 0 ||
+    (sourceText.trim().length > 0 && sourceText !== defaultSourceText) ||
+    Object.keys(results).length > 0
+
   const initialNotice =
     draft.sourceText === defaultSourceText ? '已加载示例文本，可以直接试跑。' : '已从本地恢复最近一次工作区。'
 
   return {
     ankiConfig,
+    articleTitle,
     apiConfig,
     handleAnkiConfigChange,
     handleAnkiFieldMappingChange,
     handleConfigChange,
     handlePromptChange,
     handleReadingPreferencesChange,
+    hasSavedDraft,
     history,
     initialNotice,
     promptConfig,
@@ -179,6 +191,7 @@ export function usePersistentConfig(): PersistentConfigState {
     resetAll,
     resetPromptConfig,
     results,
+    setArticleTitle,
     sentences,
     setHistory,
     setResults,

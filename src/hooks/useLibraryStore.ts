@@ -42,6 +42,7 @@ type RemoveChapterResult = {
 }
 
 type SaveManualDraftInput = {
+  articleTitle: string
   results: Record<string, AnalysisResult>
   sentences: SentenceItem[]
   sourceText: string
@@ -58,7 +59,16 @@ function updateBookInList(books: BookRecord[], nextBook: BookRecord) {
     })
 }
 
-function buildManualBookTitle(sourceText: string, sentences: SentenceItem[]) {
+function buildManualBookTitle(
+  articleTitle: string,
+  sourceText: string,
+  sentences: SentenceItem[],
+) {
+  const trimmedArticleTitle = articleTitle.trim()
+  if (trimmedArticleTitle) {
+    return trimmedArticleTitle
+  }
+
   const firstLine = sourceText
     .split('\n')
     .map((line) => line.trim())
@@ -274,11 +284,20 @@ export function useLibraryStore() {
   }, [])
 
   const saveManualDraftAsBook = useCallback(async ({
+    articleTitle,
     results,
     sentences,
     sourceText,
   }: SaveManualDraftInput) => {
     const trimmedSourceText = sourceText.trim()
+    const trimmedArticleTitle = articleTitle.trim()
+
+    if (!trimmedArticleTitle) {
+      setLibraryNotice('')
+      setLibraryError('加入书架前，请先填写文章标题。')
+      return null
+    }
+
     if (!trimmedSourceText) {
       setLibraryNotice('')
       setLibraryError('请先粘贴一段完整的西语文本，再保存到书架。')
@@ -292,7 +311,7 @@ export function useLibraryStore() {
     const normalizedChapter = normalizeChapterRecord({
       id: chapterId,
       bookId,
-      title: '手动导入章节',
+      title: trimmedArticleTitle,
       order: 0,
       originalText: trimmedSourceText,
       sourceText: trimmedSourceText,
@@ -307,7 +326,7 @@ export function useLibraryStore() {
     })
     const book: BookRecord = {
       id: bookId,
-      title: buildManualBookTitle(trimmedSourceText, sentences),
+      title: buildManualBookTitle(trimmedArticleTitle, trimmedSourceText, sentences),
       author: '手动导入',
       sourceType: 'manual',
       importedAt: timestamp,

@@ -75,6 +75,8 @@ function App() {
 
   const setWorkspaceSourceText: Dispatch<SetStateAction<string>> = (action) => {
     if (effectiveWorkspaceSource === 'draft') {
+      library.setLibraryNotice('')
+      library.setLibraryError('')
       persistent.setSourceText(action)
       return
     }
@@ -235,6 +237,7 @@ function App() {
       : null
   const savedResourceSignatures = new Set(library.savedResources.map((resource) => resource.signature))
   const canBackToReading = readingVisibleSentences.length > 0
+  const manualWorkspaceLabel = persistent.hasSavedDraft ? '继续编辑草稿' : '粘贴文章解析'
 
   const handleChapterRangeChange = (nextRange: SentenceRange) => {
     if (effectiveWorkspaceSource !== 'chapter' || !activeChapter) {
@@ -270,8 +273,16 @@ function App() {
   }
 
   const handleOpenManualWorkspace = () => {
+    library.setLibraryNotice('')
+    library.setLibraryError('')
     setWorkspaceSource('draft')
     setActivePage('workspace')
+  }
+
+  const handleManualArticleTitleChange = (value: string) => {
+    library.setLibraryNotice('')
+    library.setLibraryError('')
+    persistent.setArticleTitle(value)
   }
 
   const handleOpenChapterWorkspace = async (chapterId: string) => {
@@ -378,6 +389,7 @@ function App() {
 
     try {
       const payload = await library.saveManualDraftAsBook({
+        articleTitle: persistent.articleTitle,
         sourceText: workspaceSourceText,
         sentences: workspaceSentences,
         results: workspaceResults,
@@ -492,6 +504,7 @@ function App() {
           isLoading={library.isLoading}
           libraryError={library.libraryError}
           libraryNotice={library.libraryNotice}
+          manualWorkspaceLabel={manualWorkspaceLabel}
           onDeleteBook={handleDeleteBook}
           onDeleteChapter={handleDeleteChapter}
           onImportFile={handleImportFile}
@@ -509,6 +522,7 @@ function App() {
       ) : activePage === 'workspace' ? (
         <WorkspacePage
           apiConfig={persistent.apiConfig}
+          articleTitle={persistent.articleTitle}
           chapterProgressPercent={chapterProgressPercent}
           chapterResolvedCount={completedResultCount}
           completedResultCount={completedResultCount}
@@ -519,7 +533,10 @@ function App() {
           history={manualHistory}
           isRunning={analysis.isRunning}
           isSavingToLibrary={isSavingManualDraft}
+          libraryError={library.libraryError}
+          libraryNotice={library.libraryNotice}
           notice={analysis.notice}
+          onArticleTitleChange={handleManualArticleTitleChange}
           onBackToLibrary={() => setActivePage('library')}
           onOpenReading={() => setActivePage('reading')}
           onSaveToLibrary={() => void handleSaveManualDraft()}
