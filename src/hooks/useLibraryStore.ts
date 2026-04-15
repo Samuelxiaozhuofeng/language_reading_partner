@@ -300,7 +300,7 @@ export function useLibraryStore() {
 
     if (!trimmedSourceText) {
       setLibraryNotice('')
-      setLibraryError('请先粘贴一段完整的西语文本，再保存到书架。')
+      setLibraryError('请先粘贴一段完整的原文，再保存到书架。')
       return null
     }
 

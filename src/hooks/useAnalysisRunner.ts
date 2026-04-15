@@ -150,7 +150,7 @@ export function useAnalysisRunner({
 
     if (pieces.length === 0) {
       setNotice('')
-      setGlobalError('当前内容无法切分成有效句子，请先粘贴一段完整的西语文本。')
+      setGlobalError('当前内容无法切分成有效句子，请先粘贴一段完整的原文。')
       setSentences([])
       setResults({})
       return
