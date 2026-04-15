@@ -98,6 +98,28 @@ export function getNextSentenceRange(
   }
 }
 
+export function getAutoAdvanceSentenceRange(
+  sentenceCount: number,
+  currentRange: SentenceRange | null | undefined,
+): SentenceRange | null {
+  const normalizedCurrentRange = normalizeSentenceRange(currentRange, sentenceCount)
+  if (!normalizedCurrentRange) {
+    return getDefaultSentenceRange(sentenceCount, null)
+  }
+
+  const nextStart = normalizedCurrentRange.end + 1
+  if (nextStart >= sentenceCount) {
+    return normalizedCurrentRange
+  }
+
+  const currentSize = normalizedCurrentRange.end - normalizedCurrentRange.start + 1
+
+  return {
+    start: nextStart,
+    end: Math.min(sentenceCount - 1, nextStart + currentSize - 1),
+  }
+}
+
 export function getSentencesInRange(
   sentences: SentenceItem[],
   range: SentenceRange | null | undefined,

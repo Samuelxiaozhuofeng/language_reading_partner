@@ -9,6 +9,7 @@ import WorkspacePage from './components/WorkspacePage'
 import { addNoteToAnki, buildAnkiNotePayload } from './lib/anki'
 import { countByStatus } from './lib/appState'
 import {
+  getAutoAdvanceSentenceRange,
   DEFAULT_CHAPTER_RANGE_SIZE,
   doesRangeContainSentenceIndex,
   getDefaultSentenceRange,
@@ -141,6 +142,16 @@ function App() {
     apiConfig: persistent.apiConfig,
     chapterRange: selectedChapterRange,
     initialNotice,
+    onChapterAnalysisCompleted: (range) => {
+      if (effectiveWorkspaceSource !== 'chapter' || !activeChapter) {
+        return
+      }
+
+      setChapterRangeOverrides((current) => ({
+        ...current,
+        [activeChapter.id]: getAutoAdvanceSentenceRange(workspaceSentences.length, range),
+      }))
+    },
     onChapterRangeCommitted: (range) => {
       if (effectiveWorkspaceSource !== 'chapter') {
         return
@@ -202,6 +213,10 @@ function App() {
   const queuedCount = countByStatus(progressSentences, 'queued')
   const runningCount = countByStatus(progressSentences, 'running')
   const completedResultCount = Object.keys(workspaceResults).length
+  const chapterProgressPercent =
+    effectiveWorkspaceSource === 'chapter' && workspaceSentences.length > 0
+      ? Math.round((completedResultCount / workspaceSentences.length) * 100)
+      : 0
   const finishedCount = successCount + errorCount
   const progressTotal = progressSentences.length
   const progressPercent =
@@ -494,6 +509,8 @@ function App() {
       ) : activePage === 'workspace' ? (
         <WorkspacePage
           apiConfig={persistent.apiConfig}
+          chapterProgressPercent={chapterProgressPercent}
+          chapterResolvedCount={completedResultCount}
           completedResultCount={completedResultCount}
           contextTitle={currentContextTitle}
           errorCount={errorCount}

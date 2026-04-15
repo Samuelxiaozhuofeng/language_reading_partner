@@ -415,6 +415,11 @@ textarea:focus {
   background: rgba(255, 255, 255, 0.64);
 }
 
+.chapter-progress-card {
+  margin-top: 0;
+  margin-bottom: 18px;
+}
+
 .range-card {
   margin-bottom: 18px;
   padding: 18px 20px;

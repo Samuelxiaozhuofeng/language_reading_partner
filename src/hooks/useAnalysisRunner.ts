@@ -23,6 +23,7 @@ import type {
 
 type UseAnalysisRunnerArgs = {
   apiConfig: ApiConfig
+  onChapterAnalysisCompleted?: (range: SentenceRange) => void | Promise<unknown>
   chapterRange?: SentenceRange | null
   initialNotice: string
   onChapterRangeCommitted?: (range: SentenceRange) => void | Promise<unknown>
@@ -42,6 +43,7 @@ export function useAnalysisRunner({
   apiConfig,
   chapterRange,
   initialNotice,
+  onChapterAnalysisCompleted,
   onChapterRangeCommitted,
   onChapterSegmentReset,
   promptConfig,
@@ -387,6 +389,7 @@ export function useAnalysisRunner({
 
       if (workspaceSource === 'chapter' && chapterRange) {
         await onChapterRangeCommitted?.(chapterRange)
+        await onChapterAnalysisCompleted?.(chapterRange)
       }
 
       setNotice(

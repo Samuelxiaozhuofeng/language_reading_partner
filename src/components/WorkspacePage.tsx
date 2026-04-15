@@ -3,6 +3,8 @@ import type { ApiConfig, RunSession, SentenceItem, SentenceRange, WorkspaceSourc
 
 type WorkspacePageProps = {
   apiConfig: ApiConfig
+  chapterProgressPercent: number
+  chapterResolvedCount: number
   completedResultCount: number
   contextTitle?: {
     bookTitle: string
@@ -45,6 +47,8 @@ type WorkspacePageProps = {
 
 function WorkspacePage({
   apiConfig,
+  chapterProgressPercent,
+  chapterResolvedCount,
   completedResultCount,
   contextTitle,
   errorCount,
@@ -178,6 +182,37 @@ function WorkspacePage({
                 : '会重跑当前草稿，并在本地保留最近几次结果。'}
             </p>
           </div>
+
+          {isChapterMode && totalSentenceCount > 0 ? (
+            <div className="analysis-progress-card chapter-progress-card" aria-live="polite">
+              <div className="analysis-progress-header">
+                <div>
+                  <p className="analysis-progress-label">章节解析进度</p>
+                  <strong>
+                    {chapterResolvedCount}/{totalSentenceCount} 句
+                  </strong>
+                </div>
+                <span className="analysis-progress-percent">{chapterProgressPercent}%</span>
+              </div>
+
+              <div
+                className="analysis-progress-track"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={totalSentenceCount}
+                aria-valuenow={chapterResolvedCount}
+                aria-valuetext={`已解析 ${chapterResolvedCount}/${totalSentenceCount} 句，${chapterProgressPercent}%`}
+              >
+                <div className="analysis-progress-fill" style={{ width: `${chapterProgressPercent}%` }} />
+              </div>
+
+              <div className="analysis-progress-meta">
+                <span>已解析 {chapterResolvedCount}</span>
+                <span>未解析 {Math.max(0, totalSentenceCount - chapterResolvedCount)}</span>
+                <span>当前结果会累计保存到整章</span>
+              </div>
+            </div>
+          ) : null}
 
           {isChapterMode ? (
             <div className="range-card">
