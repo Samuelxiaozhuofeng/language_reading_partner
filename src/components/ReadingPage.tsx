@@ -138,6 +138,7 @@ type ReadingDisplaySettingsProps = {
 const DOCKED_READING_BREAKPOINT = 960
 const CHAPTER_PAGE_GAP = 56
 const READING_DESKTOP_BREAKPOINT = 960
+const CHAPTER_PAGE_BOTTOM_SAFE_LINES = 1.2
 const FALLBACK_CHAPTER_PAGE_LAYOUT: ChapterPageLayout = {
   bodyHeight: 0,
   bodyWidth: 0,
@@ -251,9 +252,14 @@ function paginateChapterParagraphs(
 
   const pageBodyWidth =
     options.pageLayout.bodyWidth || Math.max(360, Math.round(options.viewportWidth - 52))
+  const bottomSafeSpace = Math.max(18, Math.round(options.fontSize * CHAPTER_PAGE_BOTTOM_SAFE_LINES))
   const pageBodyHeight =
-    options.pageLayout.bodyHeight ||
-    Math.max(320, Math.round(options.viewportHeight - options.fontSize * 9.6))
+    Math.max(
+      180,
+      (options.pageLayout.bodyHeight ||
+        Math.max(320, Math.round(options.viewportHeight - options.fontSize * 9.6))) -
+        bottomSafeSpace,
+    )
   const paragraphGap = Math.max(16, Math.round(options.fontSize * 1.1))
   const measuredHeightCache = new Map<string, number>()
   const pages: ChapterReadingPage[] = []
@@ -450,6 +456,7 @@ function SentenceDetailPanel({
   savedHighlightSignatures,
   sentence,
 }: SentenceDetailPanelProps) {
+  const knowledgeDetailCardRef = useRef<HTMLDivElement | null>(null)
   const [ankiSubmitState, setAnkiSubmitState] = useState<{
     message: string
     selectionKey: string
@@ -459,22 +466,7 @@ function SentenceDetailPanel({
     selectionKey: '',
     status: 'idle',
   })
-
-  if (!result) {
-    return (
-      <div className="result-placeholder">
-        <p>
-          {sentence.status === 'error'
-            ? '这句解析失败了，请回工作区重试本句。'
-            : sentence.status === 'running' || sentence.status === 'queued'
-              ? 'AI 正在处理中...'
-              : '这句还没有开始解析。'}
-        </p>
-      </div>
-    )
-  }
-
-  const highlights = result.highlights ?? []
+  const highlights = result?.highlights ?? []
   const selectedHighlight = highlights.find(
     (highlight) =>
       activeSelection?.sentenceId === sentence.id &&
@@ -493,6 +485,56 @@ function SentenceDetailPanel({
     ankiSubmitState.selectionKey === selectedHighlightKey ? ankiSubmitState.status : 'idle'
   const visibleAnkiMessage =
     ankiSubmitState.selectionKey === selectedHighlightKey ? ankiSubmitState.message : ''
+
+  useEffect(() => {
+    if (!selectedHighlight || !knowledgeDetailCardRef.current) {
+      return
+    }
+
+    const detailCard = knowledgeDetailCardRef.current
+    const scrollContainer = detailCard.closest('.reading-inspector')
+
+    if (!(scrollContainer instanceof HTMLElement)) {
+      return
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const detailRect = detailCard.getBoundingClientRect()
+      const containerRect = scrollContainer.getBoundingClientRect()
+      const scrollPadding = 16
+      const isAboveViewport = detailRect.top < containerRect.top + scrollPadding
+      const isBelowViewport = detailRect.bottom > containerRect.bottom - scrollPadding
+
+      if (!isAboveViewport && !isBelowViewport) {
+        return
+      }
+
+      const nextScrollTop = isAboveViewport
+        ? scrollContainer.scrollTop + detailRect.top - containerRect.top - scrollPadding
+        : scrollContainer.scrollTop + detailRect.bottom - containerRect.bottom + scrollPadding
+
+      scrollContainer.scrollTo({
+        top: Math.max(0, nextScrollTop),
+        behavior: 'smooth',
+      })
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [selectedHighlight])
+
+  if (!result) {
+    return (
+      <div className="result-placeholder">
+        <p>
+          {sentence.status === 'error'
+            ? '这句解析失败了，请回工作区重试本句。'
+            : sentence.status === 'running' || sentence.status === 'queued'
+              ? 'AI 正在处理中...'
+              : '这句还没有开始解析。'}
+        </p>
+      </div>
+    )
+  }
 
   const handleAddToAnki = async () => {
     if (!selectedHighlight || !selectedHighlightKey) {
@@ -563,7 +605,7 @@ function SentenceDetailPanel({
             </div>
 
             {selectedHighlight ? (
-              <div className="knowledge-detail-card">
+              <div className="knowledge-detail-card" ref={knowledgeDetailCardRef}>
                 <div className="knowledge-detail-header">
                   <div>
                     <p className="section-kicker">Knowledge Point</p>

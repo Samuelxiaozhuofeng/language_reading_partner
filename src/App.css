@@ -1133,7 +1133,7 @@ blockquote {
   height: 100%;
   align-content: start;
   overflow: hidden;
-  padding: 0;
+  padding: 0 0 calc(var(--reading-body-font-size, 18px) * 1.15);
 }
 
 .reading-book-body {
