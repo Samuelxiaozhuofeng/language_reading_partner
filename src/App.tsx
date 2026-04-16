@@ -551,6 +551,7 @@ function App() {
           notice={analysis.notice}
           onArticleTitleChange={handleManualArticleTitleChange}
           onBackToLibrary={() => setActivePage('library')}
+          onCancelAnalysis={analysis.cancelAnalysis}
           onOpenReading={() => setActivePage('reading')}
           onSaveToLibrary={() => void handleSaveManualDraft()}
           onOpenSettings={openSettings}

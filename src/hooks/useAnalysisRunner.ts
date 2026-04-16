@@ -63,6 +63,12 @@ export function useAnalysisRunner({
   const [isRunning, setIsRunning] = useState(false)
   const [notice, setNotice] = useState(initialNotice)
   const runTokenRef = useRef(0)
+  const runAbortControllerRef = useRef<AbortController | null>(null)
+  const activeRunRef = useRef<{
+    pendingIds: Set<string>
+    previousResults: Record<string, AnalysisResult>
+    previousSentenceState: Record<string, Pick<SentenceItem, 'status' | 'error'>>
+  } | null>(null)
 
   useEffect(() => {
     setNotice(initialNotice)
@@ -247,6 +253,21 @@ export function useAnalysisRunner({
 
     runTokenRef.current += 1
     const runToken = runTokenRef.current
+    const abortController = new AbortController()
+    runAbortControllerRef.current = abortController
+    activeRunRef.current = {
+      pendingIds,
+      previousResults: results,
+      previousSentenceState: Object.fromEntries(
+        sanitized.map((sentence) => [
+          sentence.id,
+          {
+            status: sentence.status,
+            error: sentence.error,
+          },
+        ]),
+      ),
+    }
     setIsRunning(true)
     setGlobalError('')
     setNotice(
@@ -376,6 +397,9 @@ export function useAnalysisRunner({
             )
           },
         },
+        {
+          signal: abortController.signal,
+        },
       )
 
       if (runTokenRef.current !== runToken) {
@@ -452,10 +476,78 @@ export function useAnalysisRunner({
       setGlobalError(toUserFacingError(error))
       return
     } finally {
+      if (runAbortControllerRef.current === abortController) {
+        runAbortControllerRef.current = null
+      }
+      if (runTokenRef.current === runToken) {
+        activeRunRef.current = null
+      }
       if (runTokenRef.current === runToken) {
         setIsRunning(false)
       }
     }
+  }
+
+  const cancelAnalysis = () => {
+    if (!isRunning) {
+      return
+    }
+
+    const activeRun = activeRunRef.current
+
+    runTokenRef.current += 1
+    runAbortControllerRef.current?.abort()
+    runAbortControllerRef.current = null
+    activeRunRef.current = null
+    setIsRunning(false)
+    setGlobalError('')
+    setNotice(
+      workspaceSource === 'chapter'
+        ? '已停止当前区间解析，未完成的句子已恢复为可重新解析状态。'
+        : '已停止当前解析，未完成的句子已恢复为可重新解析状态。',
+    )
+
+    if (!activeRun) {
+      return
+    }
+
+    setResults((current) => {
+      const nextResults = { ...current }
+
+      activeRun.pendingIds.forEach((sentenceId) => {
+        if (sentenceId in nextResults) {
+          return
+        }
+
+        const previousResult = activeRun.previousResults[sentenceId]
+        if (previousResult) {
+          nextResults[sentenceId] = previousResult
+        }
+      })
+
+      return nextResults
+    })
+
+    setSentences((current) =>
+      current.map((sentence) => {
+        if (!activeRun.pendingIds.has(sentence.id)) {
+          return sentence
+        }
+
+        if (sentence.status !== 'queued' && sentence.status !== 'running') {
+          return sentence
+        }
+
+        const previousState = activeRun.previousSentenceState[sentence.id]
+        const previousResult = activeRun.previousResults[sentence.id]
+
+        return {
+          ...sentence,
+          status: previousResult ? 'success' : previousState?.status === 'error' ? 'error' : 'idle',
+          error: previousResult ? undefined : previousState?.error,
+        }
+      }),
+    )
   }
 
   const retrySingleSentence = async (sentenceId: string) => {
@@ -546,6 +638,7 @@ export function useAnalysisRunner({
 
   return {
     clearStatus,
+    cancelAnalysis,
     globalError,
     handleSegment,
     handleSentenceChange,

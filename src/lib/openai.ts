@@ -33,6 +33,10 @@ type AnalysisCallbacks = {
   onError?: (payload: { sentenceId: string; error: string }) => void
 }
 
+type RunConcurrentAnalysisOptions = {
+  signal?: AbortSignal
+}
+
 const REQUEST_TIMEOUT_MS = 60_000
 const DOCUMENT_PLACEHOLDERS = [
   '{documentMetadata}',
@@ -224,9 +228,23 @@ export async function analyzeSentence(
   config: ApiConfig,
   promptConfig: PromptConfig,
   job: AnalysisJob,
+  signal?: AbortSignal,
 ): Promise<AnalysisResult> {
   const controller = new AbortController()
-  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  let didTimeout = false
+  const handleExternalAbort = () => controller.abort()
+  const timeoutId = window.setTimeout(() => {
+    didTimeout = true
+    controller.abort()
+  }, REQUEST_TIMEOUT_MS)
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort()
+    } else {
+      signal.addEventListener('abort', handleExternalAbort, { once: true })
+    }
+  }
 
   try {
     const response = await fetch(normalizeBaseUrl(config.baseUrl), {
@@ -268,6 +286,10 @@ export async function analyzeSentence(
     }
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
+      if (!didTimeout && signal?.aborted) {
+        throw error
+      }
+
       throw new Error('请求超时，请检查网络或缩短单次处理内容。')
     }
 
@@ -277,6 +299,9 @@ export async function analyzeSentence(
 
     throw error
   } finally {
+    if (signal) {
+      signal.removeEventListener('abort', handleExternalAbort)
+    }
     window.clearTimeout(timeoutId)
   }
 }
@@ -331,21 +356,31 @@ export async function runConcurrentAnalysis(
   promptConfig: PromptConfig,
   jobs: AnalysisJob[],
   callbacks: AnalysisCallbacks,
+  options: RunConcurrentAnalysisOptions = {},
 ) {
   const concurrency = Math.max(1, Math.min(config.concurrency, jobs.length || 1))
   let cursor = 0
+  const { signal } = options
 
   async function worker() {
-    while (cursor < jobs.length) {
+    while (cursor < jobs.length && !signal?.aborted) {
       const job = jobs[cursor]
       cursor += 1
+
+      if (signal?.aborted) {
+        return
+      }
 
       callbacks.onStart?.(job)
 
       try {
-        const result = await analyzeSentence(config, promptConfig, job)
+        const result = await analyzeSentence(config, promptConfig, job, signal)
         callbacks.onSuccess?.({ sentenceId: job.sentenceId, result })
       } catch (error) {
+        if (signal?.aborted) {
+          return
+        }
+
         callbacks.onError?.({
           sentenceId: job.sentenceId,
           error: toUserFacingError(error),

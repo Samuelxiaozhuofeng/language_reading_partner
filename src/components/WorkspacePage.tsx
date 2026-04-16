@@ -22,6 +22,7 @@ type WorkspacePageProps = {
   notice: string
   onArticleTitleChange: (value: string) => void
   onBackToLibrary: () => void
+  onCancelAnalysis: () => void
   onOpenReading: () => void
   onSaveToLibrary?: () => void
   onOpenSettings: () => void
@@ -67,6 +68,7 @@ function WorkspacePage({
   notice,
   onArticleTitleChange,
   onBackToLibrary,
+  onCancelAnalysis,
   onOpenReading,
   onSaveToLibrary,
   onOpenSettings,
@@ -293,8 +295,12 @@ function WorkspacePage({
           ) : null}
 
           <div className="analysis-actions">
-            <button className="primary-button" type="button" onClick={onRunAnalysis} disabled={isRunning}>
-              {isRunning ? '解析中...' : isChapterMode ? '开始当前区间解析' : '开始整章解析'}
+            <button
+              className="primary-button"
+              type="button"
+              onClick={isRunning ? onCancelAnalysis : onRunAnalysis}
+            >
+              {isRunning ? (isChapterMode ? '停止当前区间解析' : '停止当前解析') : isChapterMode ? '开始当前区间解析' : '开始整章解析'}
             </button>
             <button className="ghost-button" type="button" disabled={readingDisabled} onClick={onOpenReading}>
               {isChapterMode ? '打开当前区间阅读' : '打开沉浸阅读'}
