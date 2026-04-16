@@ -951,9 +951,15 @@ blockquote {
 .reading-shell.is-chapter-shell {
   min-height: 0;
   height: calc(100vh - 24px);
-  padding-top: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
+  gap: 14px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
 }
 
 .reading-shell.has-docked-inspector {
@@ -972,6 +978,7 @@ blockquote {
 .reading-shell.is-chapter-shell .reading-stage.is-chapter-mode {
   flex: 1 1 auto;
   min-height: 0;
+  gap: 0;
 }
 
 .reading-stage.has-docked-inspector {
