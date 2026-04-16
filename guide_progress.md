@@ -4,10 +4,9 @@
 
 ## 总览
 
-- 已完成：Phase 1 `ReadingPage.tsx`、Phase 2 `SettingsDialog.tsx`
+- 已完成：Phase 1 `ReadingPage.tsx`、Phase 2 `SettingsDialog.tsx`、Phase 3 `lib/anki.ts`
 - 进行中：无
 - 待完成：
-  - Phase 3 `lib/anki.ts`
   - Phase 4 `App.tsx`
   - Phase 5 `useAnalysisRunner.ts`
   - Phase 6 `useLibraryStore.ts`
@@ -75,6 +74,35 @@
 
 - `SettingsDialog.tsx` 当前仅保留弹窗壳、tab 切换和 Esc 关闭逻辑
 - `App.tsx` 的调用方式保持不变
+
+### Phase 3: 拆 `lib/anki.ts`
+
+已完成拆分，且已独立验证。
+
+新增模块：
+
+- `src/lib/anki/index.ts`
+- `src/lib/anki/constants.ts`
+- `src/lib/anki/client.ts`
+- `src/lib/anki/errors.ts`
+- `src/lib/anki/payload.ts`
+- `src/lib/anki/noteType.ts`
+
+结果：
+
+- 原 `src/lib/anki.ts` 已被目录化实现替代，并由 `src/lib/anki/index.ts` 统一收口导出
+- SRA note type 模板、AnkiConnect client、字段映射与 payload、note type 创建/修复、错误格式化已按职责拆开
+- 现有调用方仍可继续使用 `import ... from './lib/anki'` / `../lib/anki` / `../../lib/anki`
+
+验证：
+
+- `npm run lint` 通过
+- `npm run build` 通过
+
+备注：
+
+- Settings 页面与阅读页的 Anki 相关调用路径未改，属于兼容迁移
+- `build` 仍有 Vite 主 chunk 体积告警，但不影响本阶段验收
 
 ## 后续执行约束
 
