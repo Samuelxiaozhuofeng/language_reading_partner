@@ -1,44 +1,33 @@
 import { useState } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
 import './App.css'
 import LibraryPage from './components/LibraryPage'
 import ReadingPage from './components/ReadingPage'
 import ResourcesPage from './components/ResourcesPage'
 import SettingsDialog from './components/SettingsDialog'
 import WorkspacePage from './components/WorkspacePage'
-import { addNoteToAnki, buildAnkiNotePayload } from './lib/anki'
 import { countByStatus } from './lib/appState'
 import {
   getAutoAdvanceSentenceRange,
   DEFAULT_CHAPTER_RANGE_SIZE,
-  doesRangeContainSentenceIndex,
   getDefaultSentenceRange,
   getNextSentenceRange,
-  getSentenceRangeAroundIndex,
-  getSentencesInRange,
   normalizeSentenceRange,
 } from './lib/chapterRange'
-import { buildKnowledgeSignature } from './lib/knowledge'
-import { buildReadingResumeAnchor, resolveReadingResumeAnchor } from './lib/readingAnchor'
+import { useAppActions } from './hooks/useAppActions'
 import { useAnalysisRunner } from './hooks/useAnalysisRunner'
 import { useLibraryStore } from './hooks/useLibraryStore'
 import { usePersistentConfig } from './hooks/usePersistentConfig'
+import { useWorkspaceBinding } from './hooks/useWorkspaceBinding'
 import type {
-  AnalysisResult,
   AppPage,
   KnowledgeKind,
   SettingsTab,
-  SentenceItem,
   SentenceRange,
   WorkspaceSource,
 } from './types'
 
-function resolveStateAction<T>(current: T, action: SetStateAction<T>) {
-  return typeof action === 'function' ? (action as (value: T) => T)(current) : action
-}
-
 function getSafeChapterRange(
-  sentences: SentenceItem[],
+  sentences: { id: string }[],
   range: SentenceRange | null | undefined,
 ) {
   return normalizeSentenceRange(range, sentences.length)
@@ -59,98 +48,30 @@ function App() {
 
   const persistent = usePersistentConfig()
   const library = useLibraryStore()
-
-  const effectiveWorkspaceSource: WorkspaceSource =
-    workspaceSource === 'chapter' && library.currentChapter ? 'chapter' : 'draft'
-
-  const activeChapter = effectiveWorkspaceSource === 'chapter' ? library.currentChapter : null
-  const workspaceSourceText = activeChapter?.sourceText ?? persistent.sourceText
-  const workspaceSentences = activeChapter?.sentences ?? persistent.sentences
-  const workspaceResults = activeChapter?.results ?? persistent.results
-  const chapterRangeOverride = activeChapter ? chapterRangeOverrides[activeChapter.id] : undefined
-  const activeReadingRange =
-    effectiveWorkspaceSource === 'chapter'
-      ? getSafeChapterRange(workspaceSentences, activeChapter?.activeRange)
-      : null
-
-  const setWorkspaceSourceText: Dispatch<SetStateAction<string>> = (action) => {
-    if (effectiveWorkspaceSource === 'draft') {
-      library.setLibraryNotice('')
-      library.setLibraryError('')
-      persistent.setSourceText(action)
-      return
-    }
-
-    void library.updateCurrentChapter((chapter) => ({
-      ...chapter,
-      sourceText: resolveStateAction(chapter.sourceText, action),
-    }))
-  }
-
-  const setWorkspaceSentences: Dispatch<SetStateAction<SentenceItem[]>> = (action) => {
-    if (effectiveWorkspaceSource === 'draft') {
-      persistent.setSentences(action)
-      return
-    }
-
-    void library.updateCurrentChapter((chapter) => ({
-      ...chapter,
-      sentences: resolveStateAction(chapter.sentences, action),
-    }))
-  }
-
-  const setWorkspaceResults: Dispatch<SetStateAction<Record<string, AnalysisResult>>> = (action) => {
-    if (effectiveWorkspaceSource === 'draft') {
-      persistent.setResults(action)
-      return
-    }
-
-    void library.updateCurrentChapter((chapter) => ({
-      ...chapter,
-      results: resolveStateAction(chapter.results, action),
-    }))
-  }
-
-  const initialNotice =
-    effectiveWorkspaceSource === 'chapter' && activeChapter
-      ? `已载入《${library.selectedBook?.title ?? '当前书籍'}》的章节《${activeChapter.title}》。`
-      : persistent.initialNotice
-
-  const selectedChapterRange =
-    effectiveWorkspaceSource === 'chapter'
-      ? getSafeChapterRange(
-          workspaceSentences,
-          chapterRangeOverride ??
-            getDefaultSentenceRange(
-              workspaceSentences.length,
-              activeChapter?.activeRange ?? null,
-            ),
-        )
-      : null
-  const workspaceVisibleSentences =
-    effectiveWorkspaceSource === 'chapter'
-      ? getSentencesInRange(workspaceSentences, selectedChapterRange)
-      : workspaceSentences
-  const readingRangeSentences =
-    effectiveWorkspaceSource === 'chapter'
-      ? getSentencesInRange(workspaceSentences, activeReadingRange)
-      : workspaceSentences
-  const readingVisibleSentences =
-    effectiveWorkspaceSource === 'chapter'
-      ? readingRangeSentences.filter((sentence) => workspaceResults[sentence.id])
-      : workspaceSentences
-  const analysisDocumentContext =
-    effectiveWorkspaceSource === 'chapter'
-      ? {
-          documentType: 'chapter' as const,
-          title: library.selectedBook?.title,
-          author: library.selectedBook?.author,
-          chapterTitle: activeChapter?.title,
-        }
-      : {
-          documentType: 'article' as const,
-          title: persistent.articleTitle,
-        }
+  const {
+    activeChapter,
+    activeReadingRange,
+    analysisDocumentContext,
+    currentContextTitle,
+    effectiveWorkspaceSource,
+    initialNotice,
+    manualHistory,
+    readingRangeSentences,
+    readingVisibleSentences,
+    selectedChapterRange,
+    setWorkspaceResults,
+    setWorkspaceSentences,
+    setWorkspaceSourceText,
+    workspaceResults,
+    workspaceSentences,
+    workspaceSourceText,
+    workspaceVisibleSentences,
+  } = useWorkspaceBinding({
+    chapterRangeOverrides,
+    library,
+    persistent,
+    workspaceSource,
+  })
 
   const analysis = useAnalysisRunner({
     apiConfig: persistent.apiConfig,
@@ -252,6 +173,36 @@ function App() {
   const canBackToReading = readingVisibleSentences.length > 0
   const manualWorkspaceLabel = persistent.hasSavedDraft ? '继续编辑草稿' : '粘贴文章解析'
 
+  const {
+    handleAddHighlightToAnki,
+    handleClearLocalData,
+    handleDeleteBook,
+    handleDeleteChapter,
+    handleImportFile,
+    handleManualArticleTitleChange,
+    handleOpenAdjacentChapter,
+    handleOpenChapterReading,
+    handleOpenChapterWorkspace,
+    handleOpenManualWorkspace,
+    handleOpenRecentChapter,
+    handleRemoveHighlight,
+    handleSaveHighlight,
+    handleSaveManualDraft,
+    handleSetResumeAnchor,
+  } = useAppActions({
+    activeChapter,
+    analysis,
+    effectiveWorkspaceSource,
+    library,
+    persistent,
+    setActivePage,
+    setIsSavingManualDraft,
+    setWorkspaceSource,
+    workspaceResults,
+    workspaceSentences,
+    workspaceSourceText,
+  })
+
   const handleChapterRangeChange = (nextRange: SentenceRange) => {
     if (effectiveWorkspaceSource !== 'chapter' || !activeChapter) {
       return
@@ -285,146 +236,6 @@ function App() {
     }
   }
 
-  const handleOpenManualWorkspace = () => {
-    library.setLibraryNotice('')
-    library.setLibraryError('')
-    setWorkspaceSource('draft')
-    setActivePage('workspace')
-  }
-
-  const handleManualArticleTitleChange = (value: string) => {
-    library.setLibraryNotice('')
-    library.setLibraryError('')
-    persistent.setArticleTitle(value)
-  }
-
-  const handleOpenChapterWorkspace = async (chapterId: string) => {
-    const chapter = await library.openChapter(chapterId)
-    if (!chapter) {
-      return
-    }
-
-    setWorkspaceSource('chapter')
-    setActivePage('workspace')
-  }
-
-  const handleOpenChapterReading = async (chapterId: string) => {
-    const chapter = await library.openChapter(chapterId)
-    if (!chapter) {
-      return
-    }
-
-    const resolvedResumeAnchor = resolveReadingResumeAnchor(
-      chapter.sentences,
-      chapter.resumeAnchor,
-    )
-    const activeRangeSize =
-      chapter.activeRange ? chapter.activeRange.end - chapter.activeRange.start + 1 : DEFAULT_CHAPTER_RANGE_SIZE
-
-    if (
-      resolvedResumeAnchor &&
-      !doesRangeContainSentenceIndex(
-        chapter.activeRange,
-        resolvedResumeAnchor.index,
-        chapter.sentences.length,
-      )
-    ) {
-      const nextRange = getSentenceRangeAroundIndex(
-        chapter.sentences.length,
-        resolvedResumeAnchor.index,
-        activeRangeSize,
-      )
-
-      if (nextRange) {
-        await library.updateCurrentChapter((currentChapter) => ({
-          ...currentChapter,
-          activeRange: nextRange,
-        }))
-      }
-    }
-
-    setWorkspaceSource('chapter')
-    setActivePage('reading')
-  }
-
-  const handleOpenRecentChapter = async () => {
-    if (!library.selectedBook?.lastReadChapterId) {
-      return
-    }
-
-    await handleOpenChapterReading(library.selectedBook.lastReadChapterId)
-  }
-
-  const handleOpenAdjacentChapter = async (chapterId: string | null) => {
-    if (!chapterId) {
-      return
-    }
-
-    await handleOpenChapterReading(chapterId)
-  }
-
-  const handleDeleteBook = async (bookId: string) => {
-    const shouldFallbackToDraft = library.currentChapter?.bookId === bookId
-    await library.removeBook(bookId)
-
-    if (shouldFallbackToDraft) {
-      setWorkspaceSource('draft')
-      setActivePage('library')
-    }
-  }
-
-  const handleDeleteChapter = async (chapterId: string) => {
-    const result = await library.removeChapter(chapterId)
-
-    if (!result) {
-      return
-    }
-
-    if (result.removedCurrentChapter && !result.nextCurrentChapterId) {
-      setWorkspaceSource('draft')
-    }
-  }
-
-  const handleImportFile = async (file: File) => {
-    const payload = await library.importBook(file)
-    if (payload.chapters[0]) {
-      setWorkspaceSource('chapter')
-      setActivePage('workspace')
-    }
-  }
-
-  const handleSaveManualDraft = async () => {
-    if (effectiveWorkspaceSource !== 'draft') {
-      return
-    }
-
-    setIsSavingManualDraft(true)
-
-    try {
-      const payload = await library.saveManualDraftAsBook({
-        articleTitle: persistent.articleTitle,
-        sourceText: workspaceSourceText,
-        sentences: workspaceSentences,
-        results: workspaceResults,
-      })
-
-      if (!payload?.chapters[0]) {
-        return
-      }
-
-      setWorkspaceSource('chapter')
-      setActivePage('workspace')
-    } finally {
-      setIsSavingManualDraft(false)
-    }
-  }
-
-  const handleClearLocalData = async () => {
-    analysis.clearStatus()
-    persistent.resetAll()
-    await library.clearLibrary()
-  }
-
   const openSettings = () => {
     setIsSettingsOpen(true)
   }
@@ -438,74 +249,23 @@ function App() {
     setActivePage('resources')
   }
 
-  const handleSaveHighlight = async (
-    sentence: SentenceItem,
-    result: AnalysisResult,
-    highlight: {
-      text: string
-      kind: KnowledgeKind
-      explanation: string
-    },
-  ) => {
-    await library.upsertKnowledgeResource({
-      id: crypto.randomUUID(),
-      signature: buildKnowledgeSignature(highlight.kind, highlight.text),
-      text: highlight.text,
-      kind: highlight.kind,
-      explanation: highlight.explanation,
-      grammarText: result.grammar,
-      meaning: result.meaning,
-      sentenceId: sentence.id,
-      sentenceText: sentence.editedText || sentence.text,
-      savedAt: new Date().toISOString(),
-      bookId: activeChapter?.bookId,
-      bookTitle: library.selectedBook?.title,
-      chapterId: activeChapter?.id,
-      chapterTitle: activeChapter?.title,
-    })
-  }
-
-  const handleRemoveHighlight = async (signature: string) => {
-    await library.removeKnowledgeResourceBySignature(signature)
-  }
-
-  const handleAddHighlightToAnki = async (
-    sentence: SentenceItem,
-    result: AnalysisResult,
-    highlight: {
-      text: string
-      kind: KnowledgeKind
-      explanation: string
-    },
-  ) => {
-    await addNoteToAnki(
-      persistent.ankiConfig,
-      buildAnkiNotePayload(sentence, result, {
-        id: `${sentence.id}:${highlight.kind}:${highlight.text}`,
-        ...highlight,
-      }),
-    )
-  }
-
-  const handleSetResumeAnchor = async (sentence: SentenceItem, sentenceIndex: number) => {
-    if (effectiveWorkspaceSource !== 'chapter') {
-      return
-    }
-
-    await library.updateCurrentChapter((chapter) => ({
-      ...chapter,
-      resumeAnchor: buildReadingResumeAnchor(sentence, sentenceIndex),
-    }))
-  }
-
-  const manualHistory = effectiveWorkspaceSource === 'draft' ? persistent.history : []
-  const currentContextTitle =
-    effectiveWorkspaceSource === 'chapter'
-      ? {
-          bookTitle: library.selectedBook?.title ?? '当前书籍',
-          chapterTitle: activeChapter?.title ?? '未命名章节',
-        }
-      : undefined
+  const settingsDialog = (
+    <SettingsDialog
+      activeSettingsTab={activeSettingsTab}
+      ankiConfig={persistent.ankiConfig}
+      apiConfig={persistent.apiConfig}
+      isOpen={isSettingsOpen}
+      onAnkiConfigChange={persistent.handleAnkiConfigChange}
+      onAnkiFieldMappingChange={persistent.handleAnkiFieldMappingChange}
+      onClearLocalData={() => void handleClearLocalData()}
+      onClose={() => setIsSettingsOpen(false)}
+      onConfigChange={persistent.handleConfigChange}
+      onPromptChange={persistent.handlePromptChange}
+      onResetPrompt={persistent.resetPromptConfig}
+      onSettingsTabChange={setActiveSettingsTab}
+      promptConfig={persistent.promptConfig}
+    />
+  )
 
   if (activePage === 'reading') {
     return (
@@ -545,21 +305,7 @@ function App() {
           workspaceSource={effectiveWorkspaceSource}
         />
 
-        <SettingsDialog
-          activeSettingsTab={activeSettingsTab}
-          ankiConfig={persistent.ankiConfig}
-          apiConfig={persistent.apiConfig}
-          isOpen={isSettingsOpen}
-          onAnkiConfigChange={persistent.handleAnkiConfigChange}
-          onAnkiFieldMappingChange={persistent.handleAnkiFieldMappingChange}
-          onClearLocalData={() => void handleClearLocalData()}
-          onClose={() => setIsSettingsOpen(false)}
-          onConfigChange={persistent.handleConfigChange}
-          onPromptChange={persistent.handlePromptChange}
-          onResetPrompt={persistent.resetPromptConfig}
-          onSettingsTabChange={setActiveSettingsTab}
-          promptConfig={persistent.promptConfig}
-        />
+        {settingsDialog}
       </>
     )
   }
@@ -655,21 +401,7 @@ function App() {
         />
       )}
 
-      <SettingsDialog
-        activeSettingsTab={activeSettingsTab}
-        ankiConfig={persistent.ankiConfig}
-        apiConfig={persistent.apiConfig}
-        isOpen={isSettingsOpen}
-        onAnkiConfigChange={persistent.handleAnkiConfigChange}
-        onAnkiFieldMappingChange={persistent.handleAnkiFieldMappingChange}
-        onClearLocalData={() => void handleClearLocalData()}
-        onClose={() => setIsSettingsOpen(false)}
-        onConfigChange={persistent.handleConfigChange}
-        onPromptChange={persistent.handlePromptChange}
-        onResetPrompt={persistent.resetPromptConfig}
-        onSettingsTabChange={setActiveSettingsTab}
-        promptConfig={persistent.promptConfig}
-      />
+      {settingsDialog}
     </div>
   )
 }

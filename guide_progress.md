@@ -4,10 +4,9 @@
 
 ## 总览
 
-- 已完成：Phase 1 `ReadingPage.tsx`、Phase 2 `SettingsDialog.tsx`、Phase 3 `lib/anki.ts`
+- 已完成：Phase 1 `ReadingPage.tsx`、Phase 2 `SettingsDialog.tsx`、Phase 3 `lib/anki.ts`、Phase 4 `App.tsx`
 - 进行中：无
 - 待完成：
-  - Phase 4 `App.tsx`
   - Phase 5 `useAnalysisRunner.ts`
   - Phase 6 `useLibraryStore.ts`
 
@@ -103,6 +102,32 @@
 
 - Settings 页面与阅读页的 Anki 相关调用路径未改，属于兼容迁移
 - `build` 仍有 Vite 主 chunk 体积告警，但不影响本阶段验收
+
+### Phase 4: 拆 `App.tsx`
+
+已完成拆分，且已独立验证。
+
+新增模块：
+
+- `src/hooks/useWorkspaceBinding.ts`
+- `src/hooks/useAppActions.ts`
+
+结果：
+
+- `src/App.tsx` 已从应用级控制器收缩为页面装配层，主要保留页面状态、设置弹窗状态、分析 hook 接线与页面 JSX 分支
+- `useWorkspaceBinding.ts` 已统一收口 draft/chapter 双数据源桥接、workspace setter 分流、阅读区间与上下文派生
+- `useAppActions.ts` 已承接工作区切换、章节打开、导入/删除、草稿入书架、高亮收藏、发送到 Anki、阅读恢复锚点与本地清理等应用级动作
+- `SettingsDialog` 的公共 props 已在 `App.tsx` 中统一收口，阅读页和其他页面继续复用同一套设置对话框参数
+
+验证：
+
+- `npm run lint` 通过
+- `npm run build` 通过
+
+备注：
+
+- `build` 仍保留 Vite 主 chunk 体积告警，但与本次拆分无关，不影响 Phase 4 验收
+- `handleRunAnalysis`、章节区间切换与 `useAnalysisRunner` 的对接仍留在 `App.tsx`，符合 guide 中“编排层继续在后续 phase 再收口”的拆分顺序
 
 ## 后续执行约束
 
