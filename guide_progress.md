@@ -4,10 +4,9 @@
 
 ## 总览
 
-- 已完成：Phase 1 `ReadingPage.tsx`、Phase 2 `SettingsDialog.tsx`、Phase 3 `lib/anki.ts`、Phase 4 `App.tsx`
+- 已完成：Phase 1 `ReadingPage.tsx`、Phase 2 `SettingsDialog.tsx`、Phase 3 `lib/anki.ts`、Phase 4 `App.tsx`、Phase 5 `useAnalysisRunner.ts`
 - 进行中：无
 - 待完成：
-  - Phase 5 `useAnalysisRunner.ts`
   - Phase 6 `useLibraryStore.ts`
 
 ## 已完成工作
@@ -128,6 +127,32 @@
 
 - `build` 仍保留 Vite 主 chunk 体积告警，但与本次拆分无关，不影响 Phase 4 验收
 - `handleRunAnalysis`、章节区间切换与 `useAnalysisRunner` 的对接仍留在 `App.tsx`，符合 guide 中“编排层继续在后续 phase 再收口”的拆分顺序
+
+### Phase 5: 拆 `useAnalysisRunner.ts`
+
+已完成拆分，并完成静态验证。
+
+新增模块：
+
+- `src/lib/analysis/runContext.ts`
+- `src/lib/analysis/runValidation.ts`
+- `src/lib/analysis/runState.ts`
+
+结果：
+
+- `src/hooks/useAnalysisRunner.ts` 已将上下文句收集、运行前校验、pending 计算、run 前状态构造、取消后恢复、单句重试状态辅助等纯逻辑迁移到 `src/lib/analysis/`
+- `useAnalysisRunner.ts` 当前主要保留 React state / ref、abort controller、`analyzeSentence` / `runConcurrentAnalysis` 调用以及对外暴露的 handler
+- `segment`、`runAnalysis`、`cancelAnalysis`、`retrySingleSentence`、`restoreSession` 的对外接口和行为文案保持不变
+
+验证：
+
+- `npm run lint` 通过
+- `npm run build` 通过
+
+备注：
+
+- 当前已完成代码级阶段验收，但未在本轮终端中完成 guide 要求的重点手测（取消分析、单句重试、恢复历史记录）
+- `build` 仍保留 Vite 主 chunk 体积告警，但与本次拆分无关，不影响 Phase 5 的静态验收
 
 ## 后续执行约束
 

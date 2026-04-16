@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import {
   cleanSentences,
@@ -8,7 +8,21 @@ import {
   MAX_HISTORY_ITEMS,
   updateSentenceState,
 } from '../lib/appState'
-import { getSentencesInRange } from '../lib/chapterRange'
+import { collectContextSentences } from '../lib/analysis/runContext'
+import {
+  buildNextResults,
+  buildPendingEntries,
+  buildQueuedSentencesForRun,
+  buildRetryErrorSentence,
+  buildRetryRunningSentence,
+  buildRetrySuccessSentence,
+  createActiveRunState,
+  finalizeRunSentenceStates,
+  restoreResultsAfterCancel,
+  restoreSentencesAfterCancel,
+  type ActiveRunState,
+} from '../lib/analysis/runState'
+import { validateApiConfig, validateRunStart } from '../lib/analysis/runValidation'
 import { analyzeSentence, runConcurrentAnalysis, toUserFacingError } from '../lib/openai'
 import { segmentSpanishText } from '../lib/segment'
 import type {
@@ -64,79 +78,20 @@ export function useAnalysisRunner({
   const [notice, setNotice] = useState(initialNotice)
   const runTokenRef = useRef(0)
   const runAbortControllerRef = useRef<AbortController | null>(null)
-  const activeRunRef = useRef<{
-    pendingIds: Set<string>
-    previousResults: Record<string, AnalysisResult>
-    previousSentenceState: Record<string, Pick<SentenceItem, 'status' | 'error'>>
-  } | null>(null)
+  const activeRunRef = useRef<ActiveRunState | null>(null)
 
   useEffect(() => {
     setNotice(initialNotice)
   }, [initialNotice])
 
-  const trimmedSentences = sentences.map((sentence) => ({
-    ...sentence,
-    editedText: sentence.editedText.trim(),
-  }))
-
-  const collectContextSentences = (
-    sentenceIndex: number,
-    count: number,
-    direction: 'previous' | 'next',
-  ) => {
-    if (count <= 0) {
-      return ''
-    }
-
-    const step = direction === 'previous' ? -1 : 1
-    const collected: string[] = []
-    let cursor = sentenceIndex + step
-
-    while (cursor >= 0 && cursor < trimmedSentences.length && collected.length < count) {
-      const text = trimmedSentences[cursor]?.editedText.trim()
-      if (text) {
-        collected.push(text)
-      }
-      cursor += step
-    }
-
-    const ordered = direction === 'previous' ? collected.reverse() : collected
-    return ordered.length > 0 ? ordered.join('\n') : ''
-  }
-
-  const validateBeforeRun = () => {
-    if (!apiConfig.baseUrl.trim() || !apiConfig.apiKey.trim() || !apiConfig.model.trim()) {
-      setNotice('')
-      setGlobalError('请先完整填写 API URL、API Key 和 Model。')
-      return false
-    }
-
-    if (workspaceSource === 'chapter') {
-      const rangedSentences = getSentencesInRange(trimmedSentences, chapterRange)
-      if (!chapterRange || rangedSentences.length === 0) {
-        setNotice('')
-        setGlobalError('请先选择一个有效的句子区间。')
-        return false
-      }
-
-      if (rangedSentences.every((sentence) => !sentence.editedText.length)) {
-        setNotice('')
-        setGlobalError('当前区间内没有可解析的句子，请调整范围或补全文本后再试。')
-        return false
-      }
-
-      return true
-    }
-
-    const usableSentences = cleanSentences(trimmedSentences)
-    if (usableSentences.length === 0) {
-      setNotice('')
-      setGlobalError('请先分句，或确保至少保留一句非空内容。')
-      return false
-    }
-
-    return true
-  }
+  const trimmedSentences = useMemo(
+    () =>
+      sentences.map((sentence) => ({
+        ...sentence,
+        editedText: sentence.editedText.trim(),
+      })),
+    [sentences],
+  )
 
   const saveRunToHistory = (
     nextSourceText: string,
@@ -198,47 +153,32 @@ export function useAnalysisRunner({
   }
 
   const runAnalysis = async () => {
-    if (!validateBeforeRun()) {
+    const validation = validateRunStart({
+      apiConfig,
+      chapterRange,
+      sentences: trimmedSentences,
+      workspaceSource,
+    })
+
+    if (!validation.ok) {
+      setNotice('')
+      setGlobalError(validation.errorMessage)
       return
     }
 
     const sanitized =
       workspaceSource === 'chapter' ? trimmedSentences : cleanSentences(trimmedSentences)
-    const contextSentences = trimmedSentences
-    const selectedSentences =
-      workspaceSource === 'chapter'
-        ? getSentencesInRange(contextSentences, chapterRange)
-        : contextSentences
-    const selectedRangeStart = workspaceSource === 'chapter' ? chapterRange?.start ?? 0 : 0
-    const rerunIds =
-      workspaceSource === 'chapter'
-        ? new Set(
-            selectedSentences
-              .filter((sentence) => sentence.editedText.length > 0)
-              .map((sentence) => sentence.id),
-          )
-        : null
-    const pendingEntries =
-      workspaceSource === 'chapter'
-        ? selectedSentences
-            .map((sentence, index) => ({
-              absoluteIndex: selectedRangeStart + index,
-              sentence,
-            }))
-            .filter(({ sentence }) => sentence.editedText.length > 0)
-        : selectedSentences
-            .map((sentence, index) => ({
-              absoluteIndex: index,
-              sentence,
-            }))
-            .filter(({ sentence }) => sentence.editedText.length > 0)
+    const pendingEntries = buildPendingEntries({
+      chapterRange,
+      sentences: trimmedSentences,
+      workspaceSource,
+    })
     const pendingIds = new Set(pendingEntries.map(({ sentence }) => sentence.id))
-    const nextResults: Record<string, AnalysisResult> =
-      workspaceSource === 'chapter'
-        ? Object.fromEntries(
-            Object.entries(results).filter(([sentenceId]) => !rerunIds?.has(sentenceId)),
-          )
-        : {}
+    const nextResults = buildNextResults({
+      pendingEntries,
+      results,
+      workspaceSource,
+    })
 
     if (workspaceSource === 'chapter' && pendingEntries.length === 0) {
       setGlobalError('')
@@ -255,19 +195,7 @@ export function useAnalysisRunner({
     const runToken = runTokenRef.current
     const abortController = new AbortController()
     runAbortControllerRef.current = abortController
-    activeRunRef.current = {
-      pendingIds,
-      previousResults: results,
-      previousSentenceState: Object.fromEntries(
-        sanitized.map((sentence) => [
-          sentence.id,
-          {
-            status: sentence.status,
-            error: sentence.error,
-          },
-        ]),
-      ),
-    }
+    activeRunRef.current = createActiveRunState(sanitized, pendingIds, results)
     setIsRunning(true)
     setGlobalError('')
     setNotice(
@@ -275,56 +203,13 @@ export function useAnalysisRunner({
         ? `正在解析区间 ${chapterRange.start}-${chapterRange.end}，共 ${pendingEntries.length} 句。`
         : `正在并发解析 ${pendingEntries.length} 句，结果会按原顺序回填。`,
     )
-    setSentences(
-      sanitized.map((sentence, index) => {
-        if (workspaceSource === 'chapter') {
-          const isInRange =
-            chapterRange &&
-            index >= chapterRange.start &&
-            index <= chapterRange.end
-
-          if (!isInRange) {
-            return sentence
-          }
-
-          if (!sentence.editedText.length) {
-            return {
-              ...sentence,
-              status: 'idle',
-              error: undefined,
-            }
-          }
-
-          if (!pendingIds.has(sentence.id)) {
-            return {
-              ...sentence,
-              status: nextResults[sentence.id] ? 'success' : sentence.status,
-              error: undefined,
-            }
-          }
-
-          return {
-            ...sentence,
-            status: 'queued',
-            error: undefined,
-          }
-        }
-
-        if (!pendingIds.has(sentence.id)) {
-          return {
-            ...sentence,
-            status: 'success',
-            error: undefined,
-          }
-        }
-
-        return {
-          ...sentence,
-          status: 'queued',
-          error: undefined,
-        }
-      }),
-    )
+    setSentences(buildQueuedSentencesForRun({
+      chapterRange,
+      nextResults,
+      pendingIds,
+      sentences: sanitized,
+      workspaceSource,
+    }))
     if (workspaceSource === 'chapter') {
       setResults(nextResults)
     }
@@ -340,11 +225,13 @@ export function useAnalysisRunner({
           sentenceId: sentence.id,
           sentence: sentence.editedText,
           previousSentence: collectContextSentences(
+            trimmedSentences,
             absoluteIndex,
             promptConfig.previousSentenceCount,
             'previous',
           ),
           nextSentence: collectContextSentences(
+            trimmedSentences,
             absoluteIndex,
             promptConfig.nextSentenceCount,
             'next',
@@ -407,49 +294,12 @@ export function useAnalysisRunner({
       }
 
       setSentences((current) =>
-        current.map((sentence, index) => {
-          if (workspaceSource === 'chapter') {
-            const isInRange =
-              chapterRange &&
-              index >= chapterRange.start &&
-              index <= chapterRange.end
-
-            if (!isInRange) {
-              return sentence
-            }
-
-            if (!sentence.editedText.trim().length) {
-              return {
-                ...sentence,
-                status: 'idle',
-                error: undefined,
-              }
-            }
-          }
-
-          if (!pendingIds.has(sentence.id)) {
-            return {
-              ...sentence,
-              status: nextResults[sentence.id] ? 'success' : sentence.status,
-              error: undefined,
-            }
-          }
-
-          if (nextResults[sentence.id]) {
-            return {
-              ...sentence,
-              status: 'success',
-              error: undefined,
-            }
-          }
-
-          return sentence.status === 'error'
-            ? sentence
-            : {
-                ...sentence,
-                status: 'error',
-                error: '模型未返回可解析结果，请检查接口兼容性后重试。',
-              }
+        finalizeRunSentenceStates({
+          chapterRange,
+          nextResults,
+          pendingIds,
+          sentences: current,
+          workspaceSource,
         }),
       )
 
@@ -511,43 +361,8 @@ export function useAnalysisRunner({
       return
     }
 
-    setResults((current) => {
-      const nextResults = { ...current }
-
-      activeRun.pendingIds.forEach((sentenceId) => {
-        if (sentenceId in nextResults) {
-          return
-        }
-
-        const previousResult = activeRun.previousResults[sentenceId]
-        if (previousResult) {
-          nextResults[sentenceId] = previousResult
-        }
-      })
-
-      return nextResults
-    })
-
-    setSentences((current) =>
-      current.map((sentence) => {
-        if (!activeRun.pendingIds.has(sentence.id)) {
-          return sentence
-        }
-
-        if (sentence.status !== 'queued' && sentence.status !== 'running') {
-          return sentence
-        }
-
-        const previousState = activeRun.previousSentenceState[sentence.id]
-        const previousResult = activeRun.previousResults[sentence.id]
-
-        return {
-          ...sentence,
-          status: previousResult ? 'success' : previousState?.status === 'error' ? 'error' : 'idle',
-          error: previousResult ? undefined : previousState?.error,
-        }
-      }),
-    )
+    setResults((current) => restoreResultsAfterCancel(current, activeRun))
+    setSentences((current) => restoreSentencesAfterCancel(current, activeRun))
   }
 
   const retrySingleSentence = async (sentenceId: string) => {
@@ -556,9 +371,10 @@ export function useAnalysisRunner({
       return
     }
 
-    if (!apiConfig.baseUrl.trim() || !apiConfig.apiKey.trim() || !apiConfig.model.trim()) {
+    const validation = validateApiConfig(apiConfig)
+    if (!validation.ok) {
       setNotice('')
-      setGlobalError('请先完整填写 API URL、API Key 和 Model。')
+      setGlobalError(validation.errorMessage)
       return
     }
 
@@ -566,11 +382,7 @@ export function useAnalysisRunner({
     setGlobalError('')
     setNotice(`正在重试第 ${sentenceIndex + 1} 句。`)
     setSentences((current) =>
-      updateSentenceState(current, sentenceId, (sentence) => ({
-        ...sentence,
-        status: 'running',
-        error: undefined,
-      })),
+      updateSentenceState(current, sentenceId, buildRetryRunningSentence),
     )
 
     try {
@@ -578,11 +390,13 @@ export function useAnalysisRunner({
         sentenceId,
         sentence: target.editedText.trim(),
         previousSentence: collectContextSentences(
+          trimmedSentences,
           sentenceIndex,
           promptConfig.previousSentenceCount,
           'previous',
         ),
         nextSentence: collectContextSentences(
+          trimmedSentences,
           sentenceIndex,
           promptConfig.nextSentenceCount,
           'next',
@@ -595,23 +409,18 @@ export function useAnalysisRunner({
         [sentenceId]: result,
       }))
       setSentences((current) =>
-        updateSentenceState(current, sentenceId, (sentence) => ({
-          ...sentence,
-          status: 'success',
-          error: undefined,
-        })),
+        updateSentenceState(current, sentenceId, buildRetrySuccessSentence),
       )
       setNotice(`第 ${sentenceIndex + 1} 句已成功重试。`)
     } catch (error) {
+      const message = toUserFacingError(error)
       setSentences((current) =>
-        updateSentenceState(current, sentenceId, (sentence) => ({
-          ...sentence,
-          status: 'error',
-          error: toUserFacingError(error),
-        })),
+        updateSentenceState(current, sentenceId, (sentence) =>
+          buildRetryErrorSentence(sentence, message),
+        ),
       )
       setNotice('')
-      setGlobalError(`第 ${sentenceIndex + 1} 句重试失败：${toUserFacingError(error)}`)
+      setGlobalError(`第 ${sentenceIndex + 1} 句重试失败：${message}`)
     }
   }
 
