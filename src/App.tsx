@@ -507,8 +507,65 @@ function App() {
         }
       : undefined
 
+  if (activePage === 'reading') {
+    return (
+      <>
+        <ReadingPage
+          activeRange={activeReadingRange}
+          adjacentChapterIds={effectiveWorkspaceSource === 'chapter' ? library.adjacentChapterIds : undefined}
+          contextTitle={currentContextTitle}
+          errorCount={readingErrorCount}
+          globalError={analysis.globalError}
+          onAddToAnki={(sentence, result, highlight) =>
+            handleAddHighlightToAnki(sentence, result, highlight)
+          }
+          onBackToWorkspace={() => setActivePage('workspace')}
+          onOpenAdjacentChapter={handleOpenAdjacentChapter}
+          onOpenResources={openResources}
+          onReadingPreferencesChange={persistent.handleReadingPreferencesChange}
+          onRemoveHighlight={(signature) => void handleRemoveHighlight(signature)}
+          onSaveHighlight={(sentence, result, highlight) =>
+            void handleSaveHighlight(sentence, result, highlight)
+          }
+          onSetResumeAnchor={(sentence, sentenceIndex) =>
+            void handleSetResumeAnchor(sentence, sentenceIndex)
+          }
+          paragraphBlocks={activeChapter?.paragraphBlocks}
+          readingPreferences={persistent.readingPreferences}
+          resumeAnchor={activeChapter?.resumeAnchor}
+          results={workspaceResults}
+          savedHighlightSignatures={savedResourceSignatures}
+          sentenceStartIndex={activeReadingRange?.start ?? 0}
+          sentences={
+            effectiveWorkspaceSource === 'chapter'
+              ? readingRangeSentences
+              : readingVisibleSentences
+          }
+          successCount={readingSuccessCount}
+          workspaceSource={effectiveWorkspaceSource}
+        />
+
+        <SettingsDialog
+          activeSettingsTab={activeSettingsTab}
+          ankiConfig={persistent.ankiConfig}
+          apiConfig={persistent.apiConfig}
+          isOpen={isSettingsOpen}
+          onAnkiConfigChange={persistent.handleAnkiConfigChange}
+          onAnkiFieldMappingChange={persistent.handleAnkiFieldMappingChange}
+          onClearLocalData={() => void handleClearLocalData()}
+          onClose={() => setIsSettingsOpen(false)}
+          onConfigChange={persistent.handleConfigChange}
+          onPromptChange={persistent.handlePromptChange}
+          onResetPrompt={persistent.resetPromptConfig}
+          onSettingsTabChange={setActiveSettingsTab}
+          promptConfig={persistent.promptConfig}
+        />
+      </>
+    )
+  }
+
   return (
-    <div className={`app-shell ${activePage === 'reading' ? 'reading-mode' : ''}`}>
+    <div className="app-shell">
       {activePage === 'library' ? (
         <LibraryPage
           books={library.books}
@@ -583,43 +640,6 @@ function App() {
           sourceText={workspaceSourceText}
           successCount={successCount}
           totalSentenceCount={workspaceSentences.length}
-          workspaceSource={effectiveWorkspaceSource}
-        />
-      ) : activePage === 'reading' ? (
-        <ReadingPage
-          activeRange={activeReadingRange}
-          adjacentChapterIds={effectiveWorkspaceSource === 'chapter' ? library.adjacentChapterIds : undefined}
-          contextTitle={currentContextTitle}
-          errorCount={readingErrorCount}
-          globalError={analysis.globalError}
-          notice={analysis.notice}
-          onAddToAnki={(sentence, result, highlight) =>
-            handleAddHighlightToAnki(sentence, result, highlight)
-          }
-          onBackToLibrary={() => setActivePage('library')}
-          onBackToWorkspace={() => setActivePage('workspace')}
-          onOpenAdjacentChapter={handleOpenAdjacentChapter}
-          onOpenResources={openResources}
-          onReadingPreferencesChange={persistent.handleReadingPreferencesChange}
-          onRemoveHighlight={(signature) => void handleRemoveHighlight(signature)}
-          onSaveHighlight={(sentence, result, highlight) =>
-            void handleSaveHighlight(sentence, result, highlight)
-          }
-          onSetResumeAnchor={(sentence, sentenceIndex) =>
-            void handleSetResumeAnchor(sentence, sentenceIndex)
-          }
-          paragraphBlocks={activeChapter?.paragraphBlocks}
-          readingPreferences={persistent.readingPreferences}
-          resumeAnchor={activeChapter?.resumeAnchor}
-          results={workspaceResults}
-          savedHighlightSignatures={savedResourceSignatures}
-          sentenceStartIndex={activeReadingRange?.start ?? 0}
-          sentences={
-            effectiveWorkspaceSource === 'chapter'
-              ? readingRangeSentences
-              : readingVisibleSentences
-          }
-          successCount={readingSuccessCount}
           workspaceSource={effectiveWorkspaceSource}
         />
       ) : (
