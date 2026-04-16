@@ -4,10 +4,9 @@
 
 ## 总览
 
-- 已完成：Phase 1 `ReadingPage.tsx`、Phase 2 `SettingsDialog.tsx`、Phase 3 `lib/anki.ts`、Phase 4 `App.tsx`、Phase 5 `useAnalysisRunner.ts`
+- 已完成：Phase 1 `ReadingPage.tsx`、Phase 2 `SettingsDialog.tsx`、Phase 3 `lib/anki.ts`、Phase 4 `App.tsx`、Phase 5 `useAnalysisRunner.ts`、Phase 6 `useLibraryStore.ts`
 - 进行中：无
-- 待完成：
-  - Phase 6 `useLibraryStore.ts`
+- 待完成：无
 
 ## 已完成工作
 
@@ -153,6 +152,34 @@
 
 - 当前已完成代码级阶段验收，但未在本轮终端中完成 guide 要求的重点手测（取消分析、单句重试、恢复历史记录）
 - `build` 仍保留 Vite 主 chunk 体积告警，但与本次拆分无关，不影响 Phase 5 的静态验收
+
+### Phase 6: 拆 `useLibraryStore.ts`
+
+已完成拆分，并完成静态验证。
+
+新增模块：
+
+- `src/lib/library/manualDraft.ts`
+- `src/lib/library/selectors.ts`
+- `src/lib/library/service.ts`
+
+结果：
+
+- `src/hooks/useLibraryStore.ts` 已把手动草稿入库 payload 生成、书籍/章节选择器、以及 IndexedDB 相关的数据查询与装配逻辑迁移到 `src/lib/library/`
+- `manualDraft.ts` 现在负责 `buildManualBookTitle`、`buildManualParagraphBlocks`、`createManualDraftBookPayload`
+- `selectors.ts` 现在负责 `updateBookInList`、邻接章节计算、删章后的当前章节与选中章节回退逻辑
+- `service.ts` 现在负责 `loadInitialLibraryState`、`hydrateBookState`、`persistChapterRecord`、`openChapterRecord`、`importBookToLibrary`、`saveManualDraftToLibrary`、`removeBookFromLibrary`、`removeChapterFromLibrary`、学习资源保存/删除和清空本地书架
+- `useLibraryStore.ts` 当前主要保留 React state、调用 service、同步 notice/error 与将 service 返回值映射回 store state
+
+验证：
+
+- `npm run lint` 通过
+- `npm run build` 通过
+
+备注：
+
+- 当前已完成代码级阶段验收，但未在本轮终端中完成 guide 中要求的书架流手测（导入 EPUB、打开章节、删除书/删章、学习资源增删）
+- `build` 仍保留 Vite 主 chunk 体积告警，但与本次拆分无关，不影响 Phase 6 的静态验收
 
 ## 后续执行约束
 
