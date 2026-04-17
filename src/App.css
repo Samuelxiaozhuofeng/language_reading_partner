@@ -1189,6 +1189,7 @@ blockquote {
 
 .reading-flow.is-paged {
   height: 100%;
+  gap: var(--reading-page-paragraph-gap, 20px);
   align-content: start;
   overflow: hidden;
   padding: 0 0 calc(var(--reading-body-font-size, 18px) * 1.15);
@@ -1211,7 +1212,7 @@ blockquote {
 
 .reading-flow.is-paged .reading-paragraph {
   break-inside: avoid;
-  margin-bottom: 1.1rem;
+  margin-bottom: 0;
 }
 
 .reading-paragraph.is-heading {

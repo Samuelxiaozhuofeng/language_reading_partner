@@ -4,6 +4,7 @@ import {
   buildParagraphText,
   CHAPTER_PAGE_BOTTOM_SAFE_LINES,
   getReadingBlockClassName,
+  getChapterParagraphGap,
   type ChapterPageLayout,
   type ChapterReadingPage,
   getSentenceDisplayText,
@@ -94,7 +95,7 @@ export function paginateChapterParagraphs(
         Math.max(320, Math.round(options.viewportHeight - options.fontSize * 9.6))) -
         bottomSafeSpace,
     )
-  const paragraphGap = Math.max(16, Math.round(options.fontSize * 1.1))
+  const paragraphGap = getChapterParagraphGap(options.fontSize)
   const measuredHeightCache = new Map<string, number>()
   const pages: ChapterReadingPage[] = []
   let currentParagraphs: ChapterReadingParagraph[] = []

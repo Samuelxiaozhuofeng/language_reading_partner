@@ -12,6 +12,7 @@ import { paginateChapterParagraphs } from './reading/readingPagination'
 import {
   CHAPTER_PAGE_GAP,
   FALLBACK_CHAPTER_PAGE_LAYOUT,
+  getChapterParagraphGap,
   getInspectorMode,
   getViewportSize,
   READING_DESKTOP_BREAKPOINT,
@@ -191,6 +192,7 @@ function ReadingPage({
           Math.min(420, Math.max(320, readingPreferences.contentWidth * 0.42)),
         )}px`,
         '--reading-page-gap': `${CHAPTER_PAGE_GAP}px`,
+        '--reading-page-paragraph-gap': `${getChapterParagraphGap(readingPreferences.fontSize)}px`,
       }) as CSSProperties,
     [isChapterMode, readingPreferences.contentWidth, readingPreferences.fontSize],
   )

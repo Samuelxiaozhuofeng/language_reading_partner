@@ -70,6 +70,10 @@ export function buildParagraphText(sentences: SentenceItem[]) {
     .join(' ')
 }
 
+export function getChapterParagraphGap(fontSize: number) {
+  return Math.max(16, Math.round(fontSize * 1.1))
+}
+
 export function getReadingBlockClassName(paragraph: Pick<ChapterReadingParagraph, 'kind' | 'headingLevel'>) {
   const baseClassName = 'reading-paragraph'
 
