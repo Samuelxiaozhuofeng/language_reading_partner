@@ -14,6 +14,7 @@ import {
   deleteKnowledgeResource,
   deleteKnowledgeResources,
   getBook,
+  getBookFile,
   getBooks,
   getChapter,
   getChaptersByBook,
@@ -131,7 +132,7 @@ export async function openChapterRecord(chapterId: string) {
 export async function importBookToLibrary(file: File) {
   const payload = await importEpubBook(file)
   const chapters = payload.chapters.map((chapter) => normalizeChapterRecord(chapter))
-  await saveImportedBook(payload.book, chapters)
+  await saveImportedBook(payload.book, chapters, payload.fileData)
 
   return {
     book: payload.book,
@@ -156,6 +157,10 @@ export async function saveManualDraftToLibrary(input: CreateManualDraftBookPaylo
       chapterId: payload.chapters[0]?.id ?? null,
     } satisfies LibrarySelection,
   }
+}
+
+export async function loadBookFile(bookId: string) {
+  return getBookFile(bookId)
 }
 
 export async function removeBookFromLibrary(bookId: string) {

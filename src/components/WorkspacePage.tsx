@@ -1,11 +1,12 @@
 import { formatTime, statusLabelMap } from '../lib/appState'
-import type { ApiConfig, RunSession, SentenceItem, SentenceRange, WorkspaceSource } from '../types'
+import type { ApiConfig, BookRecord, RunSession, SentenceItem, SentenceRange, WorkspaceSource } from '../types'
 
 type WorkspacePageProps = {
   apiConfig: ApiConfig
   articleTitle: string
   chapterProgressPercent: number
   chapterResolvedCount: number
+  chapterSourceType?: BookRecord['sourceType']
   completedResultCount: number
   contextTitle?: {
     bookTitle: string
@@ -55,6 +56,7 @@ function WorkspacePage({
   articleTitle,
   chapterProgressPercent,
   chapterResolvedCount,
+  chapterSourceType,
   completedResultCount,
   contextTitle,
   errorCount,
@@ -96,6 +98,7 @@ function WorkspacePage({
   workspaceSource,
 }: WorkspacePageProps) {
   const isChapterMode = workspaceSource === 'chapter'
+  const isEpubChapterMode = isChapterMode && chapterSourceType === 'epub'
   const currentSentenceCount = isChapterMode ? totalSentenceCount : sentences.length
   const workspaceTitle = isChapterMode
     ? contextTitle?.chapterTitle ?? '章节工作区'
@@ -144,8 +147,8 @@ function WorkspacePage({
         <section className="panel source-panel">
           <div className="panel-header">
             <div>
-              <p className="section-kicker">Text</p>
-              <h2>{isChapterMode ? '章节正文' : '原文'}</h2>
+              <p className="section-kicker">{isEpubChapterMode ? 'EPUB' : 'Text'}</p>
+              <h2>{isEpubChapterMode ? '原生阅读模式' : isChapterMode ? '章节正文' : '原文'}</h2>
             </div>
             <div className="panel-actions">
               {!isChapterMode && onSaveToLibrary ? (
@@ -161,9 +164,11 @@ function WorkspacePage({
               <button className="ghost-button" type="button" onClick={onOpenSettingsAi}>
                 AI 设置
               </button>
-              <button className="secondary-button" type="button" onClick={onSegment}>
-                重新分句
-              </button>
+              {!isEpubChapterMode ? (
+                <button className="secondary-button" type="button" onClick={onSegment}>
+                  重新分句
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -179,25 +184,41 @@ function WorkspacePage({
             </label>
           ) : null}
 
-          <label className="field field-block">
-            <span>{isChapterMode ? '章节工作文本' : '原文'}</span>
-            <textarea
-              className="source-textarea"
-              value={sourceText}
-              onChange={(event) => onSourceTextChange(event.target.value)}
-              placeholder={
-                isChapterMode
-                  ? '你可以在这里微调当前章节再重新分句...'
-                  : '把整篇文章、章节或短篇故事粘贴到这里...'
-              }
-            />
-          </label>
+          {isEpubChapterMode ? (
+            <div className="epub-workspace-summary">
+              <p>
+                这本书会在阅读页按 EPUB 原始章节样式渲染，不再把正文转换成可编辑文本。
+              </p>
+              <p>
+                当前工作区只负责选择句子范围并触发 AI 解析；章节总句数仍会从正文中提取用于统计与分段。
+              </p>
+              <p className="panel-tip">
+                当前章节文本长度约 {sourceText.trim().length} 字符，可解析句子 {totalSentenceCount} 条。
+              </p>
+            </div>
+          ) : (
+            <>
+              <label className="field field-block">
+                <span>{isChapterMode ? '章节工作文本' : '原文'}</span>
+                <textarea
+                  className="source-textarea"
+                  value={sourceText}
+                  onChange={(event) => onSourceTextChange(event.target.value)}
+                  placeholder={
+                    isChapterMode
+                      ? '你可以在这里微调当前章节再重新分句...'
+                      : '把整篇文章、章节或短篇故事粘贴到这里...'
+                  }
+                />
+              </label>
 
-          <p className="panel-tip">
-            {isChapterMode
-              ? '修改正文后记得重新分句，当前区间会按新的文本重新解析。'
-              : '适合粘贴整篇文章、章节或短篇，解析后可加入书架。'}
-          </p>
+              <p className="panel-tip">
+                {isChapterMode
+                  ? '修改正文后记得重新分句，当前区间会按新的文本重新解析。'
+                  : '适合粘贴整篇文章、章节或短篇，解析后可加入书架。'}
+              </p>
+            </>
+          )}
         </section>
 
         <section className="panel analysis-panel">
@@ -207,7 +228,9 @@ function WorkspacePage({
               <h2>解析与阅读</h2>
             </div>
             <p className="panel-meta">
-              {isChapterMode
+              {isEpubChapterMode
+                ? '正文保持 EPUB 原始样式，只解析你选中的句子区间。'
+                : isChapterMode
                 ? '只会重跑当前区间，并覆盖这一段已有结果。'
                 : '会重跑当前草稿，并在本地保留最近几次结果。'}
             </p>
@@ -341,63 +364,65 @@ function WorkspacePage({
           )}
         </section>
 
-        <section className="panel editor-panel">
-          <div className="panel-header">
-            <div>
-              <p className="section-kicker">Sentences</p>
-              <h2>逐句校对</h2>
-            </div>
-            <p className="panel-meta">
-              {isChapterMode ? '这里只显示当前区间内的句子。' : 'AI 会以编辑后的句子内容为准。'}
-            </p>
-          </div>
-
-          <div className="sentence-list">
-            {sentences.length === 0 ? (
-              <div className="empty-state">
-                <p>
-                  {isChapterMode
-                    ? selectedRange
-                      ? '当前区间还没有可编辑的句子。'
-                      : '先在 Step 2 选择一个句子区间，这里会显示对应内容。'
-                    : '先粘贴一段原文并点击“重新分句”，这里就会出现可编辑句子。'}
-                </p>
+        {!isEpubChapterMode ? (
+          <section className="panel editor-panel">
+            <div className="panel-header">
+              <div>
+                <p className="section-kicker">Sentences</p>
+                <h2>逐句校对</h2>
               </div>
-            ) : (
-              sentences.map((sentence, index) => (
-                <article className="sentence-card" key={sentence.id}>
-                  <div className="sentence-card-header">
-                    <span className="sentence-index">#{isChapterMode ? sentenceStartIndex + index : index + 1}</span>
-                    <span className={`status-badge status-${sentence.status}`}>
-                      {statusLabelMap[sentence.status]}
-                    </span>
-                  </div>
+              <p className="panel-meta">
+                {isChapterMode ? '这里只显示当前区间内的句子。' : 'AI 会以编辑后的句子内容为准。'}
+              </p>
+            </div>
 
-                  <textarea
-                    className="sentence-textarea"
-                    value={sentence.editedText}
-                    onChange={(event) => onSentenceChange(sentence.id, event.target.value)}
-                    placeholder="句子内容"
-                  />
+            <div className="sentence-list">
+              {sentences.length === 0 ? (
+                <div className="empty-state">
+                  <p>
+                    {isChapterMode
+                      ? selectedRange
+                        ? '当前区间还没有可编辑的句子。'
+                        : '先在 Step 2 选择一个句子区间，这里会显示对应内容。'
+                      : '先粘贴一段原文并点击“重新分句”，这里就会出现可编辑句子。'}
+                  </p>
+                </div>
+              ) : (
+                sentences.map((sentence, index) => (
+                  <article className="sentence-card" key={sentence.id}>
+                    <div className="sentence-card-header">
+                      <span className="sentence-index">#{isChapterMode ? sentenceStartIndex + index : index + 1}</span>
+                      <span className={`status-badge status-${sentence.status}`}>
+                        {statusLabelMap[sentence.status]}
+                      </span>
+                    </div>
 
-                  {sentence.error ? <p className="sentence-error">{sentence.error}</p> : null}
+                    <textarea
+                      className="sentence-textarea"
+                      value={sentence.editedText}
+                      onChange={(event) => onSentenceChange(sentence.id, event.target.value)}
+                      placeholder="句子内容"
+                    />
 
-                  <div className="sentence-actions">
-                    <span>{sentence.editedText.trim().length} 字符</span>
-                    <button
-                      className="ghost-button"
-                      type="button"
-                      onClick={() => onRetrySentence(sentence.id)}
-                      disabled={isRunning || !sentence.editedText.trim()}
-                    >
-                      重试本句
-                    </button>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
-        </section>
+                    {sentence.error ? <p className="sentence-error">{sentence.error}</p> : null}
+
+                    <div className="sentence-actions">
+                      <span>{sentence.editedText.trim().length} 字符</span>
+                      <button
+                        className="ghost-button"
+                        type="button"
+                        onClick={() => onRetrySentence(sentence.id)}
+                        disabled={isRunning || !sentence.editedText.trim()}
+                      >
+                        重试本句
+                      </button>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+        ) : null}
 
         {!isChapterMode ? (
           <aside className="panel history-panel">

@@ -32,10 +32,6 @@ import type {
 
 type ReadingPageProps = {
   activeRange?: SentenceRange | null
-  adjacentChapterIds?: {
-    previousId: string | null
-    nextId: string | null
-  }
   contextTitle?: {
     bookTitle: string
     chapterTitle: string
@@ -48,7 +44,6 @@ type ReadingPageProps = {
     highlight: AnalysisHighlight,
   ) => Promise<void>
   onBackToWorkspace: () => void
-  onOpenAdjacentChapter: (chapterId: string | null) => void
   onOpenResources: () => void
   onReadingPreferencesChange: <Key extends keyof ReadingPreferences>(
     key: Key,
@@ -220,7 +215,11 @@ function ReadingPage({
   }, [])
 
   useEffect(() => {
-    if (!isChapterMode || !chapterBodyRef.current || typeof ResizeObserver === 'undefined') {
+    if (
+      !isChapterMode ||
+      !chapterBodyRef.current ||
+      typeof ResizeObserver === 'undefined'
+    ) {
       return
     }
 

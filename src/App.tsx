@@ -170,7 +170,8 @@ function App() {
       ? library.chapters.find((chapter) => chapter.id === library.selectedBook?.lastReadChapterId) ?? null
       : null
   const savedResourceSignatures = new Set(library.savedResources.map((resource) => resource.signature))
-  const canBackToReading = readingVisibleSentences.length > 0
+  const canBackToReading =
+    effectiveWorkspaceSource === 'chapter' ? Boolean(activeChapter) : readingVisibleSentences.length > 0
   const manualWorkspaceLabel = persistent.hasSavedDraft ? '继续编辑草稿' : '粘贴文章解析'
 
   const {
@@ -180,7 +181,6 @@ function App() {
     handleDeleteChapter,
     handleImportFile,
     handleManualArticleTitleChange,
-    handleOpenAdjacentChapter,
     handleOpenChapterReading,
     handleOpenChapterWorkspace,
     handleOpenManualWorkspace,
@@ -272,7 +272,6 @@ function App() {
       <>
         <ReadingPage
           activeRange={activeReadingRange}
-          adjacentChapterIds={effectiveWorkspaceSource === 'chapter' ? library.adjacentChapterIds : undefined}
           contextTitle={currentContextTitle}
           errorCount={readingErrorCount}
           globalError={analysis.globalError}
@@ -280,7 +279,6 @@ function App() {
             handleAddHighlightToAnki(sentence, result, highlight)
           }
           onBackToWorkspace={() => setActivePage('workspace')}
-          onOpenAdjacentChapter={handleOpenAdjacentChapter}
           onOpenResources={openResources}
           onReadingPreferencesChange={persistent.handleReadingPreferencesChange}
           onRemoveHighlight={(signature) => void handleRemoveHighlight(signature)}
@@ -386,6 +384,7 @@ function App() {
           sourceText={workspaceSourceText}
           successCount={successCount}
           totalSentenceCount={workspaceSentences.length}
+          chapterSourceType={effectiveWorkspaceSource === 'chapter' ? library.selectedBook?.sourceType : undefined}
           workspaceSource={effectiveWorkspaceSource}
         />
       ) : (

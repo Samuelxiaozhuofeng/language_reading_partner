@@ -3,6 +3,8 @@ import type { ChapterParagraphBlock, SentenceItem, SentenceRange } from '../type
 
 export type ChapterReadingParagraph = {
   id: string
+  kind?: ChapterParagraphBlock['kind']
+  headingLevel?: number
   sentences: SentenceItem[]
 }
 
@@ -39,6 +41,8 @@ export function buildChapterReadingParagraphs(
     if (visibleSentences.length > 0) {
       paragraphs.push({
         id: paragraph.id,
+        kind: paragraph.kind,
+        headingLevel: paragraph.headingLevel,
         sentences: visibleSentences,
       })
     }
@@ -53,6 +57,7 @@ export function buildChapterReadingParagraphs(
     return [
       {
         id: 'fallback-reading-paragraph',
+        kind: 'paragraph',
         sentences,
       },
     ]

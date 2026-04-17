@@ -69,3 +69,25 @@ export function buildParagraphText(sentences: SentenceItem[]) {
     .filter(Boolean)
     .join(' ')
 }
+
+export function getReadingBlockClassName(paragraph: Pick<ChapterReadingParagraph, 'kind' | 'headingLevel'>) {
+  const baseClassName = 'reading-paragraph'
+
+  if (paragraph.kind === 'heading') {
+    return `${baseClassName} is-heading is-heading-${paragraph.headingLevel ?? 2}`
+  }
+
+  if (paragraph.kind === 'quote') {
+    return `${baseClassName} is-quote`
+  }
+
+  if (paragraph.kind === 'list-item') {
+    return `${baseClassName} is-list-item`
+  }
+
+  if (paragraph.kind === 'preformatted') {
+    return `${baseClassName} is-preformatted`
+  }
+
+  return baseClassName
+}

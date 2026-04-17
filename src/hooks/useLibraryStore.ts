@@ -13,6 +13,7 @@ import {
   type HydratedBookState,
   hydrateBookState,
   importBookToLibrary,
+  loadBookFile,
   loadInitialLibraryState,
   openChapterRecord,
   persistChapterRecord,
@@ -370,11 +371,16 @@ export function useLibraryStore() {
     setLibraryError('')
   }, [])
 
+  const getBookFile = useCallback(async (bookId: string) => {
+    return loadBookFile(bookId)
+  }, [])
+
   return {
     adjacentChapterIds,
     chapters,
     clearLibrary,
     currentChapter,
+    getBookFile,
     savedResources,
     importBook,
     saveManualDraftAsBook,

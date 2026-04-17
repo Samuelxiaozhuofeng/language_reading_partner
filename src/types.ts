@@ -84,6 +84,8 @@ export type AnalysisDocumentContext = {
 
 export type ChapterParagraphBlock = {
   id: string
+  kind?: 'paragraph' | 'heading' | 'quote' | 'list-item' | 'preformatted'
+  headingLevel?: number
   text: string
 }
 
@@ -111,6 +113,7 @@ export type BookChapterRecord = {
   bookId: string
   title: string
   order: number
+  epubHref?: string
   originalText: string
   sourceText: string
   paragraphBlocks: ChapterParagraphBlock[]

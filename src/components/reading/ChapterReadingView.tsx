@@ -1,5 +1,9 @@
 import type { RefObject } from 'react'
-import { getSentenceDisplayText, type ChapterReadingPage } from './readingShared'
+import {
+  getReadingBlockClassName,
+  getSentenceDisplayText,
+  type ChapterReadingPage,
+} from './readingShared'
 import type { ChapterReadingParagraph } from '../../lib/readingFlow'
 
 type ChapterReadingViewProps = {
@@ -57,7 +61,7 @@ export function ChapterReadingView({
           <div className="reading-book-body" ref={chapterBodyRef}>
             <div className="reading-flow is-paged">
               {(currentChapterPageData?.paragraphs ?? []).map((paragraph) => (
-                <p className="reading-paragraph" key={paragraph.id}>
+                <div className={getReadingBlockClassName(paragraph)} key={paragraph.id}>
                   {paragraph.sentences.map((sentence) => (
                     <button
                       className={`reading-inline-sentence ${
@@ -70,7 +74,7 @@ export function ChapterReadingView({
                       {getSentenceDisplayText(sentence)}
                     </button>
                   ))}
-                </p>
+                </div>
               ))}
             </div>
           </div>

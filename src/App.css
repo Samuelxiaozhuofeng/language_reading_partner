@@ -457,6 +457,17 @@ textarea:focus {
   font-size: 0.78rem;
 }
 
+.epub-workspace-summary {
+  display: grid;
+  gap: 12px;
+}
+
+.epub-workspace-summary p {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.7;
+}
+
 .analysis-progress-header,
 .analysis-progress-meta {
   display: flex;
@@ -1126,6 +1137,12 @@ blockquote {
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
+.epub-book-page {
+  min-height: 0;
+  height: 100%;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
 .reading-book-page-header {
   display: grid;
   gap: 10px;
@@ -1134,6 +1151,40 @@ blockquote {
 .reading-book-page-header h2 {
   margin: 0;
   font-size: clamp(2rem, 3vw, 3rem);
+}
+
+.epub-reader-shell {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 24px;
+  border: 1px solid rgba(69, 72, 82, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.epub-reader-host {
+  min-height: 0;
+  height: 100%;
+}
+
+.epub-reader-host > div,
+.epub-reader-host iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.epub-reader-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(250, 245, 235, 0.94);
+}
+
+.epub-reader-overlay.is-error {
+  color: #9d2f2f;
 }
 
 .reading-flow.is-paged {
@@ -1155,11 +1206,71 @@ blockquote {
   font-size: var(--reading-body-font-size, 18px);
   line-height: 2;
   text-wrap: pretty;
+  text-align: justify;
 }
 
 .reading-flow.is-paged .reading-paragraph {
   break-inside: avoid;
   margin-bottom: 1.1rem;
+}
+
+.reading-paragraph.is-heading {
+  font-family: var(--display);
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  text-align: left;
+}
+
+.reading-paragraph.is-heading-1 {
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  margin-top: 0.2rem;
+}
+
+.reading-paragraph.is-heading-2 {
+  font-size: clamp(1.65rem, 3vw, 2.2rem);
+}
+
+.reading-paragraph.is-heading-3,
+.reading-paragraph.is-heading-4,
+.reading-paragraph.is-heading-5,
+.reading-paragraph.is-heading-6 {
+  font-size: clamp(1.2rem, 2vw, 1.5rem);
+}
+
+.reading-paragraph.is-quote {
+  padding-left: 1.2rem;
+  border-left: 3px solid rgba(14, 125, 120, 0.22);
+  color: rgba(49, 50, 59, 0.92);
+  font-style: italic;
+}
+
+.reading-paragraph.is-list-item {
+  position: relative;
+  padding-left: 1.3rem;
+}
+
+.reading-paragraph.is-list-item::before {
+  content: '';
+  position: absolute;
+  left: 0.18rem;
+  top: 0.92em;
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 999px;
+  background: rgba(14, 125, 120, 0.58);
+  transform: translateY(-50%);
+}
+
+.reading-paragraph.is-preformatted {
+  padding: 1rem 1.1rem;
+  border-radius: 18px;
+  background: rgba(61, 58, 56, 0.05);
+  font-family: 'IBM Plex Mono', 'SFMono-Regular', monospace;
+  font-size: calc(var(--reading-body-font-size, 18px) * 0.9);
+  line-height: 1.8;
+  text-align: left;
+  white-space: pre-wrap;
 }
 
 .reading-paragraph--measure {
@@ -1186,7 +1297,7 @@ blockquote {
 }
 
 .reading-inline-sentence + .reading-inline-sentence {
-  margin-left: 0.35ch;
+  margin-left: 0.18ch;
 }
 
 .reading-inline-sentence--measure {

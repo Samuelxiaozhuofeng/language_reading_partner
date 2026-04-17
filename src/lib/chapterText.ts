@@ -17,9 +17,14 @@ function normalizeWhitespace(text: string) {
   return text.replace(/\s+/g, ' ').trim()
 }
 
-export function createParagraphBlock(text: string): ChapterParagraphBlock {
+export function createParagraphBlock(
+  text: string,
+  options?: Pick<ChapterParagraphBlock, 'kind' | 'headingLevel'>,
+): ChapterParagraphBlock {
   return {
     id: crypto.randomUUID(),
+    kind: options?.kind ?? 'paragraph',
+    headingLevel: options?.headingLevel,
     text: normalizeWhitespace(text),
   }
 }

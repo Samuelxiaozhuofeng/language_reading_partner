@@ -17,6 +17,7 @@ import {
 
 type ImportedChapterDraft = Pick<
   BookChapterRecord,
+  | 'epubHref'
   | 'title'
   | 'order'
   | 'originalText'
@@ -32,6 +33,7 @@ type ImportedChapterDraft = Pick<
 type ImportedBookPayload = {
   book: BookRecord
   chapters: BookChapterRecord[]
+  fileData: ArrayBuffer
 }
 
 function stripHash(href: string) {
@@ -53,6 +55,39 @@ function getSectionIdentifier(section: Section) {
   return stripHash(section.href || section.url || '')
 }
 
+function resolveParagraphBlockMeta(tagName: string) {
+  const normalizedTag = tagName.toLowerCase()
+
+  if (/^h[1-6]$/u.test(normalizedTag)) {
+    return {
+      kind: 'heading' as const,
+      headingLevel: Number(normalizedTag.slice(1)),
+    }
+  }
+
+  if (normalizedTag === 'blockquote') {
+    return {
+      kind: 'quote' as const,
+    }
+  }
+
+  if (normalizedTag === 'li') {
+    return {
+      kind: 'list-item' as const,
+    }
+  }
+
+  if (normalizedTag === 'pre') {
+    return {
+      kind: 'preformatted' as const,
+    }
+  }
+
+  return {
+    kind: 'paragraph' as const,
+  }
+}
+
 function extractParagraphBlocks(html: string): ChapterParagraphBlock[] {
   const parser = new DOMParser()
   const document = parser.parseFromString(html, 'text/html')
@@ -62,7 +97,9 @@ function extractParagraphBlocks(html: string): ChapterParagraphBlock[] {
     document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, li, blockquote, pre'),
   )
   const paragraphs = candidates
-    .map((element) => createParagraphBlock(element.textContent ?? ''))
+    .map((element) =>
+      createParagraphBlock(element.textContent ?? '', resolveParagraphBlockMeta(element.tagName)),
+    )
     .filter((paragraph) => paragraph.text.length > 0)
 
   if (paragraphs.length > 0) {
@@ -78,6 +115,7 @@ async function sectionToDraft(
   request: (path: string) => Promise<object>,
   order: number,
   title: string,
+  sourceHref?: string,
 ) {
   await section.load(request)
   const html = section.document?.documentElement?.outerHTML ?? ''
@@ -90,6 +128,7 @@ async function sectionToDraft(
   return {
     title: title.trim() || `第 ${order + 1} 章`,
     order,
+    epubHref: sourceHref || section.href || section.url || undefined,
     originalText,
     sourceText,
     paragraphBlocks,
@@ -164,6 +203,7 @@ async function buildChaptersFromToc(
         bookInstance.load.bind(bookInstance) as (path: string) => Promise<object>,
         drafts.length,
         item.label || '未命名章节',
+        item.href,
       ),
     )
   }
@@ -189,6 +229,7 @@ async function buildChaptersFromSpine(
         bookInstance.load.bind(bookInstance) as (path: string) => Promise<object>,
         drafts.length,
         item.href || `第 ${item.index + 1} 章`,
+        item.href,
       ),
     )
   }
@@ -226,7 +267,7 @@ export async function importEpubBook(file: File): Promise<ImportedBookPayload> {
       analysisState: deriveChapterAnalysisState(chapterDraft.sentences, chapterDraft.results),
     }))
 
-    return { book, chapters }
+    return { book, chapters, fileData: arrayBuffer }
   } catch (error) {
     if (error instanceof Error) {
       throw error

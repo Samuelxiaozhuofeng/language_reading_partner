@@ -3,6 +3,7 @@ import type { SentenceItem } from '../../types'
 import {
   buildParagraphText,
   CHAPTER_PAGE_BOTTOM_SAFE_LINES,
+  getReadingBlockClassName,
   type ChapterPageLayout,
   type ChapterReadingPage,
   getSentenceDisplayText,
@@ -17,36 +18,45 @@ type PaginateChapterParagraphsOptions = {
 }
 
 export function estimateParagraphHeight(
-  sentences: SentenceItem[],
+  paragraph: ChapterReadingParagraph,
   pageBodyWidth: number,
   fontSize: number,
 ) {
   const effectiveWidth = Math.max(260, pageBodyWidth)
   const charsPerLine = Math.max(18, Math.floor(effectiveWidth / Math.max(7.4, fontSize * 0.56)))
   const lineHeight = fontSize * 2
-  const paragraphText = buildParagraphText(sentences)
+  const paragraphText = buildParagraphText(paragraph.sentences)
 
   if (!paragraphText) {
     return lineHeight
   }
 
   const estimatedLineCount = Math.max(1, Math.ceil(paragraphText.length / charsPerLine))
-  return Math.ceil(estimatedLineCount * lineHeight)
+  const headingBoost =
+    paragraph.kind === 'heading'
+      ? Math.max(1.3, 1.75 - Math.min(0.5, (paragraph.headingLevel ?? 2) * 0.1))
+      : paragraph.kind === 'quote'
+        ? 1.12
+        : paragraph.kind === 'preformatted'
+          ? 1.18
+          : 1
+
+  return Math.ceil(estimatedLineCount * lineHeight * headingBoost)
 }
 
 export function measureParagraphHeight(
   measureContainer: HTMLDivElement,
-  sentences: SentenceItem[],
+  paragraphData: ChapterReadingParagraph,
   pageBodyWidth: number,
   fontSize: number,
 ) {
   measureContainer.style.width = `${Math.max(260, pageBodyWidth)}px`
   measureContainer.replaceChildren()
 
-  const paragraph = document.createElement('p')
-  paragraph.className = 'reading-paragraph reading-paragraph--measure'
+  const paragraph = document.createElement('div')
+  paragraph.className = `${getReadingBlockClassName(paragraphData)} reading-paragraph--measure`
 
-  sentences.forEach((sentence, sentenceIndex) => {
+  paragraphData.sentences.forEach((sentence, sentenceIndex) => {
     const sentenceButton = document.createElement('button')
     sentenceButton.className = 'reading-inline-sentence reading-inline-sentence--measure'
     sentenceButton.type = 'button'
@@ -54,7 +64,7 @@ export function measureParagraphHeight(
     sentenceButton.textContent = getSentenceDisplayText(sentence)
     paragraph.appendChild(sentenceButton)
 
-    if (sentenceIndex < sentences.length - 1) {
+    if (sentenceIndex < paragraphData.sentences.length - 1) {
       paragraph.appendChild(document.createTextNode(' '))
     }
   })
@@ -63,7 +73,7 @@ export function measureParagraphHeight(
   const height = Math.ceil(paragraph.getBoundingClientRect().height)
   measureContainer.replaceChildren()
 
-  return height || estimateParagraphHeight(sentences, pageBodyWidth, fontSize)
+  return height || estimateParagraphHeight(paragraphData, pageBodyWidth, fontSize)
 }
 
 export function paginateChapterParagraphs(
@@ -91,8 +101,12 @@ export function paginateChapterParagraphs(
   let currentHeight = 0
   let pageIndex = 0
 
-  const getParagraphHeight = (sentences: SentenceItem[]) => {
-    const cacheKey = sentences.map((sentence) => sentence.id).join('|')
+  const getParagraphHeight = (paragraph: ChapterReadingParagraph) => {
+    const cacheKey = [
+      paragraph.kind ?? 'paragraph',
+      paragraph.headingLevel ?? 0,
+      paragraph.sentences.map((sentence) => sentence.id).join('|'),
+    ].join(':')
     const cachedHeight = measuredHeightCache.get(cacheKey)
     if (cachedHeight) {
       return cachedHeight
@@ -101,11 +115,11 @@ export function paginateChapterParagraphs(
     const measuredHeight = options.measureContainer
       ? measureParagraphHeight(
           options.measureContainer,
-          sentences,
+          paragraph,
           pageBodyWidth,
           options.fontSize,
         )
-      : estimateParagraphHeight(sentences, pageBodyWidth, options.fontSize)
+      : estimateParagraphHeight(paragraph, pageBodyWidth, options.fontSize)
 
     measuredHeightCache.set(cacheKey, measuredHeight)
     return measuredHeight
@@ -125,8 +139,12 @@ export function paginateChapterParagraphs(
     currentHeight = 0
   }
 
-  const pushParagraphChunk = (paragraphId: string, sentences: SentenceItem[]) => {
-    const paragraphHeight = getParagraphHeight(sentences)
+  const pushParagraphChunk = (paragraph: ChapterReadingParagraph, sentences: SentenceItem[]) => {
+    const paragraphChunk = {
+      ...paragraph,
+      sentences,
+    }
+    const paragraphHeight = getParagraphHeight(paragraphChunk)
     const nextHeight =
       currentParagraphs.length === 0
         ? paragraphHeight
@@ -139,7 +157,8 @@ export function paginateChapterParagraphs(
     currentParagraphs = [
       ...currentParagraphs,
       {
-        id: `${paragraphId}-${currentParagraphs.length}`,
+        ...paragraphChunk,
+        id: `${paragraph.id}-${currentParagraphs.length}`,
         sentences,
       },
     ]
@@ -148,10 +167,10 @@ export function paginateChapterParagraphs(
   }
 
   paragraphs.forEach((paragraph) => {
-    const paragraphHeight = getParagraphHeight(paragraph.sentences)
+    const paragraphHeight = getParagraphHeight(paragraph)
 
     if (paragraphHeight <= pageBodyHeight) {
-      pushParagraphChunk(paragraph.id, paragraph.sentences)
+      pushParagraphChunk(paragraph, paragraph.sentences)
       return
     }
 
@@ -160,12 +179,18 @@ export function paginateChapterParagraphs(
 
     paragraph.sentences.forEach((sentence) => {
       const nextChunk = [...chunk, sentence]
-      const nextChunkHeight = getParagraphHeight(nextChunk)
+      const nextChunkHeight = getParagraphHeight({
+        ...paragraph,
+        sentences: nextChunk,
+      })
 
       if (chunk.length > 0 && nextChunkHeight > pageBodyHeight) {
-        pushParagraphChunk(paragraph.id, chunk)
+        pushParagraphChunk(paragraph, chunk)
         chunk = [sentence]
-        chunkHeight = getParagraphHeight(chunk)
+        chunkHeight = getParagraphHeight({
+          ...paragraph,
+          sentences: chunk,
+        })
         return
       }
 
@@ -174,7 +199,7 @@ export function paginateChapterParagraphs(
     })
 
     if (chunk.length > 0 && chunkHeight > 0) {
-      pushParagraphChunk(paragraph.id, chunk)
+      pushParagraphChunk(paragraph, chunk)
     }
   })
 
