@@ -9,11 +9,13 @@ import type {
   ChapterParagraphBlock,
 } from '../types'
 import {
+  createChapterSentenceItems,
   createChapterSentences,
   createParagraphBlock,
   deriveChapterAnalysisState,
   paragraphsToText,
 } from './chapterText'
+import { segmentSpanishText } from './segment'
 
 type ImportedChapterDraft = Pick<
   BookChapterRecord,
@@ -35,6 +37,29 @@ type ImportedBookPayload = {
   chapters: BookChapterRecord[]
   fileData: ArrayBuffer
 }
+
+type ExtractedParagraphDraft = Pick<
+  ChapterParagraphBlock,
+  'kind' | 'headingLevel' | 'text' | 'html' | 'sentenceTexts' | 'sentenceHtml'
+> & {
+  sentenceTexts: string[]
+}
+
+const INLINE_TAG_NAMES = new Set([
+  'b',
+  'cite',
+  'code',
+  'em',
+  'i',
+  'mark',
+  's',
+  'small',
+  'span',
+  'strong',
+  'sub',
+  'sup',
+  'u',
+])
 
 function stripHash(href: string) {
   return href.split('#')[0] ?? href
@@ -88,6 +113,211 @@ function resolveParagraphBlockMeta(tagName: string) {
   }
 }
 
+function unwrapElement(element: Element) {
+  const parent = element.parentNode
+  if (!parent) {
+    return
+  }
+
+  while (element.firstChild) {
+    parent.insertBefore(element.firstChild, element)
+  }
+
+  parent.removeChild(element)
+}
+
+function sanitizeInlineElement(element: HTMLElement) {
+  element
+    .querySelectorAll('script, style, nav, aside, svg, noscript, iframe, object, img, picture, video, audio')
+    .forEach((node) => node.remove())
+
+  Array.from(element.querySelectorAll('*'))
+    .reverse()
+    .forEach((node) => {
+      const normalizedTag = node.tagName.toLowerCase()
+
+      if (normalizedTag === 'br') {
+        node.replaceWith(element.ownerDocument.createTextNode(' '))
+        return
+      }
+
+      if (!INLINE_TAG_NAMES.has(normalizedTag)) {
+        unwrapElement(node)
+        return
+      }
+
+      Array.from(node.attributes).forEach((attribute) => {
+        node.removeAttribute(attribute.name)
+      })
+    })
+}
+
+function normalizeInlineTextNodes(element: HTMLElement) {
+  const textNodes: Array<{ node: Text; start: number; end: number }> = []
+  const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+  let fullText = ''
+
+  while (true) {
+    const currentNode = walker.nextNode()
+    if (!(currentNode instanceof Text)) {
+      break
+    }
+
+    let nextText = currentNode.textContent?.replace(/\s+/g, ' ') ?? ''
+    if (!nextText.trim()) {
+      currentNode.textContent = ''
+      continue
+    }
+
+    if (fullText.length === 0) {
+      nextText = nextText.trimStart()
+    } else if (fullText.endsWith(' ') && nextText.startsWith(' ')) {
+      nextText = nextText.slice(1)
+    }
+
+    if (!nextText) {
+      currentNode.textContent = ''
+      continue
+    }
+
+    const start = fullText.length
+    fullText += nextText
+    currentNode.textContent = nextText
+    textNodes.push({
+      node: currentNode,
+      start,
+      end: fullText.length,
+    })
+  }
+
+  const trimmedText = fullText.trimEnd()
+  if (trimmedText.length < fullText.length) {
+    const trailingWhitespaceCount = fullText.length - trimmedText.length
+    const lastEntry = textNodes[textNodes.length - 1]
+    if (lastEntry) {
+      const currentText = lastEntry.node.textContent ?? ''
+      lastEntry.node.textContent = currentText.slice(0, Math.max(0, currentText.length - trailingWhitespaceCount))
+      lastEntry.end = trimmedText.length
+    }
+  }
+
+  return {
+    fullText: trimmedText,
+    textNodes,
+  }
+}
+
+function resolveTextBoundary(
+  textNodes: Array<{ node: Text; start: number; end: number }>,
+  offset: number,
+) {
+  const lastEntry = textNodes[textNodes.length - 1]
+  if (!lastEntry) {
+    return null
+  }
+
+  if (offset >= lastEntry.end) {
+    return {
+      node: lastEntry.node,
+      offset: lastEntry.node.textContent?.length ?? 0,
+    }
+  }
+
+  for (const entry of textNodes) {
+    if (offset >= entry.start && offset <= entry.end) {
+      return {
+        node: entry.node,
+        offset: offset - entry.start,
+      }
+    }
+  }
+
+  return null
+}
+
+function extractInlineSentenceHtml(element: HTMLElement, sentenceTexts: string[]) {
+  const clone = element.cloneNode(true) as HTMLElement
+  sanitizeInlineElement(clone)
+  const { fullText, textNodes } = normalizeInlineTextNodes(clone)
+
+  if (!fullText || textNodes.length === 0) {
+    return {
+      html: undefined,
+      sentenceHtml: undefined,
+      text: '',
+    }
+  }
+
+  const sentenceHtml: string[] = []
+  let searchCursor = 0
+
+  for (const sentenceText of sentenceTexts) {
+    const sentenceStart = fullText.indexOf(sentenceText, searchCursor)
+    if (sentenceStart === -1) {
+      return {
+        html: clone.innerHTML.trim() || undefined,
+        sentenceHtml: undefined,
+        text: fullText,
+      }
+    }
+
+    const sentenceEnd = sentenceStart + sentenceText.length
+    const startBoundary = resolveTextBoundary(textNodes, sentenceStart)
+    const endBoundary = resolveTextBoundary(textNodes, sentenceEnd)
+    if (!startBoundary || !endBoundary) {
+      return {
+        html: clone.innerHTML.trim() || undefined,
+        sentenceHtml: undefined,
+        text: fullText,
+      }
+    }
+
+    const range = clone.ownerDocument.createRange()
+    range.setStart(startBoundary.node, startBoundary.offset)
+    range.setEnd(endBoundary.node, endBoundary.offset)
+
+    const container = clone.ownerDocument.createElement('div')
+    container.append(range.cloneContents())
+    sentenceHtml.push(container.innerHTML.trim() || sentenceText)
+    searchCursor = sentenceEnd
+  }
+
+  return {
+    html: clone.innerHTML.trim() || undefined,
+    sentenceHtml,
+    text: fullText,
+  }
+}
+
+function extractParagraphDraft(element: Element): ExtractedParagraphDraft | null {
+  const blockMeta = resolveParagraphBlockMeta(element.tagName)
+  const sentenceTexts = segmentSpanishText(element.textContent ?? '')
+  const inlineExtraction =
+    element instanceof HTMLElement
+      ? extractInlineSentenceHtml(element, sentenceTexts)
+      : {
+          html: undefined,
+          sentenceHtml: undefined,
+          text: (element.textContent ?? '').replace(/\s+/g, ' ').trim(),
+        }
+
+  if (!inlineExtraction.text) {
+    return null
+  }
+
+  return {
+    kind: blockMeta.kind,
+    headingLevel: blockMeta.headingLevel,
+    text: inlineExtraction.text,
+    html: inlineExtraction.html,
+    sentenceTexts,
+    sentenceHtml:
+      inlineExtraction.sentenceHtml?.length === sentenceTexts.length
+        ? inlineExtraction.sentenceHtml
+        : undefined,
+  }
+}
+
 function extractParagraphBlocks(html: string): ChapterParagraphBlock[] {
   const parser = new DOMParser()
   const document = parser.parseFromString(html, 'text/html')
@@ -96,14 +326,33 @@ function extractParagraphBlocks(html: string): ChapterParagraphBlock[] {
   const candidates = Array.from(
     document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, li, blockquote, pre'),
   )
-  const paragraphs = candidates
-    .map((element) =>
-      createParagraphBlock(element.textContent ?? '', resolveParagraphBlockMeta(element.tagName)),
-    )
-    .filter((paragraph) => paragraph.text.length > 0)
+  const paragraphDrafts = candidates
+    .map((element) => extractParagraphDraft(element))
+    .filter((paragraph): paragraph is ExtractedParagraphDraft => Boolean(paragraph))
 
-  if (paragraphs.length > 0) {
-    return paragraphs
+  if (paragraphDrafts.length > 0) {
+    const sentenceTexts = paragraphDrafts.flatMap((paragraph) => paragraph.sentenceTexts)
+    const sentences = createChapterSentenceItems(sentenceTexts)
+    let sentenceCursor = 0
+
+    return paragraphDrafts.map((paragraph) => {
+      const paragraphSentenceIds = sentences
+        .slice(sentenceCursor, sentenceCursor + paragraph.sentenceTexts.length)
+        .map((sentence) => sentence.id)
+      sentenceCursor += paragraph.sentenceTexts.length
+
+      return createParagraphBlock(paragraph.text, {
+        kind: paragraph.kind,
+        headingLevel: paragraph.headingLevel,
+        html: paragraph.html,
+        sentenceIds: paragraphSentenceIds.length > 0 ? paragraphSentenceIds : undefined,
+        sentenceTexts: paragraph.sentenceTexts,
+        sentenceHtml:
+          paragraph.sentenceHtml?.length === paragraphSentenceIds.length
+            ? paragraph.sentenceHtml
+            : undefined,
+      })
+    })
   }
 
   const fallbackText = createParagraphBlock(document.body?.textContent ?? '')
@@ -122,8 +371,26 @@ async function sectionToDraft(
   const paragraphBlocks = extractParagraphBlocks(html)
   const originalText = paragraphsToText(paragraphBlocks)
   const sourceText = originalText
-  const sentences = createChapterSentences(sourceText)
+  const storedSentenceTexts = paragraphBlocks.flatMap((paragraph) => paragraph.sentenceTexts ?? [])
+  const sentences =
+    storedSentenceTexts.length > 0 && storedSentenceTexts.every(Boolean)
+      ? createChapterSentenceItems(storedSentenceTexts)
+      : createChapterSentences(sourceText)
   section.unload()
+
+  if (storedSentenceTexts.length > 0 && storedSentenceTexts.every(Boolean)) {
+    let sentenceCursor = 0
+    paragraphBlocks.forEach((paragraph) => {
+      if (!paragraph.sentenceIds?.length) {
+        return
+      }
+
+      paragraph.sentenceIds = sentences
+        .slice(sentenceCursor, sentenceCursor + paragraph.sentenceIds.length)
+        .map((sentence) => sentence.id)
+      sentenceCursor += paragraph.sentenceIds.length
+    })
+  }
 
   return {
     title: title.trim() || `第 ${order + 1} 章`,

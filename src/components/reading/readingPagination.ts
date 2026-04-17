@@ -62,7 +62,14 @@ export function measureParagraphHeight(
     sentenceButton.className = 'reading-inline-sentence reading-inline-sentence--measure'
     sentenceButton.type = 'button'
     sentenceButton.tabIndex = -1
-    sentenceButton.textContent = getSentenceDisplayText(sentence)
+    const sentenceHtml = paragraphData.sentenceHtmlById?.[sentence.id]
+    if (sentenceHtml) {
+      const content = document.createElement('span')
+      content.innerHTML = sentenceHtml
+      sentenceButton.appendChild(content)
+    } else {
+      sentenceButton.textContent = getSentenceDisplayText(sentence)
+    }
     paragraph.appendChild(sentenceButton)
 
     if (sentenceIndex < paragraphData.sentences.length - 1) {

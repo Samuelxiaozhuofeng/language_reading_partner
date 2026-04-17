@@ -19,13 +19,20 @@ function normalizeWhitespace(text: string) {
 
 export function createParagraphBlock(
   text: string,
-  options?: Pick<ChapterParagraphBlock, 'kind' | 'headingLevel'>,
+  options?: Pick<
+    ChapterParagraphBlock,
+    'kind' | 'headingLevel' | 'html' | 'sentenceIds' | 'sentenceTexts' | 'sentenceHtml'
+  >,
 ): ChapterParagraphBlock {
   return {
     id: crypto.randomUUID(),
     kind: options?.kind ?? 'paragraph',
     headingLevel: options?.headingLevel,
     text: normalizeWhitespace(text),
+    html: options?.html,
+    sentenceIds: options?.sentenceIds,
+    sentenceTexts: options?.sentenceTexts,
+    sentenceHtml: options?.sentenceHtml,
   }
 }
 
@@ -37,7 +44,11 @@ export function paragraphsToText(paragraphs: ChapterParagraphBlock[]) {
 }
 
 export function createChapterSentences(sourceText: string) {
-  return segmentSpanishText(sourceText).map(createSentenceItem)
+  return createChapterSentenceItems(segmentSpanishText(sourceText))
+}
+
+export function createChapterSentenceItems(sentences: string[]) {
+  return sentences.map(createSentenceItem)
 }
 
 export function summarizeSentenceStats(sentences: SentenceItem[]): ChapterStats {

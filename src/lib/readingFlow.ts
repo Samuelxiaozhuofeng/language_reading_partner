@@ -6,6 +6,7 @@ export type ChapterReadingParagraph = {
   kind?: ChapterParagraphBlock['kind']
   headingLevel?: number
   sentences: SentenceItem[]
+  sentenceHtmlById?: Record<string, string>
 }
 
 export function buildChapterReadingParagraphs(
@@ -19,8 +20,47 @@ export function buildChapterReadingParagraphs(
 
   let globalSentenceIndex = 0
   const paragraphs: ChapterReadingParagraph[] = []
+  const sentenceById = new Map(sentences.map((sentence) => [sentence.id, sentence]))
 
   for (const paragraph of paragraphBlocks) {
+    if (paragraph.sentenceIds?.length) {
+      const visibleSentences: SentenceItem[] = []
+      const sentenceHtmlById: Record<string, string> = {}
+
+      for (let sentenceIndex = 0; sentenceIndex < paragraph.sentenceIds.length; sentenceIndex += 1) {
+        const sentenceId = paragraph.sentenceIds[sentenceIndex]
+        if (
+          globalSentenceIndex >= activeRange.start &&
+          globalSentenceIndex <= activeRange.end
+        ) {
+          const sentence =
+            sentenceById.get(sentenceId) ?? sentences[globalSentenceIndex - activeRange.start]
+          if (sentence) {
+            visibleSentences.push(sentence)
+            const sentenceHtml = paragraph.sentenceHtml?.[sentenceIndex]
+            if (sentenceHtml) {
+              sentenceHtmlById[sentence.id] = sentenceHtml
+            }
+          }
+        }
+
+        globalSentenceIndex += 1
+      }
+
+      if (visibleSentences.length > 0) {
+        paragraphs.push({
+          id: paragraph.id,
+          kind: paragraph.kind,
+          headingLevel: paragraph.headingLevel,
+          sentences: visibleSentences,
+          sentenceHtmlById:
+            Object.keys(sentenceHtmlById).length > 0 ? sentenceHtmlById : undefined,
+        })
+      }
+
+      continue
+    }
+
     const paragraphSentences = segmentSpanishText(paragraph.text)
     const visibleSentences: SentenceItem[] = []
 

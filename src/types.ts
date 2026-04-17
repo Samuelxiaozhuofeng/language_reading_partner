@@ -87,6 +87,10 @@ export type ChapterParagraphBlock = {
   kind?: 'paragraph' | 'heading' | 'quote' | 'list-item' | 'preformatted'
   headingLevel?: number
   text: string
+  html?: string
+  sentenceIds?: string[]
+  sentenceTexts?: string[]
+  sentenceHtml?: string[]
 }
 
 export type ReadingResumeAnchor = {

@@ -71,7 +71,15 @@ export function ChapterReadingView({
                       type="button"
                       onClick={() => onOpenSentence(sentence.id)}
                     >
-                      {getSentenceDisplayText(sentence)}
+                      {paragraph.sentenceHtmlById?.[sentence.id] ? (
+                        <span
+                          dangerouslySetInnerHTML={{
+                            __html: paragraph.sentenceHtmlById[sentence.id],
+                          }}
+                        />
+                      ) : (
+                        getSentenceDisplayText(sentence)
+                      )}
                     </button>
                   ))}
                 </div>
