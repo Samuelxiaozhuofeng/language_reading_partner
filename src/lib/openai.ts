@@ -4,6 +4,8 @@ import type {
   AnalysisResult,
   ApiConfig,
   PromptConfig,
+  VocabularyExplanation,
+  VocabularyPromptConfig,
 } from '../types'
 import { sanitizeHighlights } from './knowledge'
 
@@ -35,6 +37,11 @@ type AnalysisCallbacks = {
 
 type RunConcurrentAnalysisOptions = {
   signal?: AbortSignal
+}
+
+type VocabularyExplanationJob = {
+  context: string
+  word: string
 }
 
 const REQUEST_TIMEOUT_MS = 60_000
@@ -95,6 +102,12 @@ function interpolatePrompt(
   }
 
   return `${buildDocumentMetadata(job.documentContext)}\n\n${interpolated}`
+}
+
+function interpolateVocabularyPrompt(template: string, job: VocabularyExplanationJob) {
+  return template
+    .replaceAll('{context}', job.context)
+    .replaceAll('{word}', job.word)
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -203,6 +216,36 @@ function parseStructuredResult(text: string): AnalysisResult {
   }
 }
 
+function parseVocabularyExplanation(text: string, word: string): VocabularyExplanation {
+  const normalized = text.trim()
+
+  if (!normalized) {
+    throw new Error('模型未返回文本内容。')
+  }
+
+  const fencedMatch = normalized.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  const jsonCandidate = fencedMatch?.[1] ?? normalized
+
+  try {
+    const parsed = JSON.parse(jsonCandidate) as {
+      explanation?: unknown
+    }
+    const explanation = typeof parsed.explanation === 'string' ? parsed.explanation.trim() : ''
+
+    if (!explanation) {
+      throw new Error('empty')
+    }
+
+    return {
+      word,
+      explanation,
+      rawText: normalized,
+    }
+  } catch {
+    throw new Error('词汇解释返回内容不是可解析的 JSON，或缺少 explanation 字段。')
+  }
+}
+
 function buildRequestBody(config: ApiConfig, promptConfig: PromptConfig, job: AnalysisJob) {
   return {
     model: config.model,
@@ -211,6 +254,23 @@ function buildRequestBody(config: ApiConfig, promptConfig: PromptConfig, job: An
       {
         role: 'user',
         content: interpolatePrompt(promptConfig.template, job),
+      },
+    ],
+  }
+}
+
+function buildVocabularyRequestBody(
+  config: ApiConfig,
+  promptConfig: VocabularyPromptConfig,
+  job: VocabularyExplanationJob,
+) {
+  return {
+    model: config.model,
+    temperature: 0.2,
+    messages: [
+      {
+        role: 'user',
+        content: interpolateVocabularyPrompt(promptConfig.template, job),
       },
     ],
   }
@@ -295,6 +355,90 @@ export async function analyzeSentence(
 
     if (error instanceof TypeError) {
       throw new Error('网络请求失败，请检查 API URL、浏览器跨域设置或网络连通性。')
+    }
+
+    throw error
+  } finally {
+    if (signal) {
+      signal.removeEventListener('abort', handleExternalAbort)
+    }
+    window.clearTimeout(timeoutId)
+  }
+}
+
+export async function explainVocabulary(
+  config: ApiConfig,
+  promptConfig: VocabularyPromptConfig,
+  job: VocabularyExplanationJob,
+  signal?: AbortSignal,
+): Promise<VocabularyExplanation> {
+  if (!config.baseUrl.trim() || !config.apiKey.trim() || !config.model.trim()) {
+    throw new Error('请先在设置里配置词汇解释 AI。')
+  }
+
+  if (!promptConfig.template.trim()) {
+    throw new Error('请先在设置里填写词汇解释 Prompt。')
+  }
+
+  const controller = new AbortController()
+  let didTimeout = false
+  const handleExternalAbort = () => controller.abort()
+  const timeoutId = window.setTimeout(() => {
+    didTimeout = true
+    controller.abort()
+  }, REQUEST_TIMEOUT_MS)
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort()
+    } else {
+      signal.addEventListener('abort', handleExternalAbort, { once: true })
+    }
+  }
+
+  try {
+    const response = await fetch(normalizeBaseUrl(config.baseUrl), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.apiKey.trim()}`,
+      },
+      body: JSON.stringify(buildVocabularyRequestBody(config, promptConfig, job)),
+      signal: controller.signal,
+    })
+
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('鉴权失败，请检查词汇解释 AI 的 API Key 是否正确。')
+    }
+
+    if (response.status === 429) {
+      throw new Error('词汇解释请求过于频繁，可能触发了限流，请稍后再试。')
+    }
+
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(
+        `词汇解释接口请求失败（${response.status}）。${text ? `返回：${text.slice(0, 120)}` : ''}`,
+      )
+    }
+
+    const payload = (await response.json()) as ChatCompletionResponse
+    if (payload.error?.message) {
+      throw new Error(payload.error.message)
+    }
+
+    return parseVocabularyExplanation(extractTextContent(payload.choices), job.word)
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      if (!didTimeout && signal?.aborted) {
+        throw error
+      }
+
+      throw new Error('词汇解释请求超时，请检查网络或换用更快的模型。')
+    }
+
+    if (error instanceof TypeError) {
+      throw new Error('词汇解释网络请求失败，请检查 API URL、浏览器跨域设置或网络连通性。')
     }
 
     throw error

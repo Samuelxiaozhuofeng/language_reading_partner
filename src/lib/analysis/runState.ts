@@ -66,6 +66,18 @@ export function buildNextResults({
   )
 }
 
+type CollectFailedPendingEntriesArgs = {
+  pendingEntries: PendingEntry[]
+  results: Record<string, AnalysisResult>
+}
+
+export function collectFailedPendingEntries({
+  pendingEntries,
+  results,
+}: CollectFailedPendingEntriesArgs) {
+  return pendingEntries.filter(({ sentence }) => !results[sentence.id])
+}
+
 export function createActiveRunState(
   sentences: SentenceItem[],
   pendingIds: Set<string>,
@@ -278,4 +290,19 @@ export function buildRetryErrorSentence(sentence: SentenceItem, error: string) {
     status: 'error' as const,
     error,
   }
+}
+
+export function buildQueuedRetrySentences(
+  sentences: SentenceItem[],
+  retryIds: Set<string>,
+) {
+  return sentences.map((sentence) =>
+    retryIds.has(sentence.id)
+      ? {
+          ...sentence,
+          status: 'queued' as const,
+          error: undefined,
+        }
+      : sentence,
+  )
 }

@@ -28,6 +28,7 @@ import type {
   ReadingResumeAnchor,
   SentenceItem,
   SentenceRange,
+  VocabularyExplanation,
   WorkspaceSource,
 } from '../types'
 
@@ -45,6 +46,7 @@ type ReadingPageProps = {
     highlight: AnalysisHighlight,
   ) => Promise<void>
   onBackToWorkspace: () => void
+  onExplainVocabulary: (context: string, word: string) => Promise<VocabularyExplanation>
   onOpenResources: () => void
   onReadingPreferencesChange: <Key extends keyof ReadingPreferences>(
     key: Key,
@@ -74,6 +76,7 @@ function ReadingPage({
   globalError,
   onAddToAnki,
   onBackToWorkspace,
+  onExplainVocabulary,
   onOpenResources,
   onReadingPreferencesChange,
   onRemoveHighlight,
@@ -475,6 +478,7 @@ function ReadingPage({
                 onAddToAnki={onAddToAnki}
                 onBackToWorkspace={onBackToWorkspace}
                 onCloseReadingSettings={() => setIsReadingSettingsOpen(false)}
+                onExplainVocabulary={onExplainVocabulary}
                 onOpenResources={onOpenResources}
                 onReadingPreferencesChange={onReadingPreferencesChange}
                 onRemoveHighlight={onRemoveHighlight}
@@ -500,6 +504,7 @@ function ReadingPage({
               mode="docked"
               onAddToAnki={onAddToAnki}
               onCloseSentence={handleCloseSentence}
+              onExplainVocabulary={onExplainVocabulary}
               onOpenResources={onOpenResources}
               onRemoveHighlight={onRemoveHighlight}
               onSaveHighlight={onSaveHighlight}
@@ -532,6 +537,7 @@ function ReadingPage({
               mode="sheet"
               onAddToAnki={onAddToAnki}
               onCloseSentence={handleCloseSentence}
+              onExplainVocabulary={onExplainVocabulary}
               onOpenResources={onOpenResources}
               onRemoveHighlight={onRemoveHighlight}
               onSaveHighlight={onSaveHighlight}

@@ -1,9 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { toUserFacingAnkiError } from '../../lib/anki'
 import { buildKnowledgeSignature, knowledgeKindLabelMap } from '../../lib/knowledge'
-import type { AnalysisHighlight, AnalysisResult, SentenceItem } from '../../types'
+import type {
+  AnalysisHighlight,
+  AnalysisResult,
+  SentenceItem,
+  VocabularyExplanation,
+} from '../../types'
+import { ClickableSentenceWords } from './ClickableSentenceWords'
 import { renderGrammarText } from './readingHighlights'
 import { buildSelectionKey, type HighlightSelection } from './readingShared'
+import {
+  useVocabularyExplanation,
+  type VocabularyExplanationInteraction,
+} from './useVocabularyExplanation'
+import { VocabularyExplanationPanel } from './VocabularyExplanationPanel'
 
 type SentenceDetailPanelProps = {
   activeSelection: HighlightSelection | null
@@ -12,6 +23,7 @@ type SentenceDetailPanelProps = {
     result: AnalysisResult,
     highlight: AnalysisHighlight,
   ) => Promise<void>
+  onExplainVocabulary: (context: string, word: string) => Promise<VocabularyExplanation>
   onOpenResources: () => void
   onRemoveHighlight: (signature: string) => void
   onSaveHighlight: (
@@ -21,20 +33,25 @@ type SentenceDetailPanelProps = {
   ) => void
   onSelectHighlight: (sentenceId: string, highlightId: string) => void
   result?: AnalysisResult
+  renderVocabularySource?: boolean
   savedHighlightSignatures: Set<string>
   sentence: SentenceItem
+  vocabularyInteraction?: VocabularyExplanationInteraction
 }
 
 export function SentenceDetailPanel({
   activeSelection,
   onAddToAnki,
+  onExplainVocabulary,
   onOpenResources,
   onRemoveHighlight,
   onSaveHighlight,
   onSelectHighlight,
   result,
+  renderVocabularySource = true,
   savedHighlightSignatures,
   sentence,
+  vocabularyInteraction,
 }: SentenceDetailPanelProps) {
   const knowledgeDetailCardRef = useRef<HTMLDivElement | null>(null)
   const [ankiSubmitState, setAnkiSubmitState] = useState<{
@@ -46,6 +63,14 @@ export function SentenceDetailPanel({
     selectionKey: '',
     status: 'idle',
   })
+  const internalVocabularyInteraction = useVocabularyExplanation({
+    onAddToAnki,
+    onExplainVocabulary,
+    result,
+    sentence,
+  })
+  const activeVocabularyInteraction =
+    vocabularyInteraction ?? internalVocabularyInteraction
   const highlights = result?.highlights ?? []
   const selectedHighlight = highlights.find(
     (highlight) =>
@@ -145,6 +170,19 @@ export function SentenceDetailPanel({
 
   return (
     <div className="analysis-stack">
+      {renderVocabularySource ? (
+        <section>
+          <h3>原句</h3>
+          <p className="analysis-paragraph vocabulary-source-sentence">
+            <ClickableSentenceWords
+              activeWord={activeVocabularyInteraction.state?.word}
+              disabled={activeVocabularyInteraction.state?.status === 'loading'}
+              text={activeVocabularyInteraction.sentenceText}
+              onWordClick={(word) => void activeVocabularyInteraction.handleWordClick(word)}
+            />
+          </p>
+        </section>
+      ) : null}
       <section>
         <h3>语法</h3>
         <div className="analysis-paragraph">
@@ -245,6 +283,13 @@ export function SentenceDetailPanel({
         <h3>内容</h3>
         <p>{result.meaning || '模型未稳定返回内容解读。'}</p>
       </section>
+
+      <VocabularyExplanationPanel
+        detailRef={activeVocabularyInteraction.detailRef}
+        state={activeVocabularyInteraction.state}
+        onAddToAnki={activeVocabularyInteraction.handleAddToAnki}
+        onClose={activeVocabularyInteraction.handleClose}
+      />
     </div>
   )
 }

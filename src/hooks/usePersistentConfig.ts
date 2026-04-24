@@ -7,6 +7,7 @@ import type {
   ReadingPreferences,
   RunSession,
   SentenceItem,
+  VocabularyPromptConfig,
 } from '../types'
 import {
   ANKI_STORAGE_KEY,
@@ -21,6 +22,8 @@ import {
   defaultPromptConfig,
   defaultReadingPreferences,
   defaultSourceText,
+  defaultVocabularyConfig,
+  defaultVocabularyPromptConfig,
   DRAFT_STORAGE_KEY,
   HISTORY_STORAGE_KEY,
   PROMPT_STORAGE_KEY,
@@ -31,12 +34,19 @@ import {
   restoreHistory,
   restorePromptConfig,
   restoreReadingPreferences,
+  restoreVocabularyAiShared,
+  restoreVocabularyConfig,
+  restoreVocabularyPromptConfig,
   type AnkiConfigChangeHandler,
   type AnkiFieldMappingChangeHandler,
   type ConfigChangeHandler,
   type PersistedDraft,
   type PromptConfigChangeHandler,
   type ReadingPreferencesChangeHandler,
+  type VocabularyPromptConfigChangeHandler,
+  VOCABULARY_AI_SHARED_STORAGE_KEY,
+  VOCABULARY_CONFIG_STORAGE_KEY,
+  VOCABULARY_PROMPT_STORAGE_KEY,
 } from '../lib/appState'
 import type { Dispatch, SetStateAction } from 'react'
 
@@ -51,12 +61,17 @@ type PersistentConfigState = {
   hasSavedDraft: boolean
   history: RunSession[]
   initialNotice: string
+  isVocabularyAiShared: boolean
   promptConfig: PromptConfig
   readingPreferences: ReadingPreferences
   resetAll: () => void
   resetPromptConfig: () => void
+  resetVocabularyPromptConfig: () => void
   results: Record<string, AnalysisResult>
   handleReadingPreferencesChange: ReadingPreferencesChangeHandler
+  handleVocabularyAiSharedChange: (value: boolean) => void
+  handleVocabularyConfigChange: ConfigChangeHandler
+  handleVocabularyPromptChange: VocabularyPromptConfigChangeHandler
   sentences: SentenceItem[]
   setHistory: Dispatch<SetStateAction<RunSession[]>>
   setArticleTitle: Dispatch<SetStateAction<string>>
@@ -64,13 +79,20 @@ type PersistentConfigState = {
   setSentences: Dispatch<SetStateAction<SentenceItem[]>>
   setSourceText: Dispatch<SetStateAction<string>>
   sourceText: string
+  vocabularyApiConfig: ApiConfig
+  vocabularyPromptConfig: VocabularyPromptConfig
 }
 
 export function usePersistentConfig(): PersistentConfigState {
   const [draft] = useState(restoreDraft)
   const [ankiConfig, setAnkiConfig] = useState<AnkiConfig>(restoreAnkiConfig)
   const [apiConfig, setApiConfig] = useState<ApiConfig>(restoreConfig)
+  const [vocabularyApiConfig, setVocabularyApiConfig] =
+    useState<ApiConfig>(restoreVocabularyConfig)
+  const [isVocabularyAiShared, setIsVocabularyAiShared] = useState(restoreVocabularyAiShared)
   const [promptConfig, setPromptConfig] = useState<PromptConfig>(restorePromptConfig)
+  const [vocabularyPromptConfig, setVocabularyPromptConfig] =
+    useState<VocabularyPromptConfig>(restoreVocabularyPromptConfig)
   const [readingPreferences, setReadingPreferences] = useState<ReadingPreferences>(
     restoreReadingPreferences,
   )
@@ -89,8 +111,20 @@ export function usePersistentConfig(): PersistentConfigState {
   }, [apiConfig])
 
   useEffect(() => {
+    localStorage.setItem(VOCABULARY_CONFIG_STORAGE_KEY, JSON.stringify(vocabularyApiConfig))
+  }, [vocabularyApiConfig])
+
+  useEffect(() => {
+    localStorage.setItem(VOCABULARY_AI_SHARED_STORAGE_KEY, JSON.stringify(isVocabularyAiShared))
+  }, [isVocabularyAiShared])
+
+  useEffect(() => {
     localStorage.setItem(PROMPT_STORAGE_KEY, JSON.stringify(promptConfig))
   }, [promptConfig])
+
+  useEffect(() => {
+    localStorage.setItem(VOCABULARY_PROMPT_STORAGE_KEY, JSON.stringify(vocabularyPromptConfig))
+  }, [vocabularyPromptConfig])
 
   useEffect(() => {
     localStorage.setItem(READING_PREFERENCES_STORAGE_KEY, JSON.stringify(readingPreferences))
@@ -112,6 +146,17 @@ export function usePersistentConfig(): PersistentConfigState {
       ...current,
       [key]: key === 'concurrency' ? clampConcurrency(value) : value,
     }))
+  }, [])
+
+  const handleVocabularyConfigChange: ConfigChangeHandler = useCallback((key, value) => {
+    setVocabularyApiConfig((current) => ({
+      ...current,
+      [key]: key === 'concurrency' ? clampConcurrency(value) : value,
+    }))
+  }, [])
+
+  const handleVocabularyAiSharedChange = useCallback((value: boolean) => {
+    setIsVocabularyAiShared(value)
   }, [])
 
   const handleAnkiConfigChange: AnkiConfigChangeHandler = useCallback((key, value) => {
@@ -141,6 +186,16 @@ export function usePersistentConfig(): PersistentConfigState {
     }))
   }, [])
 
+  const handleVocabularyPromptChange: VocabularyPromptConfigChangeHandler = useCallback(
+    (key, value) => {
+      setVocabularyPromptConfig((current) => ({
+        ...current,
+        [key]: value,
+      }))
+    },
+    [],
+  )
+
   const handleReadingPreferencesChange: ReadingPreferencesChangeHandler = useCallback(
     (key, value) => {
       setReadingPreferences((current) => ({
@@ -158,11 +213,18 @@ export function usePersistentConfig(): PersistentConfigState {
     setPromptConfig(defaultPromptConfig)
   }, [])
 
+  const resetVocabularyPromptConfig = useCallback(() => {
+    setVocabularyPromptConfig(defaultVocabularyPromptConfig)
+  }, [])
+
   const resetAll = useCallback(() => {
     clearPersistedStorage()
     setAnkiConfig(defaultAnkiConfig)
     setApiConfig(defaultConfig)
+    setVocabularyApiConfig(defaultVocabularyConfig)
+    setIsVocabularyAiShared(true)
     setPromptConfig(defaultPromptConfig)
+    setVocabularyPromptConfig(defaultVocabularyPromptConfig)
     setReadingPreferences(defaultReadingPreferences)
     setArticleTitle('')
     setSourceText('')
@@ -188,13 +250,18 @@ export function usePersistentConfig(): PersistentConfigState {
     handleConfigChange,
     handlePromptChange,
     handleReadingPreferencesChange,
+    handleVocabularyAiSharedChange,
+    handleVocabularyConfigChange,
+    handleVocabularyPromptChange,
     hasSavedDraft,
     history,
     initialNotice,
+    isVocabularyAiShared,
     promptConfig,
     readingPreferences,
     resetAll,
     resetPromptConfig,
+    resetVocabularyPromptConfig,
     results,
     setArticleTitle,
     sentences,
@@ -203,5 +270,7 @@ export function usePersistentConfig(): PersistentConfigState {
     setSentences,
     setSourceText,
     sourceText,
+    vocabularyApiConfig,
+    vocabularyPromptConfig,
   }
 }

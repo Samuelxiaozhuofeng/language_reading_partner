@@ -6,6 +6,7 @@ import type {
   AnalysisResult,
   ReadingPreferences,
   SentenceItem,
+  VocabularyExplanation,
 } from '../../types'
 import { statusLabelMap } from '../../lib/appState'
 
@@ -21,6 +22,7 @@ type DraftReadingViewProps = {
   ) => Promise<void>
   onBackToWorkspace: () => void
   onCloseReadingSettings: () => void
+  onExplainVocabulary: (context: string, word: string) => Promise<VocabularyExplanation>
   onOpenResources: () => void
   onReadingPreferencesChange: <Key extends keyof ReadingPreferences>(
     key: Key,
@@ -51,6 +53,7 @@ export function DraftReadingView({
   onAddToAnki,
   onBackToWorkspace,
   onCloseReadingSettings,
+  onExplainVocabulary,
   onOpenResources,
   onReadingPreferencesChange,
   onRemoveHighlight,
@@ -130,6 +133,7 @@ export function DraftReadingView({
                   <SentenceDetailPanel
                     activeSelection={activeSelection}
                     onAddToAnki={onAddToAnki}
+                    onExplainVocabulary={onExplainVocabulary}
                     onOpenResources={onOpenResources}
                     onRemoveHighlight={onRemoveHighlight}
                     onSaveHighlight={onSaveHighlight}

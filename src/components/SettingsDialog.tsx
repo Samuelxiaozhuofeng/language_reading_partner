@@ -5,8 +5,9 @@ import type {
   ConfigChangeHandler,
   PromptConfigChangeHandler,
   SettingsTab,
+  VocabularyPromptConfigChangeHandler,
 } from '../lib/appState'
-import type { AnkiConfig, ApiConfig, PromptConfig } from '../types'
+import type { AnkiConfig, ApiConfig, PromptConfig, VocabularyPromptConfig } from '../types'
 import AiSettingsTab from './settings/AiSettingsTab'
 import AnkiSettingsTab from './settings/AnkiSettingsTab'
 import PromptSettingsTab from './settings/PromptSettingsTab'
@@ -19,6 +20,7 @@ type SettingsDialogProps = {
   ankiConfig: AnkiConfig
   apiConfig: ApiConfig
   isOpen: boolean
+  isVocabularyAiShared: boolean
   onAnkiConfigChange: AnkiConfigChangeHandler
   onAnkiFieldMappingChange: AnkiFieldMappingChangeHandler
   onClearLocalData: () => void
@@ -26,8 +28,14 @@ type SettingsDialogProps = {
   onConfigChange: ConfigChangeHandler
   onPromptChange: PromptConfigChangeHandler
   onResetPrompt: () => void
+  onResetVocabularyPrompt: () => void
   onSettingsTabChange: (tab: SettingsTab) => void
+  onVocabularyAiSharedChange: (value: boolean) => void
+  onVocabularyConfigChange: ConfigChangeHandler
+  onVocabularyPromptChange: VocabularyPromptConfigChangeHandler
   promptConfig: PromptConfig
+  vocabularyApiConfig: ApiConfig
+  vocabularyPromptConfig: VocabularyPromptConfig
 }
 
 function SettingsDialog({
@@ -35,6 +43,7 @@ function SettingsDialog({
   ankiConfig,
   apiConfig,
   isOpen,
+  isVocabularyAiShared,
   onAnkiConfigChange,
   onAnkiFieldMappingChange,
   onClearLocalData,
@@ -42,14 +51,26 @@ function SettingsDialog({
   onConfigChange,
   onPromptChange,
   onResetPrompt,
+  onResetVocabularyPrompt,
   onSettingsTabChange,
+  onVocabularyAiSharedChange,
+  onVocabularyConfigChange,
+  onVocabularyPromptChange,
   promptConfig,
+  vocabularyApiConfig,
+  vocabularyPromptConfig,
 }: SettingsDialogProps) {
-  const modelFetch = useModelFetch({
+  const sentenceModelFetch = useModelFetch({
     apiConfig,
     isActive: activeSettingsTab === 'ai',
     isOpen,
     onConfigChange,
+  })
+  const vocabularyModelFetch = useModelFetch({
+    apiConfig: vocabularyApiConfig,
+    isActive: activeSettingsTab === 'ai' && !isVocabularyAiShared,
+    isOpen,
+    onConfigChange: onVocabularyConfigChange,
   })
 
   const ankiConnection = useAnkiConnection({
@@ -142,26 +163,46 @@ function SettingsDialog({
         {activeSettingsTab === 'ai' ? (
           <AiSettingsTab
             apiConfig={apiConfig}
-            availableModels={modelFetch.availableModels}
-            currentModelPage={modelFetch.currentModelPage}
-            filteredModelCount={modelFetch.filteredModels.length}
-            modelFetchMessage={modelFetch.modelFetchMessage}
-            modelFetchStatus={modelFetch.modelFetchStatus}
-            modelSearchTerm={modelFetch.modelSearchTerm}
+            availableModels={sentenceModelFetch.availableModels}
+            currentModelPage={sentenceModelFetch.currentModelPage}
+            filteredModelCount={sentenceModelFetch.filteredModels.length}
+            isVocabularyAiShared={isVocabularyAiShared}
+            modelFetchMessage={sentenceModelFetch.modelFetchMessage}
+            modelFetchStatus={sentenceModelFetch.modelFetchStatus}
+            modelSearchTerm={sentenceModelFetch.modelSearchTerm}
             onConfigChange={onConfigChange}
-            onModelSearchTermChange={modelFetch.setModelSearchTerm}
-            onNextModelPage={modelFetch.goToNextModelPage}
-            onPreviousModelPage={modelFetch.goToPreviousModelPage}
-            onRefetchModels={() => void modelFetch.runModelFetch()}
-            shouldPaginateModels={modelFetch.shouldPaginateModels}
-            totalModelPages={modelFetch.totalModelPages}
-            visibleModels={modelFetch.visibleModels}
+            onModelSearchTermChange={sentenceModelFetch.setModelSearchTerm}
+            onNextModelPage={sentenceModelFetch.goToNextModelPage}
+            onPreviousModelPage={sentenceModelFetch.goToPreviousModelPage}
+            onRefetchModels={() => void sentenceModelFetch.runModelFetch()}
+            onVocabularyAiSharedChange={onVocabularyAiSharedChange}
+            onVocabularyConfigChange={onVocabularyConfigChange}
+            onVocabularyModelSearchTermChange={vocabularyModelFetch.setModelSearchTerm}
+            onVocabularyNextModelPage={vocabularyModelFetch.goToNextModelPage}
+            onVocabularyPreviousModelPage={vocabularyModelFetch.goToPreviousModelPage}
+            onVocabularyRefetchModels={() => void vocabularyModelFetch.runModelFetch()}
+            shouldPaginateModels={sentenceModelFetch.shouldPaginateModels}
+            totalModelPages={sentenceModelFetch.totalModelPages}
+            visibleModels={sentenceModelFetch.visibleModels}
+            vocabularyApiConfig={vocabularyApiConfig}
+            vocabularyAvailableModels={vocabularyModelFetch.availableModels}
+            vocabularyCurrentModelPage={vocabularyModelFetch.currentModelPage}
+            vocabularyFilteredModelCount={vocabularyModelFetch.filteredModels.length}
+            vocabularyModelFetchMessage={vocabularyModelFetch.modelFetchMessage}
+            vocabularyModelFetchStatus={vocabularyModelFetch.modelFetchStatus}
+            vocabularyModelSearchTerm={vocabularyModelFetch.modelSearchTerm}
+            vocabularyShouldPaginateModels={vocabularyModelFetch.shouldPaginateModels}
+            vocabularyTotalModelPages={vocabularyModelFetch.totalModelPages}
+            vocabularyVisibleModels={vocabularyModelFetch.visibleModels}
           />
         ) : activeSettingsTab === 'prompt' ? (
           <PromptSettingsTab
             onPromptChange={onPromptChange}
             onResetPrompt={onResetPrompt}
+            onResetVocabularyPrompt={onResetVocabularyPrompt}
+            onVocabularyPromptChange={onVocabularyPromptChange}
             promptConfig={promptConfig}
+            vocabularyPromptConfig={vocabularyPromptConfig}
           />
         ) : (
           <AnkiSettingsTab

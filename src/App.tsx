@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import './App.css'
 import LibraryPage from './components/LibraryPage'
 import ReadingPage from './components/ReadingPage'
@@ -6,6 +6,7 @@ import ResourcesPage from './components/ResourcesPage'
 import SettingsDialog from './components/SettingsDialog'
 import WorkspacePage from './components/WorkspacePage'
 import { countByStatus } from './lib/appState'
+import { explainVocabulary } from './lib/openai'
 import {
   getAutoAdvanceSentenceRange,
   DEFAULT_CHAPTER_RANGE_SIZE,
@@ -249,12 +250,30 @@ function App() {
     setActivePage('resources')
   }
 
+  const handleExplainVocabulary = useCallback((context: string, word: string) => {
+    const vocabularyConfig = persistent.isVocabularyAiShared
+      ? persistent.apiConfig
+      : persistent.vocabularyApiConfig
+
+    return explainVocabulary(
+      vocabularyConfig,
+      persistent.vocabularyPromptConfig,
+      { context, word },
+    )
+  }, [
+    persistent.apiConfig,
+    persistent.isVocabularyAiShared,
+    persistent.vocabularyApiConfig,
+    persistent.vocabularyPromptConfig,
+  ])
+
   const settingsDialog = (
     <SettingsDialog
       activeSettingsTab={activeSettingsTab}
       ankiConfig={persistent.ankiConfig}
       apiConfig={persistent.apiConfig}
       isOpen={isSettingsOpen}
+      isVocabularyAiShared={persistent.isVocabularyAiShared}
       onAnkiConfigChange={persistent.handleAnkiConfigChange}
       onAnkiFieldMappingChange={persistent.handleAnkiFieldMappingChange}
       onClearLocalData={() => void handleClearLocalData()}
@@ -263,7 +282,13 @@ function App() {
       onPromptChange={persistent.handlePromptChange}
       onResetPrompt={persistent.resetPromptConfig}
       onSettingsTabChange={setActiveSettingsTab}
+      onVocabularyAiSharedChange={persistent.handleVocabularyAiSharedChange}
+      onVocabularyConfigChange={persistent.handleVocabularyConfigChange}
+      onVocabularyPromptChange={persistent.handleVocabularyPromptChange}
+      onResetVocabularyPrompt={persistent.resetVocabularyPromptConfig}
       promptConfig={persistent.promptConfig}
+      vocabularyApiConfig={persistent.vocabularyApiConfig}
+      vocabularyPromptConfig={persistent.vocabularyPromptConfig}
     />
   )
 
@@ -279,6 +304,7 @@ function App() {
             handleAddHighlightToAnki(sentence, result, highlight)
           }
           onBackToWorkspace={() => setActivePage('workspace')}
+          onExplainVocabulary={handleExplainVocabulary}
           onOpenResources={openResources}
           onReadingPreferencesChange={persistent.handleReadingPreferencesChange}
           onRemoveHighlight={(signature) => void handleRemoveHighlight(signature)}

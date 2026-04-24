@@ -11,11 +11,15 @@ import type {
   SettingsTab,
   SentenceItem,
   SentenceStatus,
+  VocabularyPromptConfig,
 } from '../types'
 import { segmentSpanishText } from './segment'
 
 export const CONFIG_STORAGE_KEY = 'spanish-reading-assistant/config'
+export const VOCABULARY_CONFIG_STORAGE_KEY = 'spanish-reading-assistant/vocabulary-config'
+export const VOCABULARY_AI_SHARED_STORAGE_KEY = 'spanish-reading-assistant/vocabulary-ai-shared'
 export const PROMPT_STORAGE_KEY = 'spanish-reading-assistant/prompt'
+export const VOCABULARY_PROMPT_STORAGE_KEY = 'spanish-reading-assistant/vocabulary-prompt'
 export const ANKI_STORAGE_KEY = 'spanish-reading-assistant/anki'
 export const DRAFT_STORAGE_KEY = 'spanish-reading-assistant/draft'
 export const HISTORY_STORAGE_KEY = 'spanish-reading-assistant/history'
@@ -33,6 +37,10 @@ export const defaultConfig: ApiConfig = {
   apiKey: '',
   model: 'gpt-4.1-mini',
   concurrency: 4,
+}
+
+export const defaultVocabularyConfig: ApiConfig = {
+  ...defaultConfig,
 }
 
 export const defaultPromptConfig: PromptConfig = {
@@ -77,6 +85,26 @@ export const defaultPromptConfig: PromptConfig = {
   ].join('\n'),
   previousSentenceCount: 1,
   nextSentenceCount: 1,
+}
+
+export const defaultVocabularyPromptConfig: VocabularyPromptConfig = {
+  template: [
+    '你是一名帮助中文母语者阅读西班牙语文学文本的词汇老师。请根据语境解释指定西语单词，并且必须只输出一个 JSON 对象，不要输出 Markdown，不要输出额外说明。',
+    '',
+    'JSON 结构固定为：',
+    '{',
+    '  "explanation": "string"',
+    '}',
+    '',
+    '要求：',
+    '1. 必须使用中文回答。',
+    '2. 解释要简短，说明这个词在当前句子里的含义、词性或常见用法。',
+    '3. 不要脱离语境罗列过多词义。',
+    '4. 如果有必要，可以补充一个很短的记忆提示。',
+    '',
+    '当前句：{context}',
+    '目标词：{word}',
+  ].join('\n'),
 }
 
 export const defaultReadingPreferences: ReadingPreferences = {
@@ -146,6 +174,10 @@ export type PromptChangeHandler = (value: string) => void
 export type PromptConfigChangeHandler = <Key extends keyof PromptConfig>(
   key: Key,
   value: PromptConfig[Key],
+) => void
+export type VocabularyPromptConfigChangeHandler = <Key extends keyof VocabularyPromptConfig>(
+  key: Key,
+  value: VocabularyPromptConfig[Key],
 ) => void
 
 export type ReadingPreferencesChangeHandler = <Key extends keyof ReadingPreferences>(
@@ -256,6 +288,37 @@ export function restoreConfig(): ApiConfig {
   }
 }
 
+export function restoreVocabularyConfig(): ApiConfig {
+  const saved = localStorage.getItem(VOCABULARY_CONFIG_STORAGE_KEY)
+  if (!saved) {
+    return defaultVocabularyConfig
+  }
+
+  try {
+    const parsed = JSON.parse(saved) as Partial<ApiConfig>
+    return {
+      ...defaultVocabularyConfig,
+      ...parsed,
+      concurrency: clampConcurrency(parsed.concurrency),
+    }
+  } catch {
+    return defaultVocabularyConfig
+  }
+}
+
+export function restoreVocabularyAiShared(): boolean {
+  const saved = localStorage.getItem(VOCABULARY_AI_SHARED_STORAGE_KEY)
+  if (!saved) {
+    return true
+  }
+
+  try {
+    return Boolean(JSON.parse(saved))
+  } catch {
+    return true
+  }
+}
+
 export function restorePromptConfig(): PromptConfig {
   const saved = localStorage.getItem(PROMPT_STORAGE_KEY)
   if (!saved) {
@@ -272,6 +335,22 @@ export function restorePromptConfig(): PromptConfig {
     return migrated
   } catch {
     return defaultPromptConfig
+  }
+}
+
+export function restoreVocabularyPromptConfig(): VocabularyPromptConfig {
+  const saved = localStorage.getItem(VOCABULARY_PROMPT_STORAGE_KEY)
+  if (!saved) {
+    return defaultVocabularyPromptConfig
+  }
+
+  try {
+    const parsed = JSON.parse(saved) as Partial<VocabularyPromptConfig>
+    return typeof parsed.template === 'string' && parsed.template.trim()
+      ? { template: parsed.template }
+      : defaultVocabularyPromptConfig
+  } catch {
+    return defaultVocabularyPromptConfig
   }
 }
 
@@ -366,7 +445,10 @@ export function restoreHistory(): RunSession[] {
 
 export function clearPersistedStorage() {
   localStorage.removeItem(CONFIG_STORAGE_KEY)
+  localStorage.removeItem(VOCABULARY_CONFIG_STORAGE_KEY)
+  localStorage.removeItem(VOCABULARY_AI_SHARED_STORAGE_KEY)
   localStorage.removeItem(PROMPT_STORAGE_KEY)
+  localStorage.removeItem(VOCABULARY_PROMPT_STORAGE_KEY)
   localStorage.removeItem(ANKI_STORAGE_KEY)
   localStorage.removeItem(DRAFT_STORAGE_KEY)
   localStorage.removeItem(HISTORY_STORAGE_KEY)

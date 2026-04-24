@@ -10,8 +10,10 @@ import {
 } from '../lib/appState'
 import { collectContextSentences } from '../lib/analysis/runContext'
 import {
+  buildQueuedRetrySentences,
   buildNextResults,
   buildPendingEntries,
+  collectFailedPendingEntries,
   buildQueuedSentencesForRun,
   buildRetryErrorSentence,
   buildRetryRunningSentence,
@@ -21,6 +23,7 @@ import {
   restoreResultsAfterCancel,
   restoreSentencesAfterCancel,
   type ActiveRunState,
+  type PendingEntry,
 } from '../lib/analysis/runState'
 import { validateApiConfig, validateRunStart } from '../lib/analysis/runValidation'
 import { analyzeSentence, runConcurrentAnalysis, toUserFacingError } from '../lib/openai'
@@ -79,10 +82,15 @@ export function useAnalysisRunner({
   const runTokenRef = useRef(0)
   const runAbortControllerRef = useRef<AbortController | null>(null)
   const activeRunRef = useRef<ActiveRunState | null>(null)
+  const sentencesRef = useRef(sentences)
 
   useEffect(() => {
     setNotice(initialNotice)
   }, [initialNotice])
+
+  useEffect(() => {
+    sentencesRef.current = sentences
+  }, [sentences])
 
   const trimmedSentences = useMemo(
     () =>
@@ -106,19 +114,49 @@ export function useAnalysisRunner({
     setHistory((current) => [session, ...current].slice(0, MAX_HISTORY_ITEMS))
   }
 
+  const commitSentences = (action: SetStateAction<SentenceItem[]>) => {
+    setSentences((current) => {
+      const nextSentences =
+        typeof action === 'function'
+          ? (action as (value: SentenceItem[]) => SentenceItem[])(current)
+          : action
+      sentencesRef.current = nextSentences
+      return nextSentences
+    })
+  }
+
+  const buildAnalysisJobs = (entries: PendingEntry[]) =>
+    entries.map(({ absoluteIndex, sentence }) => ({
+      sentenceId: sentence.id,
+      sentence: sentence.editedText,
+      previousSentence: collectContextSentences(
+        trimmedSentences,
+        absoluteIndex,
+        promptConfig.previousSentenceCount,
+        'previous',
+      ),
+      nextSentence: collectContextSentences(
+        trimmedSentences,
+        absoluteIndex,
+        promptConfig.nextSentenceCount,
+        'next',
+      ),
+      documentContext,
+    }))
+
   const handleSegment = () => {
     const pieces = segmentSpanishText(sourceText)
 
     if (pieces.length === 0) {
       setNotice('')
       setGlobalError('当前内容无法切分成有效句子，请先粘贴一段完整的原文。')
-      setSentences([])
+      commitSentences([])
       setResults({})
       return
     }
 
     const nextSentences = pieces.map(createSentenceItem)
-    setSentences(nextSentences)
+    commitSentences(nextSentences)
     setResults({})
     if (workspaceSource === 'chapter') {
       onChapterSegmentReset?.(nextSentences.length)
@@ -142,7 +180,7 @@ export function useAnalysisRunner({
       return nextResults
     })
 
-    setSentences((current) =>
+    commitSentences((current) =>
       updateSentenceState(current, id, (sentence) => ({
         ...sentence,
         editedText: value,
@@ -203,7 +241,7 @@ export function useAnalysisRunner({
         ? `正在解析区间 ${chapterRange.start}-${chapterRange.end}，共 ${pendingEntries.length} 句。`
         : `正在并发解析 ${pendingEntries.length} 句，结果会按原顺序回填。`,
     )
-    setSentences(buildQueuedSentencesForRun({
+    commitSentences(buildQueuedSentencesForRun({
       chapterRange,
       nextResults,
       pendingIds,
@@ -218,99 +256,138 @@ export function useAnalysisRunner({
     }
 
     try {
-      await runConcurrentAnalysis(
-        apiConfig,
-        promptConfig,
-        pendingEntries.map(({ absoluteIndex, sentence }) => ({
-          sentenceId: sentence.id,
-          sentence: sentence.editedText,
-          previousSentence: collectContextSentences(
-            trimmedSentences,
-            absoluteIndex,
-            promptConfig.previousSentenceCount,
-            'previous',
-          ),
-          nextSentence: collectContextSentences(
-            trimmedSentences,
-            absoluteIndex,
-            promptConfig.nextSentenceCount,
-            'next',
-          ),
-          documentContext,
-        })),
-        {
-          onStart: ({ sentenceId }) => {
-            if (runTokenRef.current !== runToken) {
-              return
-            }
+      const runEntries = async (entries: PendingEntry[]) =>
+        runConcurrentAnalysis(
+          apiConfig,
+          promptConfig,
+          buildAnalysisJobs(entries),
+          {
+            onStart: ({ sentenceId }) => {
+              if (runTokenRef.current !== runToken) {
+                return
+              }
 
-            setSentences((current) =>
-              updateSentenceState(current, sentenceId, (sentence) => ({
-                ...sentence,
-                status: 'running',
-                error: undefined,
-              })),
-            )
-          },
-          onSuccess: ({ sentenceId, result }) => {
-            if (runTokenRef.current !== runToken) {
-              return
-            }
+              commitSentences((current) =>
+                updateSentenceState(current, sentenceId, (sentence) => ({
+                  ...sentence,
+                  status: 'running',
+                  error: undefined,
+                })),
+              )
+            },
+            onSuccess: ({ sentenceId, result }) => {
+              if (runTokenRef.current !== runToken) {
+                return
+              }
 
-            nextResults[sentenceId] = result
-            setResults((current) => ({
-              ...current,
-              [sentenceId]: result,
-            }))
-            setSentences((current) =>
-              updateSentenceState(current, sentenceId, (sentence) => ({
-                ...sentence,
-                status: 'success',
-                error: undefined,
-              })),
-            )
-          },
-          onError: ({ sentenceId, error }) => {
-            if (runTokenRef.current !== runToken) {
-              return
-            }
+              nextResults[sentenceId] = result
+              setResults((current) => ({
+                ...current,
+                [sentenceId]: result,
+              }))
+              commitSentences((current) =>
+                updateSentenceState(current, sentenceId, (sentence) => ({
+                  ...sentence,
+                  status: 'success',
+                  error: undefined,
+                })),
+              )
+            },
+            onError: ({ sentenceId, error }) => {
+              if (runTokenRef.current !== runToken) {
+                return
+              }
 
-            setSentences((current) =>
-              updateSentenceState(current, sentenceId, (sentence) => ({
-                ...sentence,
-                status: 'error',
-                error,
-              })),
-            )
+              commitSentences((current) =>
+                updateSentenceState(current, sentenceId, (sentence) => ({
+                  ...sentence,
+                  status: 'error',
+                  error,
+                })),
+              )
+            },
           },
-        },
-        {
-          signal: abortController.signal,
-        },
-      )
+          {
+            signal: abortController.signal,
+          },
+        )
+
+      await runEntries(pendingEntries)
 
       if (runTokenRef.current !== runToken) {
         return
       }
 
-      setSentences((current) =>
-        finalizeRunSentenceStates({
-          chapterRange,
-          nextResults,
-          pendingIds,
-          sentences: current,
-          workspaceSource,
-        }),
-      )
+      const finalizedAfterFirstPass = finalizeRunSentenceStates({
+        chapterRange,
+        nextResults,
+        pendingIds,
+        sentences: sentencesRef.current,
+        workspaceSource,
+      })
+      commitSentences(finalizedAfterFirstPass)
+
+      let autoRetriedCount = 0
+      let unresolvedCount = 0
+
+      if (workspaceSource === 'chapter') {
+        const retryEntries = collectFailedPendingEntries({
+          pendingEntries,
+          results: nextResults,
+        })
+        autoRetriedCount = retryEntries.length
+
+        if (retryEntries.length > 0) {
+          const retryIds = new Set(retryEntries.map(({ sentence }) => sentence.id))
+          activeRunRef.current = createActiveRunState(
+            finalizedAfterFirstPass,
+            retryIds,
+            nextResults,
+          )
+          setNotice(`首轮解析完成，检测到 ${retryEntries.length} 句未成功，正在自动重试。`)
+          commitSentences(buildQueuedRetrySentences(finalizedAfterFirstPass, retryIds))
+          await runEntries(retryEntries)
+
+          if (runTokenRef.current !== runToken) {
+            return
+          }
+
+          commitSentences(
+            finalizeRunSentenceStates({
+              chapterRange,
+              nextResults,
+              pendingIds: retryIds,
+              sentences: sentencesRef.current,
+              workspaceSource,
+            }),
+          )
+
+          unresolvedCount = collectFailedPendingEntries({
+            pendingEntries: retryEntries,
+            results: nextResults,
+          }).length
+        }
+      }
 
       if (workspaceSource === 'chapter' && chapterRange) {
         await onChapterRangeCommitted?.(chapterRange)
-        await onChapterAnalysisCompleted?.(chapterRange)
+        if (unresolvedCount === 0) {
+          await onChapterAnalysisCompleted?.(chapterRange)
+        }
+      }
+
+      if (workspaceSource === 'chapter' && chapterRange && unresolvedCount > 0) {
+        setNotice(
+          `区间 ${chapterRange.start}-${chapterRange.end} 首轮有 ${autoRetriedCount} 句失败，自动重试后仍有 ${unresolvedCount} 句未完成。你可以继续逐句重试或调整后重跑。`,
+        )
+        return
       }
 
       setNotice(
         workspaceSource === 'chapter' && chapterRange
-          ? `区间 ${chapterRange.start}-${chapterRange.end} 解析完成，已切换到沉浸阅读页。`
+          ? autoRetriedCount > 0
+            ? `区间 ${chapterRange.start}-${chapterRange.end} 已完成自动补跑，现已切换到沉浸阅读页。`
+            : `区间 ${chapterRange.start}-${chapterRange.end} 解析完成，已切换到沉浸阅读页。`
           : '本轮解析已完成，已自动切换到沉浸阅读页。',
       )
       if (workspaceSource === 'draft') {
@@ -362,7 +439,7 @@ export function useAnalysisRunner({
     }
 
     setResults((current) => restoreResultsAfterCancel(current, activeRun))
-    setSentences((current) => restoreSentencesAfterCancel(current, activeRun))
+    commitSentences((current) => restoreSentencesAfterCancel(current, activeRun))
   }
 
   const retrySingleSentence = async (sentenceId: string) => {
@@ -381,7 +458,7 @@ export function useAnalysisRunner({
     const sentenceIndex = sentences.findIndex((sentence) => sentence.id === sentenceId)
     setGlobalError('')
     setNotice(`正在重试第 ${sentenceIndex + 1} 句。`)
-    setSentences((current) =>
+    commitSentences((current) =>
       updateSentenceState(current, sentenceId, buildRetryRunningSentence),
     )
 
@@ -408,13 +485,13 @@ export function useAnalysisRunner({
         ...current,
         [sentenceId]: result,
       }))
-      setSentences((current) =>
+      commitSentences((current) =>
         updateSentenceState(current, sentenceId, buildRetrySuccessSentence),
       )
       setNotice(`第 ${sentenceIndex + 1} 句已成功重试。`)
     } catch (error) {
       const message = toUserFacingError(error)
-      setSentences((current) =>
+      commitSentences((current) =>
         updateSentenceState(current, sentenceId, (sentence) =>
           buildRetryErrorSentence(sentence, message),
         ),
@@ -426,7 +503,7 @@ export function useAnalysisRunner({
 
   const restoreSession = (session: RunSession) => {
     setSourceText(session.sourceText)
-    setSentences(
+    commitSentences(
       session.sentences.map((sentence) => ({
         ...sentence,
         status: session.results[sentence.id] ? 'success' : 'idle',

@@ -29,6 +29,16 @@ export type PromptConfig = {
   nextSentenceCount: number
 }
 
+export type VocabularyPromptConfig = {
+  template: string
+}
+
+export type VocabularyExplanation = {
+  word: string
+  explanation: string
+  rawText?: string
+}
+
 export type ReadingPreferences = {
   contentWidth: number
   fontSize: number

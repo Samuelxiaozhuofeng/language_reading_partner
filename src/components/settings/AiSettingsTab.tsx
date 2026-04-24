@@ -2,10 +2,11 @@ import type { ConfigChangeHandler, ModelFetchStatus } from '../../lib/appState'
 import { MAX_CONCURRENCY } from '../../lib/appState'
 import type { ApiConfig } from '../../types'
 
-type AiSettingsTabProps = {
+type ModelPickerProps = {
   apiConfig: ApiConfig
   availableModels: string[]
   currentModelPage: number
+  datalistId: string
   filteredModelCount: number
   modelFetchMessage: string
   modelFetchStatus: ModelFetchStatus
@@ -16,16 +17,55 @@ type AiSettingsTabProps = {
   onPreviousModelPage: () => void
   onRefetchModels: () => void
   shouldPaginateModels: boolean
+  showConcurrency: boolean
+  title: string
   totalModelPages: number
   visibleModels: string[]
 }
 
-const AVAILABLE_MODELS_DATALIST_ID = 'settings-available-models'
+type AiSettingsTabProps = {
+  apiConfig: ApiConfig
+  availableModels: string[]
+  currentModelPage: number
+  filteredModelCount: number
+  isVocabularyAiShared: boolean
+  modelFetchMessage: string
+  modelFetchStatus: ModelFetchStatus
+  modelSearchTerm: string
+  onConfigChange: ConfigChangeHandler
+  onModelSearchTermChange: (value: string) => void
+  onNextModelPage: () => void
+  onPreviousModelPage: () => void
+  onRefetchModels: () => void
+  onVocabularyAiSharedChange: (value: boolean) => void
+  onVocabularyConfigChange: ConfigChangeHandler
+  onVocabularyModelSearchTermChange: (value: string) => void
+  onVocabularyNextModelPage: () => void
+  onVocabularyPreviousModelPage: () => void
+  onVocabularyRefetchModels: () => void
+  shouldPaginateModels: boolean
+  totalModelPages: number
+  visibleModels: string[]
+  vocabularyApiConfig: ApiConfig
+  vocabularyAvailableModels: string[]
+  vocabularyCurrentModelPage: number
+  vocabularyFilteredModelCount: number
+  vocabularyModelFetchMessage: string
+  vocabularyModelFetchStatus: ModelFetchStatus
+  vocabularyModelSearchTerm: string
+  vocabularyShouldPaginateModels: boolean
+  vocabularyTotalModelPages: number
+  vocabularyVisibleModels: string[]
+}
 
-function AiSettingsTab({
+const SENTENCE_MODELS_DATALIST_ID = 'settings-sentence-available-models'
+const VOCABULARY_MODELS_DATALIST_ID = 'settings-vocabulary-available-models'
+
+function AiConfigForm({
   apiConfig,
   availableModels,
   currentModelPage,
+  datalistId,
   filteredModelCount,
   modelFetchMessage,
   modelFetchStatus,
@@ -36,14 +76,16 @@ function AiSettingsTab({
   onPreviousModelPage,
   onRefetchModels,
   shouldPaginateModels,
+  showConcurrency,
+  title,
   totalModelPages,
   visibleModels,
-}: AiSettingsTabProps) {
+}: ModelPickerProps) {
   return (
-    <div className="settings-panel">
+    <section className="ai-config-section">
       <div className="panel-header settings-subheader">
         <div>
-          <h3>接口与模型</h3>
+          <h3>{title}</h3>
         </div>
         <button
           className="ghost-button"
@@ -82,34 +124,37 @@ function AiSettingsTab({
           <span>Model</span>
           <input
             type="text"
-            list={AVAILABLE_MODELS_DATALIST_ID}
+            list={datalistId}
             value={apiConfig.model}
             onChange={(event) => onConfigChange('model', event.target.value)}
             placeholder="gpt-4.1-mini"
           />
-          <datalist id={AVAILABLE_MODELS_DATALIST_ID}>
+          <datalist id={datalistId}>
             {availableModels.map((model) => (
               <option key={model} value={model} />
             ))}
           </datalist>
         </label>
 
-        <label className="field">
-          <span>并发数</span>
-          <input
-            type="number"
-            min={1}
-            max={MAX_CONCURRENCY}
-            value={apiConfig.concurrency}
-            onChange={(event) => onConfigChange('concurrency', Number(event.target.value))}
-          />
-        </label>
+        {showConcurrency ? (
+          <label className="field">
+            <span>并发数</span>
+            <input
+              type="number"
+              min={1}
+              max={MAX_CONCURRENCY}
+              value={apiConfig.concurrency}
+              onChange={(event) => onConfigChange('concurrency', Number(event.target.value))}
+            />
+          </label>
+        ) : null}
       </div>
 
-      <p className="panel-tip">
-        可设置范围为 1-{MAX_CONCURRENCY}。这里控制的是同时发出的请求数，不是模型官方承诺的可用并发上限。值越大越快，但更容易触发服务商或中转站的
-        RPM/TPM 限流；一般建议先从 4-8 开始，稳定后再逐步加大。
-      </p>
+      {showConcurrency ? (
+        <p className="panel-tip">
+          可设置范围为 1-{MAX_CONCURRENCY}。这里控制的是句子批量解析时同时发出的请求数。
+        </p>
+      ) : null}
 
       <div className={`fetch-status fetch-${modelFetchStatus}`}>
         <p>{modelFetchMessage}</p>
@@ -177,6 +222,102 @@ function AiSettingsTab({
           ) : null}
         </div>
       ) : null}
+    </section>
+  )
+}
+
+function AiSettingsTab({
+  apiConfig,
+  availableModels,
+  currentModelPage,
+  filteredModelCount,
+  isVocabularyAiShared,
+  modelFetchMessage,
+  modelFetchStatus,
+  modelSearchTerm,
+  onConfigChange,
+  onModelSearchTermChange,
+  onNextModelPage,
+  onPreviousModelPage,
+  onRefetchModels,
+  onVocabularyAiSharedChange,
+  onVocabularyConfigChange,
+  onVocabularyModelSearchTermChange,
+  onVocabularyNextModelPage,
+  onVocabularyPreviousModelPage,
+  onVocabularyRefetchModels,
+  shouldPaginateModels,
+  totalModelPages,
+  visibleModels,
+  vocabularyApiConfig,
+  vocabularyAvailableModels,
+  vocabularyCurrentModelPage,
+  vocabularyFilteredModelCount,
+  vocabularyModelFetchMessage,
+  vocabularyModelFetchStatus,
+  vocabularyModelSearchTerm,
+  vocabularyShouldPaginateModels,
+  vocabularyTotalModelPages,
+  vocabularyVisibleModels,
+}: AiSettingsTabProps) {
+  return (
+    <div className="settings-panel ai-settings-panel">
+      <AiConfigForm
+        apiConfig={apiConfig}
+        availableModels={availableModels}
+        currentModelPage={currentModelPage}
+        datalistId={SENTENCE_MODELS_DATALIST_ID}
+        filteredModelCount={filteredModelCount}
+        modelFetchMessage={modelFetchMessage}
+        modelFetchStatus={modelFetchStatus}
+        modelSearchTerm={modelSearchTerm}
+        onConfigChange={onConfigChange}
+        onModelSearchTermChange={onModelSearchTermChange}
+        onNextModelPage={onNextModelPage}
+        onPreviousModelPage={onPreviousModelPage}
+        onRefetchModels={onRefetchModels}
+        shouldPaginateModels={shouldPaginateModels}
+        showConcurrency
+        title="句子解释 AI"
+        totalModelPages={totalModelPages}
+        visibleModels={visibleModels}
+      />
+
+      <label className="ai-share-toggle">
+        <input
+          type="checkbox"
+          checked={isVocabularyAiShared}
+          onChange={(event) => onVocabularyAiSharedChange(event.target.checked)}
+        />
+        <span>词汇解释 AI 共用句子解释 AI</span>
+      </label>
+
+      {isVocabularyAiShared ? (
+        <p className="panel-tip">
+          当前点击词汇时会直接使用上方句子解释 AI；关闭共用后，可以给词汇解释单独配置更快的模型。
+        </p>
+      ) : (
+        <AiConfigForm
+          apiConfig={vocabularyApiConfig}
+          availableModels={vocabularyAvailableModels}
+          currentModelPage={vocabularyCurrentModelPage}
+          datalistId={VOCABULARY_MODELS_DATALIST_ID}
+          filteredModelCount={vocabularyFilteredModelCount}
+          modelFetchMessage={vocabularyModelFetchMessage}
+          modelFetchStatus={vocabularyModelFetchStatus}
+          modelSearchTerm={vocabularyModelSearchTerm}
+          onConfigChange={onVocabularyConfigChange}
+          onModelSearchTermChange={onVocabularyModelSearchTermChange}
+          onNextModelPage={onVocabularyNextModelPage}
+          onPreviousModelPage={onVocabularyPreviousModelPage}
+          onRefetchModels={onVocabularyRefetchModels}
+          shouldPaginateModels={vocabularyShouldPaginateModels}
+          showConcurrency={false}
+          title="词汇解释 AI"
+          totalModelPages={vocabularyTotalModelPages}
+          visibleModels={vocabularyVisibleModels}
+        />
+      )}
 
       <p className="panel-tip">
         兼容 OpenAI Chat Completions 协议。输入 URL 和 API Key 后会自动请求 `models`

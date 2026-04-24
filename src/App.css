@@ -573,6 +573,7 @@ textarea:focus {
 }
 
 .primary-button:disabled,
+.secondary-button:disabled,
 .ghost-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -780,6 +781,40 @@ blockquote {
 
 .analysis-paragraph {
   line-height: 1.8;
+}
+
+.vocabulary-source-sentence {
+  color: var(--ink-strong);
+}
+
+.clickable-sentence-words {
+  white-space: pre-wrap;
+}
+
+.vocabulary-word-button {
+  display: inline;
+  margin: 0;
+  border: none;
+  border-radius: 8px;
+  padding: 0 3px;
+  background: transparent;
+  color: var(--accent-deep);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.vocabulary-word-button:hover,
+.vocabulary-word-button.is-active {
+  background: rgba(14, 125, 120, 0.12);
+  box-shadow: 0 5px 10px rgba(69, 72, 82, 0.1);
+}
+
+.vocabulary-word-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 .result-placeholder {
@@ -1669,6 +1704,25 @@ blockquote {
   margin: 0;
 }
 
+.vocabulary-detail-card {
+  margin-top: 14px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(14, 125, 120, 0.18);
+  background: rgba(255, 255, 255, 0.72);
+  display: grid;
+  gap: 12px;
+}
+
+.vocabulary-detail-card:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(14, 125, 120, 0.12);
+}
+
+.vocabulary-detail-card p {
+  margin: 0;
+}
+
 .reading-empty {
   padding: 48px 24px;
 }
@@ -1739,6 +1793,34 @@ blockquote {
   border: 1px solid rgba(69, 72, 82, 0.12);
   background: rgba(255, 255, 255, 0.5);
   padding: 18px;
+}
+
+.ai-settings-panel,
+.prompt-config-section {
+  display: grid;
+  gap: 16px;
+}
+
+.ai-config-section,
+.prompt-config-section + .prompt-config-section {
+  border-top: 1px dashed rgba(69, 72, 82, 0.16);
+  padding-top: 16px;
+}
+
+.ai-share-toggle {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--ink-strong);
+  cursor: pointer;
+}
+
+.ai-share-toggle input {
+  accent-color: var(--accent-strong);
 }
 
 .model-picker {

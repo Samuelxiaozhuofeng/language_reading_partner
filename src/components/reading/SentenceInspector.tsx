@@ -1,10 +1,16 @@
 import { SentenceDetailPanel } from './SentenceDetailPanel'
 import {
-  getSentenceDisplayText,
   type HighlightSelection,
   type InspectorMode,
 } from './readingShared'
-import type { AnalysisHighlight, AnalysisResult, SentenceItem } from '../../types'
+import type {
+  AnalysisHighlight,
+  AnalysisResult,
+  SentenceItem,
+  VocabularyExplanation,
+} from '../../types'
+import { ClickableSentenceWords } from './ClickableSentenceWords'
+import { useVocabularyExplanation } from './useVocabularyExplanation'
 
 type SentenceInspectorProps = {
   activeSelection: HighlightSelection | null
@@ -17,6 +23,7 @@ type SentenceInspectorProps = {
     highlight: AnalysisHighlight,
   ) => Promise<void>
   onCloseSentence: () => void
+  onExplainVocabulary: (context: string, word: string) => Promise<VocabularyExplanation>
   onOpenResources: () => void
   onRemoveHighlight: (signature: string) => void
   onSaveHighlight: (
@@ -33,21 +40,8 @@ type SentenceInspectorProps = {
 }
 
 export function SentenceInspector({
-  activeSelection,
   activeSentence,
-  activeSentenceIndex,
-  mode,
-  onAddToAnki,
-  onCloseSentence,
-  onOpenResources,
-  onRemoveHighlight,
-  onSaveHighlight,
-  onSelectHighlight,
-  onSetCurrentResumeAnchor,
-  resolveStatusLabel,
-  results,
-  resumeAnchorSentenceId,
-  savedHighlightSignatures,
+  ...props
 }: SentenceInspectorProps) {
   if (!activeSentence) {
     return (
@@ -61,6 +55,38 @@ export function SentenceInspector({
     )
   }
 
+  return <ActiveSentenceInspector activeSentence={activeSentence} {...props} />
+}
+
+type ActiveSentenceInspectorProps = Omit<SentenceInspectorProps, 'activeSentence'> & {
+  activeSentence: SentenceItem
+}
+
+function ActiveSentenceInspector({
+  activeSelection,
+  activeSentence,
+  activeSentenceIndex,
+  mode,
+  onAddToAnki,
+  onCloseSentence,
+  onExplainVocabulary,
+  onOpenResources,
+  onRemoveHighlight,
+  onSaveHighlight,
+  onSelectHighlight,
+  onSetCurrentResumeAnchor,
+  resolveStatusLabel,
+  results,
+  resumeAnchorSentenceId,
+  savedHighlightSignatures,
+}: ActiveSentenceInspectorProps) {
+  const result = results[activeSentence.id]
+  const vocabularyInteraction = useVocabularyExplanation({
+    onAddToAnki,
+    onExplainVocabulary,
+    result,
+    sentence: activeSentence,
+  })
   const isPinned = activeSentence.id === resumeAnchorSentenceId
   const inspectorClassName =
     mode === 'docked' ? 'reading-inspector is-docked' : 'reading-inspector is-sheet'
@@ -102,18 +128,28 @@ export function SentenceInspector({
         </span>
       </div>
 
-      <p className="reading-inspector-sentence">{getSentenceDisplayText(activeSentence)}</p>
+      <p className="reading-inspector-sentence">
+        <ClickableSentenceWords
+          activeWord={vocabularyInteraction.state?.word}
+          disabled={!result || vocabularyInteraction.state?.status === 'loading'}
+          text={vocabularyInteraction.sentenceText}
+          onWordClick={(word) => void vocabularyInteraction.handleWordClick(word)}
+        />
+      </p>
 
       <SentenceDetailPanel
         activeSelection={activeSelection}
         onAddToAnki={onAddToAnki}
+        onExplainVocabulary={onExplainVocabulary}
         onOpenResources={onOpenResources}
         onRemoveHighlight={onRemoveHighlight}
         onSaveHighlight={onSaveHighlight}
         onSelectHighlight={onSelectHighlight}
-        result={results[activeSentence.id]}
+        renderVocabularySource={false}
+        result={result}
         savedHighlightSignatures={savedHighlightSignatures}
         sentence={activeSentence}
+        vocabularyInteraction={vocabularyInteraction}
       />
     </section>
   )
