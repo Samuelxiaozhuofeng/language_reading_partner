@@ -26,6 +26,7 @@ type SentenceDetailPanelProps = {
   onExplainVocabulary: (context: string, word: string) => Promise<VocabularyExplanation>
   onOpenResources: () => void
   onRemoveHighlight: (signature: string) => void
+  onRetrySentence?: (sentenceId: string) => void
   onSaveHighlight: (
     sentence: SentenceItem,
     result: AnalysisResult,
@@ -45,6 +46,7 @@ export function SentenceDetailPanel({
   onExplainVocabulary,
   onOpenResources,
   onRemoveHighlight,
+  onRetrySentence,
   onSaveHighlight,
   onSelectHighlight,
   result,
@@ -91,6 +93,13 @@ export function SentenceDetailPanel({
   const visibleAnkiMessage =
     ankiSubmitState.selectionKey === selectedHighlightKey ? ankiSubmitState.message : ''
 
+  const canRetrySentence =
+    Boolean(onRetrySentence) &&
+    sentence.status !== 'queued' &&
+    sentence.status !== 'running' &&
+    Boolean((sentence.editedText || sentence.text).trim())
+  const retryButtonLabel = sentence.status === 'error' ? '重试本句' : '单独解析本句'
+
   useEffect(() => {
     if (!selectedHighlight || !knowledgeDetailCardRef.current) {
       return
@@ -132,11 +141,21 @@ export function SentenceDetailPanel({
       <div className="result-placeholder">
         <p>
           {sentence.status === 'error'
-            ? '这句解析失败了，请回工作区重试本句。'
+            ? '这句解析失败了，可以单独重试本句。'
             : sentence.status === 'running' || sentence.status === 'queued'
               ? 'AI 正在处理中...'
               : '这句还没有开始解析。'}
         </p>
+        {onRetrySentence ? (
+          <button
+            className="secondary-button result-placeholder-action"
+            type="button"
+            disabled={!canRetrySentence}
+            onClick={() => onRetrySentence(sentence.id)}
+          >
+            {retryButtonLabel}
+          </button>
+        ) : null}
       </div>
     )
   }

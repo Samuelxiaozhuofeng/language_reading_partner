@@ -818,8 +818,16 @@ blockquote {
 }
 
 .result-placeholder {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
   padding: 4px 2px 2px;
   color: var(--muted);
+}
+
+.result-placeholder-action {
+  padding: 9px 13px;
+  font-size: 0.84rem;
 }
 
 .empty-state {

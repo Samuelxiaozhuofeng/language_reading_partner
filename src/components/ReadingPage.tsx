@@ -53,6 +53,7 @@ type ReadingPageProps = {
     value: ReadingPreferences[Key],
   ) => void
   onRemoveHighlight: (signature: string) => void
+  onRetrySentence?: (sentenceId: string) => void
   onSaveHighlight: (
     sentence: SentenceItem,
     result: AnalysisResult,
@@ -80,6 +81,7 @@ function ReadingPage({
   onOpenResources,
   onReadingPreferencesChange,
   onRemoveHighlight,
+  onRetrySentence,
   onSaveHighlight,
   onSetResumeAnchor,
   paragraphBlocks,
@@ -134,6 +136,17 @@ function ReadingPage({
         ? buildChapterReadingParagraphs(paragraphBlocks ?? [], sentences, activeRange)
         : [],
     [activeRange, isChapterMode, paragraphBlocks, sentences],
+  )
+  const chapterReadingKey = useMemo(
+    () =>
+      isChapterMode
+        ? [
+            activeRange?.start ?? 'none',
+            activeRange?.end ?? 'none',
+            sentences.map((sentence) => sentence.id).join('|'),
+          ].join(':')
+        : '',
+    [activeRange?.end, activeRange?.start, isChapterMode, sentences],
   )
   const activeSentence = useMemo(
     () => sentences.find((sentence) => sentence.id === effectiveActiveSentenceId) ?? null,
@@ -299,7 +312,7 @@ function ReadingPage({
     })
 
     return () => window.cancelAnimationFrame(frameId)
-  }, [chapterPages, isChapterMode, resumeAnchorSentenceId])
+  }, [chapterReadingKey, isChapterMode, resumeAnchorSentenceId])
 
   useEffect(() => {
     if (!isChapterMode) {
@@ -482,6 +495,7 @@ function ReadingPage({
                 onOpenResources={onOpenResources}
                 onReadingPreferencesChange={onReadingPreferencesChange}
                 onRemoveHighlight={onRemoveHighlight}
+                onRetrySentence={onRetrySentence}
                 onSaveHighlight={onSaveHighlight}
                 onSelectHighlight={handleSelectHighlight}
                 onToggleAllSentences={handleToggleAllSentences}
@@ -507,6 +521,7 @@ function ReadingPage({
               onExplainVocabulary={onExplainVocabulary}
               onOpenResources={onOpenResources}
               onRemoveHighlight={onRemoveHighlight}
+              onRetrySentence={onRetrySentence}
               onSaveHighlight={onSaveHighlight}
               onSelectHighlight={handleSelectHighlight}
               onSetCurrentResumeAnchor={handleSetCurrentResumeAnchor}
@@ -540,6 +555,7 @@ function ReadingPage({
               onExplainVocabulary={onExplainVocabulary}
               onOpenResources={onOpenResources}
               onRemoveHighlight={onRemoveHighlight}
+              onRetrySentence={onRetrySentence}
               onSaveHighlight={onSaveHighlight}
               onSelectHighlight={handleSelectHighlight}
               onSetCurrentResumeAnchor={handleSetCurrentResumeAnchor}

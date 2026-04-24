@@ -29,6 +29,7 @@ type DraftReadingViewProps = {
     value: ReadingPreferences[Key],
   ) => void
   onRemoveHighlight: (signature: string) => void
+  onRetrySentence?: (sentenceId: string) => void
   onSaveHighlight: (
     sentence: SentenceItem,
     result: AnalysisResult,
@@ -57,6 +58,7 @@ export function DraftReadingView({
   onOpenResources,
   onReadingPreferencesChange,
   onRemoveHighlight,
+  onRetrySentence,
   onSaveHighlight,
   onSelectHighlight,
   onToggleAllSentences,
@@ -136,6 +138,7 @@ export function DraftReadingView({
                     onExplainVocabulary={onExplainVocabulary}
                     onOpenResources={onOpenResources}
                     onRemoveHighlight={onRemoveHighlight}
+                    onRetrySentence={onRetrySentence}
                     onSaveHighlight={onSaveHighlight}
                     onSelectHighlight={onSelectHighlight}
                     result={results[sentence.id]}

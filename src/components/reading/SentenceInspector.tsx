@@ -26,6 +26,7 @@ type SentenceInspectorProps = {
   onExplainVocabulary: (context: string, word: string) => Promise<VocabularyExplanation>
   onOpenResources: () => void
   onRemoveHighlight: (signature: string) => void
+  onRetrySentence?: (sentenceId: string) => void
   onSaveHighlight: (
     sentence: SentenceItem,
     result: AnalysisResult,
@@ -72,6 +73,7 @@ function ActiveSentenceInspector({
   onExplainVocabulary,
   onOpenResources,
   onRemoveHighlight,
+  onRetrySentence,
   onSaveHighlight,
   onSelectHighlight,
   onSetCurrentResumeAnchor,
@@ -143,6 +145,7 @@ function ActiveSentenceInspector({
         onExplainVocabulary={onExplainVocabulary}
         onOpenResources={onOpenResources}
         onRemoveHighlight={onRemoveHighlight}
+        onRetrySentence={onRetrySentence}
         onSaveHighlight={onSaveHighlight}
         onSelectHighlight={onSelectHighlight}
         renderVocabularySource={false}

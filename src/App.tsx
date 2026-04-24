@@ -315,6 +315,7 @@ function App() {
           onOpenResources={openResources}
           onReadingPreferencesChange={persistent.handleReadingPreferencesChange}
           onRemoveHighlight={(signature) => void handleRemoveHighlight(signature)}
+          onRetrySentence={(sentenceId) => void analysis.retrySingleSentence(sentenceId)}
           onSaveHighlight={(sentence, result, highlight) =>
             void handleSaveHighlight(sentence, result, highlight)
           }
