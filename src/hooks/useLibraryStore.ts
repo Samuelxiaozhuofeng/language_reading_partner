@@ -206,13 +206,6 @@ export function useLibraryStore() {
     sourceText: string
   }) => {
     const trimmedSourceText = sourceText.trim()
-    const trimmedArticleTitle = articleTitle.trim()
-
-    if (!trimmedArticleTitle) {
-      setLibraryNotice('')
-      setLibraryError('加入书架前，请先填写文章标题。')
-      return null
-    }
 
     if (!trimmedSourceText) {
       setLibraryNotice('')
@@ -221,7 +214,7 @@ export function useLibraryStore() {
     }
 
     const payload = await saveManualDraftToLibrary({
-      articleTitle: trimmedArticleTitle,
+      articleTitle: articleTitle.trim(),
       results,
       sentences,
       sourceText: trimmedSourceText,

@@ -85,6 +85,13 @@ type UseAppActionsArgs = {
   workspaceSourceText: string
 }
 
+type ManualDraftSaveInput = {
+  articleTitle?: string
+  results?: Record<string, AnalysisResult>
+  sentences?: SentenceItem[]
+  sourceText?: string
+}
+
 export function useAppActions({
   activeChapter,
   analysis,
@@ -206,7 +213,7 @@ export function useAppActions({
     }
   }, [library, setActivePage, setWorkspaceSource])
 
-  const handleSaveManualDraft = useCallback(async () => {
+  const handleSaveManualDraft = useCallback(async (input: ManualDraftSaveInput = {}) => {
     if (effectiveWorkspaceSource !== 'draft') {
       return
     }
@@ -215,10 +222,10 @@ export function useAppActions({
 
     try {
       const payload = await library.saveManualDraftAsBook({
-        articleTitle: persistent.articleTitle,
-        sourceText: workspaceSourceText,
-        sentences: workspaceSentences,
-        results: workspaceResults,
+        articleTitle: input.articleTitle ?? persistent.articleTitle,
+        sourceText: input.sourceText ?? workspaceSourceText,
+        sentences: input.sentences ?? workspaceSentences,
+        results: input.results ?? workspaceResults,
       })
 
       if (!payload?.chapters[0]) {

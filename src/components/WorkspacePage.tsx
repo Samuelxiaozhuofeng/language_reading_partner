@@ -25,9 +25,7 @@ type WorkspacePageProps = {
   onBackToLibrary: () => void
   onCancelAnalysis: () => void
   onOpenReading: () => void
-  onSaveToLibrary?: () => void
   onOpenSettings: () => void
-  onOpenSettingsAi: () => void
   onRestoreSession: (session: RunSession) => void
   onRetrySentence: (sentenceId: string) => void
   onSelectNextRange: () => void
@@ -72,9 +70,7 @@ function WorkspacePage({
   onBackToLibrary,
   onCancelAnalysis,
   onOpenReading,
-  onSaveToLibrary,
   onOpenSettings,
-  onOpenSettingsAi,
   onRestoreSession,
   onRetrySentence,
   onSelectNextRange,
@@ -151,22 +147,14 @@ function WorkspacePage({
               <h2>{isEpubChapterMode ? '原生阅读模式' : isChapterMode ? '章节正文' : '原文'}</h2>
             </div>
             <div className="panel-actions">
-              {!isChapterMode && onSaveToLibrary ? (
-                <button
-                  className="ghost-button"
-                  type="button"
-                  onClick={onSaveToLibrary}
-                  disabled={isSavingToLibrary}
-                >
-                  {isSavingToLibrary ? '保存中...' : '加入书架'}
-                </button>
-              ) : null}
-              <button className="ghost-button" type="button" onClick={onOpenSettingsAi}>
-                AI 设置
-              </button>
               {!isEpubChapterMode ? (
-                <button className="secondary-button" type="button" onClick={onSegment}>
-                  重新分句
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={onSegment}
+                  disabled={!isChapterMode && isSavingToLibrary}
+                >
+                  {!isChapterMode && isSavingToLibrary ? '保存中...' : '分句'}
                 </button>
               ) : null}
             </div>
@@ -206,7 +194,7 @@ function WorkspacePage({
                   onChange={(event) => onSourceTextChange(event.target.value)}
                   placeholder={
                     isChapterMode
-                      ? '你可以在这里微调当前章节再重新分句...'
+                      ? '你可以在这里微调当前章节再分句...'
                       : '把整篇文章、章节或短篇故事粘贴到这里...'
                   }
                 />
@@ -214,7 +202,7 @@ function WorkspacePage({
 
               <p className="panel-tip">
                 {isChapterMode
-                  ? '修改正文后记得重新分句，当前区间会按新的文本重新解析。'
+                  ? '修改正文后记得分句，当前区间会按新的文本重新解析。'
                   : '适合粘贴整篇文章、章节或短篇，解析后可加入书架。'}
               </p>
             </>
@@ -384,7 +372,7 @@ function WorkspacePage({
                       ? selectedRange
                         ? '当前区间还没有可编辑的句子。'
                         : '先在 Step 2 选择一个句子区间，这里会显示对应内容。'
-                      : '先粘贴一段原文并点击“重新分句”，这里就会出现可编辑句子。'}
+                      : '先粘贴一段原文并点击“分句”，这里就会出现可编辑句子。'}
                   </p>
                 </div>
               ) : (

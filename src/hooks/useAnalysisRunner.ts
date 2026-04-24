@@ -152,7 +152,7 @@ export function useAnalysisRunner({
       setGlobalError('当前内容无法切分成有效句子，请先粘贴一段完整的原文。')
       commitSentences([])
       setResults({})
-      return
+      return null
     }
 
     const nextSentences = pieces.map(createSentenceItem)
@@ -167,6 +167,7 @@ export function useAnalysisRunner({
         ? `已按当前章节文本重新生成 ${nextSentences.length} 句，原有句子解析结果已清空。`
         : `已生成 ${nextSentences.length} 句，你可以先微调再启动 AI。`,
     )
+    return nextSentences
   }
 
   const handleSentenceChange = (id: string, value: string) => {

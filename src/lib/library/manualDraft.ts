@@ -51,10 +51,11 @@ export function createManualDraftBookPayload({
   const timestamp = new Date().toISOString()
   const bookId = crypto.randomUUID()
   const chapterId = crypto.randomUUID()
+  const title = buildManualBookTitle(articleTitle, sourceText, sentences)
   const normalizedChapter = normalizeChapterRecord({
     id: chapterId,
     bookId,
-    title: articleTitle.trim(),
+    title,
     order: 0,
     originalText: sourceText,
     sourceText,
@@ -69,7 +70,7 @@ export function createManualDraftBookPayload({
   })
   const book: BookRecord = {
     id: bookId,
-    title: buildManualBookTitle(articleTitle, sourceText, sentences),
+    title,
     author: '手动导入',
     sourceType: 'manual',
     importedAt: timestamp,

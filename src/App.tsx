@@ -237,12 +237,19 @@ function App() {
     }
   }
 
-  const openSettings = () => {
-    setIsSettingsOpen(true)
+  const handleSegment = async () => {
+    const nextSentences = analysis.handleSegment()
+    if (effectiveWorkspaceSource !== 'draft' || !nextSentences) {
+      return
+    }
+
+    await handleSaveManualDraft({
+      sentences: nextSentences,
+      results: {},
+    })
   }
 
-  const openSettingsAi = () => {
-    setActiveSettingsTab('ai')
+  const openSettings = () => {
     setIsSettingsOpen(true)
   }
 
@@ -380,15 +387,13 @@ function App() {
           onBackToLibrary={() => setActivePage('library')}
           onCancelAnalysis={analysis.cancelAnalysis}
           onOpenReading={() => setActivePage('reading')}
-          onSaveToLibrary={() => void handleSaveManualDraft()}
           onOpenSettings={openSettings}
-          onOpenSettingsAi={openSettingsAi}
           onRestoreSession={analysis.restoreSession}
           onRetrySentence={analysis.retrySingleSentence}
           onSelectNextRange={handleUseNextChapterRange}
           onUpdateRange={handleChapterRangeChange}
           onRunAnalysis={() => void handleRunAnalysis()}
-          onSegment={analysis.handleSegment}
+          onSegment={() => void handleSegment()}
           onSentenceChange={analysis.handleSentenceChange}
           onSourceTextChange={setWorkspaceSourceText}
           rangeSize={DEFAULT_CHAPTER_RANGE_SIZE}
