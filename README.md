@@ -94,3 +94,7 @@ npm run build
 - Vite
 - 本地浏览器存储
 - OpenAI 兼容接口
+
+## 鸣谢
+
+- 感谢 [linux.do](https://linux.do/t/topic/1776670) 社区的支持。
