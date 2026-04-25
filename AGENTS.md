@@ -129,6 +129,14 @@
 - 书架导入、打开、删除
 - 学习资源增删
 
+页面类改动的验证边界：
+
+- 不需要启动 `npm run dev` 或 Vite dev server
+- 不需要启动 `npm run preview`
+- 不需要尝试按浏览器验证技能使用 `agent-browser`
+- 完成 `npm run build` 后，至少确认 `dist/index.html` 已生成，作为页面可打开的基本验证
+- 完成代码工作后，在最终回复中告诉用户自行打开页面尝试
+
 如果新增测试，优先放在对应代码旁边，文件名使用 `*.test.ts` 或 `*.test.tsx`。优先给 `src/lib/` 中的纯逻辑补测试。
 
 ## Commit & Pull Request Guidelines

@@ -207,6 +207,92 @@
   color: #fffdf7;
 }
 
+.collections-bar {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid rgba(69, 72, 82, 0.1);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.collection-tabs,
+.collection-tab-item,
+.collection-create-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.collection-tab-item {
+  gap: 6px;
+}
+
+.collection-tab,
+.collection-delete-button {
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease;
+}
+
+.collection-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--ink);
+}
+
+.collection-tab.is-active {
+  background: linear-gradient(135deg, #0e7d78 0%, #1f5c7a 100%);
+  color: #fffdf7;
+}
+
+.collection-count {
+  display: inline-flex;
+  min-width: 24px;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: rgba(31, 29, 28, 0.08);
+  font-size: 0.78rem;
+}
+
+.collection-tab.is-active .collection-count {
+  background: rgba(255, 253, 247, 0.18);
+}
+
+.collection-delete-button {
+  padding: 7px 10px;
+  background: rgba(164, 69, 35, 0.08);
+  color: #8d3718;
+  font-size: 0.78rem;
+}
+
+.collection-tab:hover,
+.collection-delete-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(69, 72, 82, 0.1);
+}
+
+.collection-create-form {
+  justify-content: space-between;
+}
+
+.collection-name-input {
+  flex: 1 1 180px;
+  min-width: 0;
+  border-radius: 999px;
+  padding: 10px 14px;
+}
+
 .hero-metrics {
   padding: 18px;
   display: grid;
@@ -2023,6 +2109,27 @@ blockquote {
   color: var(--muted);
 }
 
+.book-collection-control {
+  display: grid;
+  gap: 6px;
+  min-width: 148px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.book-collection-control span {
+  font-family: var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.book-collection-select {
+  min-height: 38px;
+  border-radius: 999px;
+  padding: 8px 34px 8px 12px;
+  font-size: 0.86rem;
+}
+
 .chapter-list {
   align-content: start;
   gap: 12px;
@@ -2092,6 +2199,10 @@ blockquote {
     align-items: center;
     justify-content: space-between;
   }
+
+  .book-collection-control {
+    min-width: 180px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -2154,6 +2265,10 @@ blockquote {
   .book-card-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .book-collection-control {
+    width: 100%;
   }
 
   .resource-card {

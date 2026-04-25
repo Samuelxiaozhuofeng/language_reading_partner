@@ -115,11 +115,18 @@ export type BookRecord = {
   author: string
   sourceType?: 'epub' | 'manual'
   coverUrl?: string
+  collectionId?: string
   importedAt: string
   chapterCount: number
   lastReadChapterId?: string
   lastOpenedAt?: string
   analysisState: ChapterAnalysisState
+}
+
+export type CollectionRecord = {
+  id: string
+  name: string
+  createdAt: number
 }
 
 export type BookChapterRecord = {

@@ -1,18 +1,32 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { BookChapterRecord, BookRecord, SavedKnowledgeResource } from '../types'
+import type {
+  BookChapterRecord,
+  BookRecord,
+  CollectionRecord,
+  SavedKnowledgeResource,
+} from '../types'
 
 const DB_NAME = 'spanish-reading-assistant/library'
-const DB_VERSION = 3
+const DB_VERSION = 4
 
 type BookFileRecord = {
   bookId: string
   data: ArrayBuffer
 }
 
+function withoutBookCollection(book: BookRecord) {
+  const nextBook = { ...book }
+  delete nextBook.collectionId
+  return nextBook
+}
+
 interface LibraryDbSchema extends DBSchema {
   books: {
     key: string
     value: BookRecord
+    indexes: {
+      'by-collection': string
+    }
   }
   chapters: {
     key: string
@@ -36,6 +50,10 @@ interface LibraryDbSchema extends DBSchema {
       'by-signature': string
     }
   }
+  collections: {
+    key: string
+    value: CollectionRecord
+  }
 }
 
 let dbPromise: Promise<IDBPDatabase<LibraryDbSchema>> | null = null
@@ -43,9 +61,13 @@ let dbPromise: Promise<IDBPDatabase<LibraryDbSchema>> | null = null
 function getDb() {
   if (!dbPromise) {
     dbPromise = openDB<LibraryDbSchema>(DB_NAME, DB_VERSION, {
-      upgrade(database) {
-        if (!database.objectStoreNames.contains('books')) {
-          database.createObjectStore('books', { keyPath: 'id' })
+      upgrade(database, _oldVersion, _newVersion, transaction) {
+        const bookStore = database.objectStoreNames.contains('books')
+          ? transaction.objectStore('books')
+          : database.createObjectStore('books', { keyPath: 'id' })
+
+        if (!bookStore.indexNames.contains('by-collection')) {
+          bookStore.createIndex('by-collection', 'collectionId')
         }
 
         if (!database.objectStoreNames.contains('chapters')) {
@@ -64,6 +86,10 @@ function getDb() {
           resourceStore.createIndex('by-kind', 'kind')
           resourceStore.createIndex('by-book', 'bookId')
           resourceStore.createIndex('by-signature', 'signature', { unique: true })
+        }
+
+        if (!database.objectStoreNames.contains('collections')) {
+          database.createObjectStore('collections', { keyPath: 'id' })
         }
       },
     })
@@ -85,6 +111,64 @@ export async function getBooks() {
 export async function getBook(bookId: string) {
   const db = await getDb()
   return db.get('books', bookId)
+}
+
+export async function getCollections() {
+  const db = await getDb()
+  const collections = await db.getAll('collections')
+  return collections.sort((left, right) => left.createdAt - right.createdAt)
+}
+
+export async function saveCollection(collection: CollectionRecord) {
+  const db = await getDb()
+  await db.put('collections', collection)
+}
+
+export async function deleteCollection(collectionId: string) {
+  const db = await getDb()
+  const tx = db.transaction(['collections', 'books'], 'readwrite')
+  const collectionStore = tx.objectStore('collections')
+  const bookStore = tx.objectStore('books')
+  const collection = await collectionStore.get(collectionId)
+
+  if (!collection) {
+    await tx.done
+    throw new Error('集合不存在，可能已经被删除。')
+  }
+
+  const books = await bookStore.index('by-collection').getAll(collectionId)
+  for (const book of books) {
+    await bookStore.put(withoutBookCollection(book))
+  }
+
+  await collectionStore.delete(collectionId)
+  await tx.done
+}
+
+export async function updateBookCollection(bookId: string, collectionId: string | null) {
+  const db = await getDb()
+  const tx = db.transaction(['books', 'collections'], 'readwrite')
+  const bookStore = tx.objectStore('books')
+  const collectionStore = tx.objectStore('collections')
+  const book = await bookStore.get(bookId)
+
+  if (!book) {
+    await tx.done
+    return null
+  }
+
+  if (collectionId) {
+    const collection = await collectionStore.get(collectionId)
+    if (!collection) {
+      await tx.done
+      throw new Error('目标集合不存在，可能已经被删除。')
+    }
+  }
+
+  const nextBook = collectionId ? { ...book, collectionId } : withoutBookCollection(book)
+  await bookStore.put(nextBook)
+  await tx.done
+  return nextBook
 }
 
 export async function getChaptersByBook(bookId: string) {
@@ -217,10 +301,11 @@ export async function deleteBookCascade(bookId: string) {
 
 export async function clearLibraryDb() {
   const db = await getDb()
-  const tx = db.transaction(['books', 'chapters', 'bookFiles', 'resources'], 'readwrite')
+  const tx = db.transaction(['books', 'chapters', 'bookFiles', 'resources', 'collections'], 'readwrite')
   await tx.objectStore('books').clear()
   await tx.objectStore('chapters').clear()
   await tx.objectStore('bookFiles').clear()
   await tx.objectStore('resources').clear()
+  await tx.objectStore('collections').clear()
   await tx.done
 }

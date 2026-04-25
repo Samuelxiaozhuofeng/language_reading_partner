@@ -3,6 +3,7 @@ import type {
   AnalysisResult,
   BookChapterRecord,
   BookRecord,
+  CollectionRecord,
   LibrarySelection,
   SavedKnowledgeResource,
   SentenceItem,
@@ -10,11 +11,14 @@ import type {
 import { sortSavedResources } from '../lib/knowledge'
 import {
   clearLibraryStorage,
+  createCollectionInLibrary,
+  deleteCollectionFromLibrary,
   type HydratedBookState,
   hydrateBookState,
   importBookToLibrary,
   loadBookFile,
   loadInitialLibraryState,
+  moveBookToCollectionInLibrary,
   openChapterRecord,
   persistChapterRecord,
   type PersistChapterOptions,
@@ -32,8 +36,14 @@ import {
   updateBookInList,
 } from '../lib/library/selectors'
 
+function filterBooksByCollection(books: BookRecord[], collectionId: string | null) {
+  return collectionId ? books.filter((book) => book.collectionId === collectionId) : books
+}
+
 export function useLibraryStore() {
-  const [books, setBooks] = useState<BookRecord[]>([])
+  const [allBooks, setAllBooks] = useState<BookRecord[]>([])
+  const [collections, setCollections] = useState<CollectionRecord[]>([])
+  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null)
   const [chapters, setChapters] = useState<BookChapterRecord[]>([])
   const [savedResources, setSavedResources] = useState<SavedKnowledgeResource[]>([])
   const [selection, setSelection] = useState<LibrarySelection>({ bookId: null, chapterId: null })
@@ -48,9 +58,29 @@ export function useLibraryStore() {
     currentChapterRef.current = currentChapter
   }, [currentChapter])
 
+  const books = useMemo(
+    () => filterBooksByCollection(allBooks, activeCollectionId),
+    [activeCollectionId, allBooks],
+  )
+
   const selectedBook = useMemo(
-    () => books.find((book) => book.id === selection.bookId) ?? null,
-    [books, selection.bookId],
+    () => allBooks.find((book) => book.id === selection.bookId) ?? null,
+    [allBooks, selection.bookId],
+  )
+
+  const collectionBookCounts = useMemo(
+    () =>
+      allBooks.reduce<Record<string, number>>((counts, book) => {
+        if (!book.collectionId) {
+          return counts
+        }
+
+        return {
+          ...counts,
+          [book.collectionId]: (counts[book.collectionId] ?? 0) + 1,
+        }
+      }, {}),
+    [allBooks],
   )
 
   const adjacentChapterIds = useMemo(
@@ -63,7 +93,7 @@ export function useLibraryStore() {
       return
     }
 
-    setBooks((current) => updateBookInList(current, hydratedBook.book))
+    setAllBooks((current) => updateBookInList(current, hydratedBook.book))
     setChapters(hydratedBook.chapters)
     setSelection(hydratedBook.selection)
   }, [])
@@ -72,6 +102,27 @@ export function useLibraryStore() {
     const hydratedBook = await hydrateBookState(bookId, preferredChapterId)
     applyHydratedBook(hydratedBook)
   }, [applyHydratedBook])
+
+  const clearBookSelection = useCallback(() => {
+    currentChapterRef.current = null
+    setCurrentChapter(null)
+    setChapters([])
+    setSelection({ bookId: null, chapterId: null })
+  }, [])
+
+  const hydrateFirstVisibleBook = useCallback(
+    async (bookList: BookRecord[], collectionId: string | null) => {
+      const nextBook = filterBooksByCollection(bookList, collectionId)[0]
+
+      if (nextBook) {
+        await hydrateBook(nextBook.id, nextBook.lastReadChapterId)
+        return
+      }
+
+      clearBookSelection()
+    },
+    [clearBookSelection, hydrateBook],
+  )
 
   useEffect(() => {
     let isCancelled = false
@@ -83,7 +134,8 @@ export function useLibraryStore() {
           return
         }
 
-        setBooks(initialState.books)
+        setAllBooks(initialState.books)
+        setCollections(initialState.collections)
         setSavedResources(initialState.savedResources)
         applyHydratedBook(initialState.hydratedBook)
       } catch (error) {
@@ -113,7 +165,7 @@ export function useLibraryStore() {
       }
       const persistedBook = persisted.book
       if (persistedBook) {
-        setBooks((currentBooks) => updateBookInList(currentBooks, persistedBook))
+        setAllBooks((currentBooks) => updateBookInList(currentBooks, persistedBook))
       }
     },
     [selection.bookId],
@@ -160,7 +212,7 @@ export function useLibraryStore() {
       setCurrentChapter(payload.persisted.chapter)
       const persistedBook = payload.persisted.book
       if (persistedBook) {
-        setBooks((current) => updateBookInList(current, persistedBook))
+        setAllBooks((current) => updateBookInList(current, persistedBook))
       }
       setChapters(payload.persisted.chapters)
       setSelection({ bookId: payload.chapter.bookId, chapterId })
@@ -177,7 +229,8 @@ export function useLibraryStore() {
 
     try {
       const payload = await importBookToLibrary(file)
-      setBooks((current) => updateBookInList(current, payload.book))
+      setActiveCollectionId(null)
+      setAllBooks((current) => updateBookInList(current, payload.book))
       setChapters(payload.chapters)
       setSelection(payload.selection)
       currentChapterRef.current = payload.currentChapter
@@ -220,7 +273,8 @@ export function useLibraryStore() {
       sourceText: trimmedSourceText,
     })
 
-    setBooks((current) => updateBookInList(current, payload.book))
+    setActiveCollectionId(null)
+    setAllBooks((current) => updateBookInList(current, payload.book))
     setChapters(payload.chapters)
     setSelection(payload.selection)
     currentChapterRef.current = payload.currentChapter
@@ -234,24 +288,17 @@ export function useLibraryStore() {
   const removeBook = useCallback(
     async (bookId: string) => {
       const nextBooks = await removeBookFromLibrary(bookId)
-      setBooks(nextBooks)
+      setAllBooks(nextBooks)
       setSavedResources((current) => current.filter((resource) => resource.bookId !== bookId))
 
       if (selection.bookId === bookId) {
-        currentChapterRef.current = null
-        setCurrentChapter(null)
-        if (nextBooks[0]) {
-          await hydrateBook(nextBooks[0].id)
-        } else {
-          setChapters([])
-          setSelection({ bookId: null, chapterId: null })
-        }
+        await hydrateFirstVisibleBook(nextBooks, activeCollectionId)
       }
 
       setLibraryNotice('书籍已从本地书架移除。')
       setLibraryError('')
     },
-    [hydrateBook, selection.bookId],
+    [activeCollectionId, hydrateFirstVisibleBook, selection.bookId],
   )
 
   const removeChapter = useCallback(
@@ -274,7 +321,7 @@ export function useLibraryStore() {
       setSavedResources((current) => current.filter((resource) => resource.chapterId !== chapterId))
       const nextBook = payload.nextBook
       if (nextBook) {
-        setBooks((current) => updateBookInList(current, nextBook))
+        setAllBooks((current) => updateBookInList(current, nextBook))
       }
 
       if (selection.bookId === payload.removedChapter.bookId) {
@@ -352,9 +399,98 @@ export function useLibraryStore() {
     setLibraryError('')
   }, [savedResources])
 
+  const setActiveCollection = useCallback(
+    async (collectionId: string | null) => {
+      setActiveCollectionId(collectionId)
+
+      const nextVisibleBooks = filterBooksByCollection(allBooks, collectionId)
+      if (!selection.bookId || !nextVisibleBooks.some((book) => book.id === selection.bookId)) {
+        await hydrateFirstVisibleBook(allBooks, collectionId)
+      }
+
+      setLibraryError('')
+    },
+    [allBooks, hydrateFirstVisibleBook, selection.bookId],
+  )
+
+  const createCollection = useCallback(
+    async (name: string) => {
+      try {
+        const payload = await createCollectionInLibrary(name)
+        setCollections(payload.collections)
+        setActiveCollectionId(payload.collection.id)
+        await hydrateFirstVisibleBook(allBooks, payload.collection.id)
+        setLibraryNotice(`已创建集合「${payload.collection.name}」。`)
+        setLibraryError('')
+      } catch (error) {
+        setLibraryNotice('')
+        setLibraryError(error instanceof Error ? error.message : '集合创建失败。')
+      }
+    },
+    [allBooks, hydrateFirstVisibleBook],
+  )
+
+  const deleteCollection = useCallback(
+    async (collectionId: string) => {
+      try {
+        const target = collections.find((collection) => collection.id === collectionId)
+        const payload = await deleteCollectionFromLibrary(collectionId)
+        const nextActiveCollectionId =
+          activeCollectionId === collectionId ? null : activeCollectionId
+        const nextVisibleBooks = filterBooksByCollection(payload.books, nextActiveCollectionId)
+
+        setAllBooks(payload.books)
+        setCollections(payload.collections)
+        setActiveCollectionId(nextActiveCollectionId)
+
+        if (!selection.bookId || !nextVisibleBooks.some((book) => book.id === selection.bookId)) {
+          await hydrateFirstVisibleBook(payload.books, nextActiveCollectionId)
+        }
+
+        setLibraryNotice(`已删除集合「${target?.name ?? '未命名集合'}」，书籍已移回全部。`)
+        setLibraryError('')
+      } catch (error) {
+        setLibraryNotice('')
+        setLibraryError(error instanceof Error ? error.message : '集合删除失败。')
+      }
+    },
+    [activeCollectionId, collections, hydrateFirstVisibleBook, selection.bookId],
+  )
+
+  const moveBookToCollection = useCallback(
+    async (bookId: string, collectionId: string | null) => {
+      try {
+        const payload = await moveBookToCollectionInLibrary(bookId, collectionId)
+        const nextVisibleBooks = filterBooksByCollection(payload.books, activeCollectionId)
+        const targetCollection = collectionId
+          ? collections.find((collection) => collection.id === collectionId)
+          : null
+
+        setAllBooks(payload.books)
+
+        if (!selection.bookId || !nextVisibleBooks.some((book) => book.id === selection.bookId)) {
+          await hydrateFirstVisibleBook(payload.books, activeCollectionId)
+        }
+
+        setLibraryNotice(
+          collectionId
+            ? `已将《${payload.book.title}》移动到「${targetCollection?.name ?? '目标集合'}」。`
+            : `已将《${payload.book.title}》移回全部。`,
+        )
+        setLibraryError('')
+      } catch (error) {
+        setLibraryNotice('')
+        setLibraryError(error instanceof Error ? error.message : '移动书籍失败。')
+      }
+    },
+    [activeCollectionId, collections, hydrateFirstVisibleBook, selection.bookId],
+  )
+
   const clearLibrary = useCallback(async () => {
     await clearLibraryStorage()
-    setBooks([])
+    setAllBooks([])
+    setCollections([])
+    setActiveCollectionId(null)
     setChapters([])
     currentChapterRef.current = null
     setCurrentChapter(null)
@@ -370,9 +506,14 @@ export function useLibraryStore() {
 
   return {
     adjacentChapterIds,
+    activeCollectionId,
     chapters,
     clearLibrary,
+    collectionBookCounts,
+    collections,
+    createCollection,
     currentChapter,
+    deleteCollection,
     getBookFile,
     savedResources,
     importBook,
@@ -387,15 +528,18 @@ export function useLibraryStore() {
     removeChapter,
     selectedBook,
     selection,
+    moveBookToCollection,
     removeKnowledgeResourceById,
     removeKnowledgeResourcesByIds,
     removeKnowledgeResourceBySignature,
     selectBook,
+    setActiveCollection,
     upsertKnowledgeResource,
     setCurrentChapter,
     setLibraryError,
     setLibraryNotice,
     updateCurrentChapter,
     books,
+    totalBookCount: allBooks.length,
   }
 }

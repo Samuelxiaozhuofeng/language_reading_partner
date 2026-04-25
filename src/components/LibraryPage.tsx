@@ -1,17 +1,24 @@
 import { chapterStatusLabelMap, formatTime } from '../lib/appState'
-import type { BookChapterRecord, BookRecord } from '../types'
+import type { BookChapterRecord, BookRecord, CollectionRecord } from '../types'
+import CollectionsBar from './library/CollectionsBar'
 
 type LibraryPageProps = {
+  activeCollectionId: string | null
   books: BookRecord[]
   chapters: BookChapterRecord[]
+  collectionBookCounts: Record<string, number>
+  collections: CollectionRecord[]
   isImporting: boolean
   isLoading: boolean
   libraryError: string
   libraryNotice: string
   manualWorkspaceLabel: string
+  onCreateCollection: (name: string) => void | Promise<void>
   onDeleteBook: (bookId: string) => void
   onDeleteChapter: (chapterId: string) => void
+  onDeleteCollection: (collectionId: string) => void | Promise<void>
   onImportFile: (file: File) => void | Promise<void>
+  onMoveBookToCollection: (bookId: string, collectionId: string | null) => void | Promise<void>
   onOpenChapterReading: (chapterId: string) => void
   onOpenChapterWorkspace: (chapterId: string) => void
   onOpenRecentChapter: () => void
@@ -20,21 +27,29 @@ type LibraryPageProps = {
   onOpenSettings: () => void
   recentChapterTitle?: string
   onSelectBook: (bookId: string) => void
+  onSetActiveCollection: (collectionId: string | null) => void | Promise<void>
   selectedBook: BookRecord | null
   selectedChapterId: string | null
+  totalBookCount: number
 }
 
 function LibraryPage({
+  activeCollectionId,
   books,
   chapters,
+  collectionBookCounts,
+  collections,
   isImporting,
   isLoading,
   libraryError,
   libraryNotice,
   manualWorkspaceLabel,
+  onCreateCollection,
   onDeleteBook,
   onDeleteChapter,
+  onDeleteCollection,
   onImportFile,
+  onMoveBookToCollection,
   onOpenChapterReading,
   onOpenChapterWorkspace,
   onOpenRecentChapter,
@@ -43,11 +58,16 @@ function LibraryPage({
   onOpenSettings,
   recentChapterTitle,
   onSelectBook,
+  onSetActiveCollection,
   selectedBook,
   selectedChapterId,
+  totalBookCount,
 }: LibraryPageProps) {
   const hasRecentChapter = Boolean(selectedBook?.lastReadChapterId && recentChapterTitle)
   const totalChapterCount = books.reduce((sum, book) => sum + book.chapterCount, 0)
+  const activeCollectionName = activeCollectionId
+    ? collections.find((collection) => collection.id === activeCollectionId)?.name
+    : null
   const selectedBookLastOpenedAt = selectedBook?.lastOpenedAt
     ? formatTime(selectedBook.lastOpenedAt)
     : '未开始阅读'
@@ -101,7 +121,9 @@ function LibraryPage({
             ) : null}
           </div>
           <div className="library-status-strip" aria-label="书架概览">
-            <span className="status-pill">{books.length} 本书</span>
+            <span className="status-pill">
+              {activeCollectionName ? `${activeCollectionName}：${books.length} 本书` : `${totalBookCount} 本书`}
+            </span>
             <span className="status-pill">{totalChapterCount} 个章节</span>
             <span className="status-pill">
               {selectedBook ? `当前：${selectedBook.title}` : '还没有选中的书'}
@@ -123,13 +145,27 @@ function LibraryPage({
             <p className="panel-meta">只保存元数据、章节文本和解析结果。</p>
           </div>
 
+          <CollectionsBar
+            activeCollectionId={activeCollectionId}
+            collectionBookCounts={collectionBookCounts}
+            collections={collections}
+            onCreateCollection={onCreateCollection}
+            onDeleteCollection={onDeleteCollection}
+            onSetActiveCollection={onSetActiveCollection}
+            totalBookCount={totalBookCount}
+          />
+
           {isLoading ? (
             <div className="empty-state">
               <p>正在载入本地书架...</p>
             </div>
           ) : books.length === 0 ? (
             <div className="empty-state">
-              <p>书架还是空的。先导入一本 EPUB，或者粘贴一篇文章开始解析。</p>
+              <p>
+                {activeCollectionId && totalBookCount > 0
+                  ? '这个集合还没有书。可以从全部中把书移动进来。'
+                  : '书架还是空的。先导入一本 EPUB，或者粘贴一篇文章开始解析。'}
+              </p>
             </div>
           ) : (
             <div className="book-grid">
@@ -169,6 +205,23 @@ function LibraryPage({
                     <span className="book-card-hint">
                       {selectedBook?.id === book.id ? '当前查看中' : '点击查看章节'}
                     </span>
+                    <label className="book-collection-control">
+                      <span>集合</span>
+                      <select
+                        className="book-collection-select"
+                        value={book.collectionId ?? ''}
+                        onChange={(event) =>
+                          void onMoveBookToCollection(book.id, event.target.value || null)
+                        }
+                      >
+                        <option value="">全部</option>
+                        {collections.map((collection) => (
+                          <option key={collection.id} value={collection.id}>
+                            {collection.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     <button className="ghost-button danger-button" type="button" onClick={() => onDeleteBook(book.id)}>
                       删除本书
                     </button>

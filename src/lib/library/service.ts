@@ -1,6 +1,7 @@
 import type {
   BookChapterRecord,
   BookRecord,
+  CollectionRecord,
   LibrarySelection,
   SavedKnowledgeResource,
 } from '../../types'
@@ -11,6 +12,7 @@ import {
   clearLibraryDb,
   deleteBookCascade,
   deleteChapterCascade,
+  deleteCollection,
   deleteKnowledgeResource,
   deleteKnowledgeResources,
   getBook,
@@ -18,12 +20,15 @@ import {
   getBooks,
   getChapter,
   getChaptersByBook,
+  getCollections,
   getSavedResourceBySignature,
   getSavedResources,
   saveBook,
   saveChapter,
+  saveCollection,
   saveImportedBook,
   saveKnowledgeResource,
+  updateBookCollection,
 } from '../libraryDb'
 import { createManualDraftBookPayload, type CreateManualDraftBookPayloadInput } from './manualDraft'
 
@@ -64,15 +69,66 @@ export async function hydrateBookState(
 }
 
 export async function loadInitialLibraryState() {
-  const [books, savedResources] = await Promise.all([getBooks(), getSavedResources()])
+  const [books, collections, savedResources] = await Promise.all([
+    getBooks(),
+    getCollections(),
+    getSavedResources(),
+  ])
   const hydratedBook = books[0]
     ? await hydrateBookState(books[0].id, books[0].lastReadChapterId)
     : null
 
   return {
     books,
+    collections,
     hydratedBook,
     savedResources: sortSavedResources(savedResources),
+  }
+}
+
+export async function createCollectionInLibrary(name: string) {
+  const collectionName = name.trim()
+
+  if (!collectionName) {
+    throw new Error('集合名称不能为空。')
+  }
+
+  const collection: CollectionRecord = {
+    id: crypto.randomUUID(),
+    name: collectionName,
+    createdAt: Date.now(),
+  }
+
+  await saveCollection(collection)
+
+  return {
+    collection,
+    collections: await getCollections(),
+  }
+}
+
+export async function deleteCollectionFromLibrary(collectionId: string) {
+  await deleteCollection(collectionId)
+
+  return {
+    books: await getBooks(),
+    collections: await getCollections(),
+  }
+}
+
+export async function moveBookToCollectionInLibrary(
+  bookId: string,
+  collectionId: string | null,
+) {
+  const book = await updateBookCollection(bookId, collectionId)
+
+  if (!book) {
+    throw new Error('书籍不存在，可能已经被删除。')
+  }
+
+  return {
+    book,
+    books: await getBooks(),
   }
 }
 

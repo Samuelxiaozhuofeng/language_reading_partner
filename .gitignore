@@ -20,6 +20,9 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 .ace-tool
+.ccb/
+.ccb*
+*.ccb*
 .DS_Store
 *.suo
 *.ntvs*

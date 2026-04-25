@@ -346,16 +346,24 @@ function App() {
     <div className="app-shell">
       {activePage === 'library' ? (
         <LibraryPage
+          activeCollectionId={library.activeCollectionId}
           books={library.books}
           chapters={library.chapters}
+          collectionBookCounts={library.collectionBookCounts}
+          collections={library.collections}
           isImporting={library.isImporting}
           isLoading={library.isLoading}
           libraryError={library.libraryError}
           libraryNotice={library.libraryNotice}
           manualWorkspaceLabel={manualWorkspaceLabel}
+          onCreateCollection={(name) => void library.createCollection(name)}
           onDeleteBook={handleDeleteBook}
           onDeleteChapter={handleDeleteChapter}
+          onDeleteCollection={(collectionId) => void library.deleteCollection(collectionId)}
           onImportFile={handleImportFile}
+          onMoveBookToCollection={(bookId, collectionId) =>
+            void library.moveBookToCollection(bookId, collectionId)
+          }
           onOpenChapterReading={handleOpenChapterReading}
           onOpenChapterWorkspace={handleOpenChapterWorkspace}
           onOpenRecentChapter={() => void handleOpenRecentChapter()}
@@ -364,8 +372,10 @@ function App() {
           onOpenSettings={openSettings}
           recentChapterTitle={recentChapter?.title}
           onSelectBook={(bookId) => void library.selectBook(bookId)}
+          onSetActiveCollection={(collectionId) => void library.setActiveCollection(collectionId)}
           selectedBook={library.selectedBook}
           selectedChapterId={library.selection.chapterId}
+          totalBookCount={library.totalBookCount}
         />
       ) : activePage === 'workspace' ? (
         <WorkspacePage
