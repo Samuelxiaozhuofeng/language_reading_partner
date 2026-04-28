@@ -309,6 +309,7 @@ export function useAnalysisRunner({
             },
           },
           {
+            batchSize: promptConfig.batchSize ?? 1,
             signal: abortController.signal,
           },
         )

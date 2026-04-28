@@ -3,6 +3,7 @@ import type {
   AnalysisJob,
   AnalysisResult,
   ApiConfig,
+  BatchAnalysisJob,
   PromptConfig,
   VocabularyExplanation,
   VocabularyPromptConfig,
@@ -36,12 +37,20 @@ type AnalysisCallbacks = {
 }
 
 type RunConcurrentAnalysisOptions = {
+  batchSize?: number
   signal?: AbortSignal
 }
 
 type VocabularyExplanationJob = {
   context: string
   word: string
+}
+
+type StructuredAnalysisValue = {
+  grammar?: unknown
+  meaning?: unknown
+  content?: unknown
+  highlights?: unknown
 }
 
 const REQUEST_TIMEOUT_MS = 60_000
@@ -159,6 +168,26 @@ function extractTextContent(content: ChatCompletionResponse['choices']) {
   return ''
 }
 
+function parseAnalysisValue(value: StructuredAnalysisValue, rawText: string): AnalysisResult {
+  const grammar = typeof value.grammar === 'string' ? value.grammar.trim() : ''
+  const meaningSource = typeof value.meaning === 'string' ? value.meaning : value.content
+  const meaning = typeof meaningSource === 'string' ? meaningSource.trim() : ''
+  const highlights = sanitizeHighlights(value.highlights)
+
+  if (!grammar && !meaning) {
+    throw new Error('empty')
+  }
+
+  return {
+    sentenceId: '',
+    grammar,
+    meaning,
+    highlights,
+    isPartial: !grammar || !meaning,
+    rawText,
+  }
+}
+
 function parseStructuredResult(text: string): AnalysisResult {
   const normalized = text.trim()
 
@@ -170,30 +199,7 @@ function parseStructuredResult(text: string): AnalysisResult {
   const jsonCandidate = fencedMatch?.[1] ?? normalized
 
   try {
-    const parsed = JSON.parse(jsonCandidate) as {
-      grammar?: unknown
-      meaning?: unknown
-      content?: unknown
-      highlights?: unknown
-    }
-
-    const grammar = typeof parsed.grammar === 'string' ? parsed.grammar.trim() : ''
-    const meaningSource = typeof parsed.meaning === 'string' ? parsed.meaning : parsed.content
-    const meaning = typeof meaningSource === 'string' ? meaningSource.trim() : ''
-    const highlights = sanitizeHighlights(parsed.highlights)
-
-    if (!grammar && !meaning) {
-      throw new Error('empty')
-    }
-
-    return {
-      sentenceId: '',
-      grammar,
-      meaning,
-      highlights,
-      isPartial: !grammar || !meaning,
-      rawText: normalized,
-    }
+    return parseAnalysisValue(JSON.parse(jsonCandidate) as StructuredAnalysisValue, normalized)
   } catch {
     const grammarMatch = normalized.match(/(?:语法|grammar)[:：]\s*([\s\S]*?)(?:\n(?:内容|meaning)[:：]|$)/i)
     const meaningMatch = normalized.match(/(?:内容|meaning)[:：]\s*([\s\S]*)$/i)
@@ -214,6 +220,48 @@ function parseStructuredResult(text: string): AnalysisResult {
       rawText: normalized,
     }
   }
+}
+
+function createMalformedBatchResult(rawText: string): AnalysisResult {
+  return {
+    sentenceId: '',
+    grammar: '',
+    meaning: '',
+    highlights: [],
+    isPartial: true,
+    rawText,
+  }
+}
+
+function parseStructuredBatchResult(text: string, count: number): AnalysisResult[] {
+  const normalized = text.trim()
+
+  if (!normalized) {
+    throw new Error('模型未返回文本内容。')
+  }
+
+  const fencedMatch = normalized.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  const jsonCandidate = fencedMatch?.[1] ?? normalized
+  const parsed = JSON.parse(jsonCandidate) as unknown
+
+  if (!Array.isArray(parsed)) {
+    throw new Error('批量解析返回内容不是 JSON 数组。')
+  }
+
+  return Array.from({ length: count }, (_, index) => {
+    const item = parsed[index]
+    const rawText = item === undefined ? normalized : JSON.stringify(item)
+
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return createMalformedBatchResult(rawText)
+    }
+
+    try {
+      return parseAnalysisValue(item as StructuredAnalysisValue, rawText)
+    } catch {
+      return createMalformedBatchResult(rawText)
+    }
+  })
 }
 
 function parseVocabularyExplanation(text: string, word: string): VocabularyExplanation {
@@ -254,6 +302,67 @@ function buildRequestBody(config: ApiConfig, promptConfig: PromptConfig, job: An
       {
         role: 'user',
         content: interpolatePrompt(promptConfig.template, job),
+      },
+    ],
+  }
+}
+
+function buildBatchRequestBody(config: ApiConfig, batchJob: BatchAnalysisJob) {
+  const numberedSentences = batchJob.sentenceEntries
+    .map(({ sentence }, index) => `句子 ${index + 1}: ${sentence}`)
+    .join('\n')
+
+  const prompt = [
+    '你是一名帮助中文母语者阅读西班牙语文学文本的老师。请严格围绕下面编号句子逐句解释，并且必须只输出一个 JSON 数组，不要输出 Markdown，不要输出额外说明。',
+    '',
+    'JSON 数组中每一项都必须对应同序号句子，结构固定为：',
+    '[',
+    '  {',
+    '    "grammar": "string",',
+    '    "meaning": "string",',
+    '    "highlights": [',
+    '      {',
+    '        "text": "string",',
+    '        "kind": "grammar | phrase | vocabulary",',
+    '        "explanation": "string"',
+    '      }',
+    '    ]',
+    '  }',
+    ']',
+    '',
+    '要求：',
+    '1. 必须使用中文回答。',
+    '2. grammar：只解释对应句子里最值得讲的 B1 及以上语法点、固定搭配、习语表达或有学习价值的结构。要简洁，不要长篇大论。',
+    '3. meaning：用自然中文说明对应句子在上下文中的含义、叙述作用或人物心理。',
+    '4. highlights：每个句子返回 0 到 4 个最值得收藏的知识点。',
+    '5. highlights 里的 text 必须是西语原词、短语或结构片段，例如 "Has pronunciado"、"tan... como..."。',
+    '6. kind 只能是 grammar、phrase、vocabulary 三选一。',
+    '7. explanation 必须是简短中文解释，适合后续复习。',
+    '8. 如果句子没有明显值得收藏的点，highlights 返回空数组 []。',
+    '9. grammar 和 meaning 即使很短也要尽量给出，不要留空。',
+    `10. 必须返回 ${batchJob.sentenceEntries.length} 个数组元素，顺序必须与句子编号完全一致。`,
+    '',
+    '参考风格：',
+    '- había pensado（过去完成时）表示在见到她之前，这些念头早已存在。',
+    '- en caso de 表示“万一……；如果发生……”。',
+    '- estar condenado a 表示“注定……；被迫一直……”。',
+    '',
+    '文档元信息：',
+    buildDocumentMetadata(batchJob.documentContext),
+    '',
+    `上文：${toPromptValue(batchJob.previousSentence)}`,
+    '待解析句子：',
+    numberedSentences,
+    `下文：${toPromptValue(batchJob.nextSentence)}`,
+  ].join('\n')
+
+  return {
+    model: config.model,
+    temperature: 0.2,
+    messages: [
+      {
+        role: 'user',
+        content: prompt,
       },
     ],
   }
@@ -344,6 +453,87 @@ export async function analyzeSentence(
       ...parsed,
       sentenceId: job.sentenceId,
     }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      if (!didTimeout && signal?.aborted) {
+        throw error
+      }
+
+      throw new Error('请求超时，请检查网络或缩短单次处理内容。')
+    }
+
+    if (error instanceof TypeError) {
+      throw new Error('网络请求失败，请检查 API URL、浏览器跨域设置或网络连通性。')
+    }
+
+    throw error
+  } finally {
+    if (signal) {
+      signal.removeEventListener('abort', handleExternalAbort)
+    }
+    window.clearTimeout(timeoutId)
+  }
+}
+
+export async function analyzeBatch(
+  config: ApiConfig,
+  batchJob: BatchAnalysisJob,
+  signal?: AbortSignal,
+): Promise<AnalysisResult[]> {
+  const controller = new AbortController()
+  let didTimeout = false
+  const handleExternalAbort = () => controller.abort()
+  const timeoutId = window.setTimeout(() => {
+    didTimeout = true
+    controller.abort()
+  }, REQUEST_TIMEOUT_MS * Math.min(batchJob.sentenceEntries.length, 5))
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort()
+    } else {
+      signal.addEventListener('abort', handleExternalAbort, { once: true })
+    }
+  }
+
+  try {
+    const response = await fetch(normalizeBaseUrl(config.baseUrl), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.apiKey.trim()}`,
+      },
+      body: JSON.stringify(buildBatchRequestBody(config, batchJob)),
+      signal: controller.signal,
+    })
+
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('鉴权失败，请检查 API Key 是否正确。')
+    }
+
+    if (response.status === 429) {
+      throw new Error('请求过于频繁，可能触发了限流，请降低并发数后重试。')
+    }
+
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(
+        `接口请求失败（${response.status}）。${text ? `返回：${text.slice(0, 120)}` : ''}`,
+      )
+    }
+
+    const payload = (await response.json()) as ChatCompletionResponse
+    if (payload.error?.message) {
+      throw new Error(payload.error.message)
+    }
+
+    const text = extractTextContent(payload.choices)
+    const parsed = parseStructuredBatchResult(text, batchJob.sentenceEntries.length)
+
+    return parsed.map((result, index) => ({
+      ...result,
+      sentenceId: batchJob.sentenceEntries[index]?.sentenceId ?? '',
+    }))
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       if (!didTimeout && signal?.aborted) {
@@ -502,9 +692,39 @@ export async function runConcurrentAnalysis(
   callbacks: AnalysisCallbacks,
   options: RunConcurrentAnalysisOptions = {},
 ) {
-  const concurrency = Math.max(1, Math.min(config.concurrency, jobs.length || 1))
+  const batchSize = Math.max(1, Math.round(options.batchSize ?? 1))
+  const chunks =
+    batchSize > 1
+      ? Array.from({ length: Math.ceil(jobs.length / batchSize) }, (_, index) =>
+          jobs.slice(index * batchSize, index * batchSize + batchSize),
+        )
+      : []
+  const concurrency = Math.max(
+    1,
+    Math.min(config.concurrency, batchSize > 1 ? chunks.length || 1 : jobs.length || 1),
+  )
   let cursor = 0
   const { signal } = options
+
+  async function runSingleJob(job: AnalysisJob, shouldNotifyStart = true) {
+    if (shouldNotifyStart) {
+      callbacks.onStart?.(job)
+    }
+
+    try {
+      const result = await analyzeSentence(config, promptConfig, job, signal)
+      callbacks.onSuccess?.({ sentenceId: job.sentenceId, result })
+    } catch (error) {
+      if (signal?.aborted) {
+        return
+      }
+
+      callbacks.onError?.({
+        sentenceId: job.sentenceId,
+        error: toUserFacingError(error),
+      })
+    }
+  }
 
   async function worker() {
     while (cursor < jobs.length && !signal?.aborted) {
@@ -515,23 +735,62 @@ export async function runConcurrentAnalysis(
         return
       }
 
-      callbacks.onStart?.(job)
+      await runSingleJob(job)
+    }
+  }
+
+  async function batchWorker() {
+    while (cursor < chunks.length && !signal?.aborted) {
+      const chunk = chunks[cursor]
+      cursor += 1
+
+      if (signal?.aborted) {
+        return
+      }
+
+      chunk.forEach((job) => callbacks.onStart?.(job))
 
       try {
-        const result = await analyzeSentence(config, promptConfig, job, signal)
-        callbacks.onSuccess?.({ sentenceId: job.sentenceId, result })
-      } catch (error) {
-        if (signal?.aborted) {
-          return
-        }
+        const batchResults = await analyzeBatch(
+          config,
+          {
+            sentenceEntries: chunk.map(({ sentenceId, sentence }) => ({ sentenceId, sentence })),
+            previousSentence: chunk[0]?.previousSentence,
+            nextSentence: chunk[chunk.length - 1]?.nextSentence,
+            documentContext: chunk[0]?.documentContext,
+          },
+          signal,
+        )
 
-        callbacks.onError?.({
-          sentenceId: job.sentenceId,
-          error: toUserFacingError(error),
+        batchResults.forEach((result, index) => {
+          const job = chunk[index]
+          if (!job) {
+            return
+          }
+
+          if (!result.grammar && !result.meaning) {
+            callbacks.onError?.({
+              sentenceId: job.sentenceId,
+              error: '批量解析返回的对应结果缺少 grammar 和 meaning 字段。',
+            })
+            return
+          }
+
+          callbacks.onSuccess?.({ sentenceId: job.sentenceId, result })
         })
+      } catch {
+        for (const job of chunk) {
+          if (signal?.aborted) {
+            return
+          }
+
+          await runSingleJob(job, false)
+        }
       }
     }
   }
 
-  await Promise.all(Array.from({ length: concurrency }, () => worker()))
+  await Promise.all(
+    Array.from({ length: concurrency }, () => (batchSize > 1 ? batchWorker() : worker())),
+  )
 }

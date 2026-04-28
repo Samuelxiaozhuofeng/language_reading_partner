@@ -1,4 +1,5 @@
 import {
+  MAX_BATCH_SIZE,
   MAX_PROMPT_CONTEXT_SENTENCE_COUNT,
   type PromptConfigChangeHandler,
   type VocabularyPromptConfigChangeHandler,
@@ -63,6 +64,17 @@ function PromptSettingsTab({
               onChange={(event) => onPromptChange('nextSentenceCount', Number(event.target.value))}
             />
           </label>
+
+          <label className="field">
+            <span>每次解析句数</span>
+            <input
+              type="number"
+              min={1}
+              max={MAX_BATCH_SIZE}
+              value={promptConfig.batchSize}
+              onChange={(event) => onPromptChange('batchSize', Number(event.target.value))}
+            />
+          </label>
         </div>
 
         <label className="field field-block">
@@ -79,6 +91,7 @@ function PromptSettingsTab({
           句子解释 Prompt 会作为单条用户消息发送给模型，请保留
           `{'{sentence}'}`、`{'{previousSentence}'}`、`{'{nextSentence}'}` 这些占位符；如果你想显式利用文档范围信息，也可以加入
           `{'{documentMetadata}'}`、`{'{documentType}'}`、`{'{documentTitle}'}`、`{'{documentAuthor}'}`、`{'{chapterTitle}'}`。
+          每次解析句数大于 1 时会使用内置批量 Prompt，以保证模型按顺序返回 JSON 数组。
         </p>
       </section>
 

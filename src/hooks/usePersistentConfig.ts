@@ -11,6 +11,7 @@ import type {
 } from '../types'
 import {
   ANKI_STORAGE_KEY,
+  clampBatchSize,
   clampConcurrency,
   clampPromptContextSentenceCount,
   clampReadingContentWidth,
@@ -177,12 +178,25 @@ export function usePersistentConfig(): PersistentConfigState {
   }, [])
 
   const handlePromptChange: PromptConfigChangeHandler = useCallback((key, value) => {
+    if (key === 'previousSentenceCount' || key === 'nextSentenceCount') {
+      setPromptConfig((current) => ({
+        ...current,
+        [key]: clampPromptContextSentenceCount(value),
+      }))
+      return
+    }
+
+    if (key === 'batchSize') {
+      setPromptConfig((current) => ({
+        ...current,
+        [key]: clampBatchSize(value),
+      }))
+      return
+    }
+
     setPromptConfig((current) => ({
       ...current,
-      [key]:
-        key === 'previousSentenceCount' || key === 'nextSentenceCount'
-          ? clampPromptContextSentenceCount(value)
-          : value,
+      [key]: value,
     }))
   }, [])
 

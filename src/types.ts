@@ -27,6 +27,7 @@ export type PromptConfig = {
   template: string
   previousSentenceCount: number
   nextSentenceCount: number
+  batchSize: number
 }
 
 export type VocabularyPromptConfig = {
@@ -80,6 +81,13 @@ export type AnalysisResult = {
 export type AnalysisJob = {
   sentenceId: string
   sentence: string
+  previousSentence?: string
+  nextSentence?: string
+  documentContext?: AnalysisDocumentContext
+}
+
+export type BatchAnalysisJob = {
+  sentenceEntries: Array<{ sentenceId: string; sentence: string }>
   previousSentence?: string
   nextSentence?: string
   documentContext?: AnalysisDocumentContext

@@ -27,6 +27,7 @@ export const READING_PREFERENCES_STORAGE_KEY = 'spanish-reading-assistant/readin
 export const MAX_HISTORY_ITEMS = 6
 export const MAX_CONCURRENCY = 99
 export const MAX_PROMPT_CONTEXT_SENTENCE_COUNT = 10
+export const MAX_BATCH_SIZE = 10
 export const MIN_READING_CONTENT_WIDTH = 720
 export const MAX_READING_CONTENT_WIDTH = 1180
 export const MIN_READING_FONT_SIZE = 16
@@ -85,6 +86,7 @@ export const defaultPromptConfig: PromptConfig = {
   ].join('\n'),
   previousSentenceCount: 1,
   nextSentenceCount: 1,
+  batchSize: 1,
 }
 
 export const defaultVocabularyPromptConfig: VocabularyPromptConfig = {
@@ -194,6 +196,7 @@ function convertLegacyPromptConfig(parsed: Partial<PromptConfig> & {
       template: parsed.template,
       previousSentenceCount: clampPromptContextSentenceCount(parsed.previousSentenceCount),
       nextSentenceCount: clampPromptContextSentenceCount(parsed.nextSentenceCount),
+      batchSize: clampBatchSize(parsed.batchSize),
     } satisfies PromptConfig
   }
 
@@ -210,6 +213,7 @@ function convertLegacyPromptConfig(parsed: Partial<PromptConfig> & {
     template: [systemPrompt, userPromptTemplate].filter(Boolean).join('\n\n'),
     previousSentenceCount: clampPromptContextSentenceCount(parsed.previousSentenceCount),
     nextSentenceCount: clampPromptContextSentenceCount(parsed.nextSentenceCount),
+    batchSize: clampBatchSize(parsed.batchSize),
   } satisfies PromptConfig
 }
 
@@ -247,6 +251,15 @@ export function clampPromptContextSentenceCount(value: unknown): number {
   }
 
   return Math.min(MAX_PROMPT_CONTEXT_SENTENCE_COUNT, Math.max(0, Math.round(numeric)))
+}
+
+export function clampBatchSize(value: unknown): number {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) {
+    return defaultPromptConfig.batchSize
+  }
+
+  return Math.min(MAX_BATCH_SIZE, Math.max(1, Math.round(numeric)))
 }
 
 export function clampReadingContentWidth(value: unknown): number {
