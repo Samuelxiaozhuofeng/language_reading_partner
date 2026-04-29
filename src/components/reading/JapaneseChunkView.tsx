@@ -2,6 +2,7 @@ import {
   hasKanji,
   findChunkIndexByTokenIndex,
   getChunkTokenIndices,
+  isJapaneseAnalysisPunctuation,
   isParticle,
   katakanaToHiragana,
   type JapaneseChunkSelection,
@@ -36,8 +37,10 @@ export function JapaneseChunkView({
   return (
     <span className="ja-chunk-line">
       {tokens.map((token, index) => {
+        const isPunctuation = isJapaneseAnalysisPunctuation(token)
         const tokenChunkIndex = findChunkIndexByTokenIndex(chunks, index)
         const isActive =
+          !isPunctuation &&
           activeChunkSelection?.sentenceId === sentenceId &&
           getChunkTokenIndices(
             chunks?.[activeChunkSelection.chunkIndex],
@@ -47,6 +50,7 @@ export function JapaneseChunkView({
         const className = [
           'ja-chunk',
           isParticle(token.pos) ? 'is-particle' : '',
+          isPunctuation ? 'is-punctuation' : '',
           isActive ? 'is-active-chunk' : '',
         ].filter(Boolean).join(' ')
         const reading = katakanaToHiragana(token.reading)
@@ -60,7 +64,15 @@ export function JapaneseChunkView({
             token.surface
           )
 
-        return onChunkClick ? (
+        if (!onChunkClick || isPunctuation) {
+          return (
+            <span className={className} key={`${token.surface}:${index}`}>
+              {content}
+            </span>
+          )
+        }
+
+        return (
           <button
             className={className}
             disabled={disabled}
@@ -73,10 +85,6 @@ export function JapaneseChunkView({
           >
             {content}
           </button>
-        ) : (
-          <span className={className} key={`${token.surface}:${index}`}>
-            {content}
-          </span>
         )
       })}
     </span>

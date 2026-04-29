@@ -10,6 +10,7 @@ import type {
   VocabularyPromptConfig,
 } from '../types'
 import { sanitizeChunkAnalysis } from './analysisResult'
+import { isJapaneseAnalysisPunctuation } from './japaneseUtils'
 import { sanitizeHighlights } from './knowledge'
 
 type ChatCompletionResponse = {
@@ -214,12 +215,19 @@ function formatJapaneseTokens(tokens?: JapaneseToken[]) {
     return '（无）'
   }
 
-  return tokens
-    .map((token, index) =>
+  const analysisTokens = tokens
+    .map((token, index) => ({ token, index }))
+    .filter(({ token }) => !isJapaneseAnalysisPunctuation(token))
+
+  if (analysisTokens.length === 0) {
+    return '（无）'
+  }
+
+  return analysisTokens
+    .map(({ token, index }) =>
       [
         `[${index}] ${token.surface}`,
         token.reading || '読みなし',
-        token.baseForm || token.surface,
         token.pos || '品詞不明',
       ].join(' / '),
     )

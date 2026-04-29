@@ -1,4 +1,5 @@
 import type { JapaneseChunkExplanation, JapaneseToken } from '../types'
+import { isJapaneseAnalysisPunctuation } from './japaneseUtils'
 
 type ChunkCandidate = Partial<Record<keyof JapaneseChunkExplanation, unknown>> & {
   depends_on?: unknown
@@ -77,15 +78,21 @@ function validateChunkTokenCoverage(
   }
 
   const flattenedIndices = chunks.flatMap((chunk) => chunk.tokenIndices ?? [])
-  const expectedIndices = tokens.map((_, index) => index)
+  const expectedIndices = tokens
+    .map((token, index) => (isJapaneseAnalysisPunctuation(token) ? null : index))
+    .filter((index): index is number => index !== null)
+
+  if (expectedIndices.length === 0) {
+    return
+  }
 
   if (flattenedIndices.length !== expectedIndices.length) {
-    throw new Error('chunkAnalysis.token_indices 必须覆盖所有原始 token。')
+    throw new Error('chunkAnalysis.token_indices 必须覆盖所有非标点 token。')
   }
 
   flattenedIndices.forEach((tokenIndex, flattenedIndex) => {
     if (tokenIndex !== expectedIndices[flattenedIndex]) {
-      throw new Error('chunkAnalysis.token_indices 必须按原句顺序覆盖每个 token 一次。')
+      throw new Error('chunkAnalysis.token_indices 必须按原句顺序覆盖每个非标点 token 一次。')
     }
   })
 
@@ -93,6 +100,13 @@ function validateChunkTokenCoverage(
     const tokenIndices = chunk.tokenIndices
     if (!tokenIndices?.length) {
       throw new Error('chunkAnalysis.token_indices 缺失。')
+    }
+
+    if (tokenIndices.some((tokenIndex) => {
+      const token = tokens[tokenIndex]
+      return token ? isJapaneseAnalysisPunctuation(token) : false
+    })) {
+      throw new Error('chunkAnalysis.token_indices 不应包含标点 token。')
     }
 
     const expectedChunk = tokenIndices.map((tokenIndex) => tokens[tokenIndex]?.surface ?? '').join('')
@@ -170,7 +184,9 @@ export function sanitizeChunkAnalysis(
   })
 
   if (tokens?.length) {
-    if (chunks.length === 0) {
+    const hasAnalysisTokens = tokens.some((token) => !isJapaneseAnalysisPunctuation(token))
+
+    if (chunks.length === 0 && hasAnalysisTokens) {
       throw new Error('日语解析返回缺少有效语块。')
     }
 

@@ -5,6 +5,36 @@ const KATAKANA_START = 0x30a1
 const KATAKANA_END = 0x30f6
 const KATAKANA_TO_HIRAGANA_OFFSET = 0x60
 const MISSING_READING = '*'
+const JAPANESE_ANALYSIS_PUNCTUATION = new Set([
+  '、',
+  '。',
+  '，',
+  '．',
+  '「',
+  '」',
+  '『',
+  '』',
+  '（',
+  '）',
+  '(',
+  ')',
+  '［',
+  '］',
+  '[',
+  ']',
+  '“',
+  '”',
+  '"',
+  "'",
+  '：',
+  ':',
+  '；',
+  ';',
+  '！',
+  '!',
+  '？',
+  '?',
+])
 
 export type JapaneseChunkSelection = {
   sentenceId: string
@@ -59,6 +89,10 @@ export function toHtmlRuby(tokens: JapaneseToken[]) {
 
 export function isParticle(pos: string) {
   return pos === '助詞' || pos.startsWith('助詞,') || pos.includes('助詞')
+}
+
+export function isJapaneseAnalysisPunctuation(token: JapaneseToken) {
+  return token.pos === '記号' || JAPANESE_ANALYSIS_PUNCTUATION.has(token.surface)
 }
 
 export function doTokensMatchText(tokens: JapaneseToken[] | undefined, text: string) {
