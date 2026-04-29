@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { chapterStatusLabelMap, formatTime } from '../lib/appState'
-import type { BookChapterRecord, BookRecord, CollectionRecord } from '../types'
+import { detectEpubLanguage } from '../lib/epub'
+import type { BookChapterRecord, BookLanguage, BookRecord, CollectionRecord } from '../types'
 import CollectionsBar from './library/CollectionsBar'
 
 type LibraryPageProps = {
@@ -17,7 +19,7 @@ type LibraryPageProps = {
   onDeleteBook: (bookId: string) => void
   onDeleteChapter: (chapterId: string) => void
   onDeleteCollection: (collectionId: string) => void | Promise<void>
-  onImportFile: (file: File) => void | Promise<void>
+  onImportFile: (file: File, language: BookLanguage) => void | Promise<void>
   onMoveBookToCollection: (bookId: string, collectionId: string | null) => void | Promise<void>
   onOpenChapterReading: (chapterId: string) => void
   onOpenChapterWorkspace: (chapterId: string) => void
@@ -63,6 +65,10 @@ function LibraryPage({
   selectedChapterId,
   totalBookCount,
 }: LibraryPageProps) {
+  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null)
+  const [detectedLanguage, setDetectedLanguage] = useState<BookLanguage | null>(null)
+  const [selectedImportLanguage, setSelectedImportLanguage] = useState<BookLanguage>('es')
+  const [showLanguageDialog, setShowLanguageDialog] = useState(false)
   const hasRecentChapter = Boolean(selectedBook?.lastReadChapterId && recentChapterTitle)
   const totalChapterCount = books.reduce((sum, book) => sum + book.chapterCount, 0)
   const activeCollectionName = activeCollectionId
@@ -72,12 +78,41 @@ function LibraryPage({
     ? formatTime(selectedBook.lastOpenedAt)
     : '未开始阅读'
 
+  const handleFileSelected = async (file: File) => {
+    setPendingImportFile(file)
+    setDetectedLanguage(null)
+    setSelectedImportLanguage('es')
+
+    const detected = await detectEpubLanguage(file)
+    setDetectedLanguage(detected)
+    setSelectedImportLanguage(detected ?? 'es')
+    setShowLanguageDialog(true)
+  }
+
+  const handleCancelLanguageDialog = () => {
+    setPendingImportFile(null)
+    setDetectedLanguage(null)
+    setSelectedImportLanguage('es')
+    setShowLanguageDialog(false)
+  }
+
+  const handleConfirmLanguage = async () => {
+    if (!pendingImportFile) {
+      return
+    }
+
+    const file = pendingImportFile
+    setShowLanguageDialog(false)
+    setPendingImportFile(null)
+    await onImportFile(file, selectedImportLanguage)
+  }
+
   return (
     <>
       <header className="panel library-header">
         <div className="library-header-top">
           <div className="library-header-copy">
-            <p className="eyebrow">Spanish Reading Copilot</p>
+            <p className="eyebrow">Reading Copilot</p>
             <h1>阅读搭子</h1>
           </div>
           <div className="hero-actions">
@@ -106,7 +141,7 @@ function LibraryPage({
                     return
                   }
 
-                  void onImportFile(file)
+                  void handleFileSelected(file)
                   event.currentTarget.value = ''
                 }}
               />
@@ -196,6 +231,7 @@ function LibraryPage({
                       <div className="book-card-meta">
                         <span>{book.chapterCount} 章</span>
                         <span>{book.sourceType === 'manual' ? '手动保存' : 'EPUB 导入'}</span>
+                        <span>{(book.language ?? 'es') === 'ja' ? '日本語' : '西班牙语'}</span>
                         <span>导入于 {formatTime(book.importedAt)}</span>
                       </div>
                     </div>
@@ -298,6 +334,47 @@ function LibraryPage({
           )}
         </section>
       </main>
+
+      {showLanguageDialog ? (
+        <dialog className="language-dialog" open>
+          <form method="dialog" className="language-dialog-card">
+            <div className="panel-header">
+              <div>
+                <p className="section-kicker">Language</p>
+                <h2>选择导入语言</h2>
+              </div>
+            </div>
+            <p className="panel-tip">
+              {detectedLanguage
+                ? `检测到 EPUB 语言为${detectedLanguage === 'ja' ? '日本語' : '西班牙语'}。`
+                : '未能从 EPUB 元数据中识别语言，请手动选择。'}
+            </p>
+            <label className="field field-block">
+              <span>解析语言</span>
+              <select
+                value={selectedImportLanguage}
+                onChange={(event) => setSelectedImportLanguage(event.currentTarget.value as BookLanguage)}
+              >
+                <option value="es">西班牙语</option>
+                <option value="ja">日本語</option>
+              </select>
+            </label>
+            <div className="panel-actions">
+              <button className="ghost-button" type="button" onClick={handleCancelLanguageDialog}>
+                取消
+              </button>
+              <button
+                className="primary-button"
+                disabled={isImporting}
+                type="button"
+                onClick={() => void handleConfirmLanguage()}
+              >
+                {isImporting ? '导入中...' : '确认导入'}
+              </button>
+            </div>
+          </form>
+        </dialog>
+      ) : null}
     </>
   )
 }

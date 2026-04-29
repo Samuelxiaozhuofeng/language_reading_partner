@@ -7,7 +7,7 @@ import type {
 } from '../types'
 
 const DB_NAME = 'spanish-reading-assistant/library'
-const DB_VERSION = 4
+const DB_VERSION = 5
 
 type BookFileRecord = {
   bookId: string
@@ -61,7 +61,7 @@ let dbPromise: Promise<IDBPDatabase<LibraryDbSchema>> | null = null
 function getDb() {
   if (!dbPromise) {
     dbPromise = openDB<LibraryDbSchema>(DB_NAME, DB_VERSION, {
-      upgrade(database, _oldVersion, _newVersion, transaction) {
+      async upgrade(database, oldVersion, _newVersion, transaction) {
         const bookStore = database.objectStoreNames.contains('books')
           ? transaction.objectStore('books')
           : database.createObjectStore('books', { keyPath: 'id' })
@@ -90,6 +90,20 @@ function getDb() {
 
         if (!database.objectStoreNames.contains('collections')) {
           database.createObjectStore('collections', { keyPath: 'id' })
+        }
+
+        if (oldVersion < 5) {
+          let cursor = await bookStore.openCursor()
+          while (cursor) {
+            const book = cursor.value
+            if (!book.language) {
+              await cursor.update({
+                ...book,
+                language: 'es',
+              })
+            }
+            cursor = await cursor.continue()
+          }
         }
       },
     })

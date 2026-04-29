@@ -1,9 +1,12 @@
 import { ReadingDisplaySettings } from './ReadingDisplaySettings'
 import { SentenceDetailPanel } from './SentenceDetailPanel'
-import type { HighlightSelection } from './readingShared'
+import { JapaneseChunkView } from './JapaneseChunkView'
+import { getSentenceDisplayText, type HighlightSelection } from './readingShared'
+import type { JapaneseChunkSelection } from '../../lib/japaneseUtils'
 import type {
   AnalysisHighlight,
   AnalysisResult,
+  BookLanguage,
   ReadingPreferences,
   SentenceItem,
   VocabularyExplanation,
@@ -12,7 +15,9 @@ import { statusLabelMap } from '../../lib/appState'
 
 type DraftReadingViewProps = {
   activeSelection: HighlightSelection | null
+  activeChunkSelection: JapaneseChunkSelection | null
   areAllSentencesExpanded: boolean
+  bookLanguage: BookLanguage
   expandedSentenceIds: Set<string>
   isReadingSettingsOpen: boolean
   onAddToAnki: (
@@ -36,6 +41,7 @@ type DraftReadingViewProps = {
     highlight: AnalysisHighlight,
   ) => void
   onSelectHighlight: (sentenceId: string, highlightId: string) => void
+  onSelectChunk: (sentenceId: string, chunkIndex: number) => void
   onToggleAllSentences: () => void
   onToggleReadingSettings: () => void
   onToggleSentence: (sentenceId: string) => void
@@ -48,7 +54,9 @@ type DraftReadingViewProps = {
 
 export function DraftReadingView({
   activeSelection,
+  activeChunkSelection,
   areAllSentencesExpanded,
+  bookLanguage,
   expandedSentenceIds,
   isReadingSettingsOpen,
   onAddToAnki,
@@ -61,6 +69,7 @@ export function DraftReadingView({
   onRetrySentence,
   onSaveHighlight,
   onSelectHighlight,
+  onSelectChunk,
   onToggleAllSentences,
   onToggleReadingSettings,
   onToggleSentence,
@@ -88,6 +97,7 @@ export function DraftReadingView({
                 onClose={onCloseReadingSettings}
                 onReadingPreferencesChange={onReadingPreferencesChange}
                 onToggle={onToggleReadingSettings}
+                bookLanguage={bookLanguage}
                 readingPreferences={readingPreferences}
               />
               <button className="ghost-button" type="button" onClick={onOpenResources}>
@@ -117,23 +127,55 @@ export function DraftReadingView({
                   </span>
                 </div>
 
-                <button
-                  aria-expanded={isExpanded}
-                  className={`reading-sentence-toggle ${isExpanded ? 'is-expanded' : ''}`}
-                  type="button"
-                  onClick={() => onToggleSentence(sentence.id)}
-                >
-                  <span className="reading-sentence-quote">
-                    {sentence.editedText || sentence.text}
-                  </span>
-                  <span className="reading-sentence-toggle-hint">
-                    {isExpanded ? '收起解释' : '点击展开解释'}
-                  </span>
-                </button>
+                {bookLanguage === 'ja' ? (
+                  <div
+                    aria-expanded={isExpanded}
+                    className={`reading-sentence-toggle ${isExpanded ? 'is-expanded' : ''}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onToggleSentence(sentence.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        onToggleSentence(sentence.id)
+                      }
+                    }}
+                  >
+                    <span className="reading-sentence-quote">
+                      <JapaneseChunkView
+                        activeChunkSelection={activeChunkSelection}
+                        sentenceId={sentence.id}
+                        showFurigana={readingPreferences.showFurigana}
+                        text={getSentenceDisplayText(sentence)}
+                        tokens={sentence.tokens}
+                        onChunkClick={(chunkIndex) => onSelectChunk(sentence.id, chunkIndex)}
+                      />
+                    </span>
+                    <span className="reading-sentence-toggle-hint">
+                      {isExpanded ? '收起解释' : '点击展开解释'}
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    aria-expanded={isExpanded}
+                    className={`reading-sentence-toggle ${isExpanded ? 'is-expanded' : ''}`}
+                    type="button"
+                    onClick={() => onToggleSentence(sentence.id)}
+                  >
+                    <span className="reading-sentence-quote">
+                      {sentence.editedText || sentence.text}
+                    </span>
+                    <span className="reading-sentence-toggle-hint">
+                      {isExpanded ? '收起解释' : '点击展开解释'}
+                    </span>
+                  </button>
+                )}
 
                 {isExpanded ? (
                   <SentenceDetailPanel
                     activeSelection={activeSelection}
+                    activeChunkSelection={activeChunkSelection}
+                    bookLanguage={bookLanguage}
                     onAddToAnki={onAddToAnki}
                     onExplainVocabulary={onExplainVocabulary}
                     onOpenResources={onOpenResources}
@@ -141,9 +183,11 @@ export function DraftReadingView({
                     onRetrySentence={onRetrySentence}
                     onSaveHighlight={onSaveHighlight}
                     onSelectHighlight={onSelectHighlight}
+                    onSelectChunk={onSelectChunk}
                     result={results[sentence.id]}
                     savedHighlightSignatures={savedHighlightSignatures}
                     sentence={sentence}
+                    showFurigana={readingPreferences.showFurigana}
                   />
                 ) : null}
               </article>

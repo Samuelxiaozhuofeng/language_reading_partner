@@ -3,6 +3,7 @@ import type {
   AnalysisResult,
   AnkiConfig,
   ApiConfig,
+  BookLanguage,
   PromptConfig,
   ReadingPreferences,
   RunSession,
@@ -55,6 +56,7 @@ type PersistentConfigState = {
   ankiConfig: AnkiConfig
   articleTitle: string
   apiConfig: ApiConfig
+  draftLanguage: BookLanguage
   handleAnkiConfigChange: AnkiConfigChangeHandler
   handleAnkiFieldMappingChange: AnkiFieldMappingChangeHandler
   handleConfigChange: ConfigChangeHandler
@@ -76,6 +78,7 @@ type PersistentConfigState = {
   sentences: SentenceItem[]
   setHistory: Dispatch<SetStateAction<RunSession[]>>
   setArticleTitle: Dispatch<SetStateAction<string>>
+  setDraftLanguage: Dispatch<SetStateAction<BookLanguage>>
   setResults: Dispatch<SetStateAction<Record<string, AnalysisResult>>>
   setSentences: Dispatch<SetStateAction<SentenceItem[]>>
   setSourceText: Dispatch<SetStateAction<string>>
@@ -98,6 +101,7 @@ export function usePersistentConfig(): PersistentConfigState {
     restoreReadingPreferences,
   )
   const [articleTitle, setArticleTitle] = useState(draft.articleTitle)
+  const [draftLanguage, setDraftLanguage] = useState<BookLanguage>(draft.language ?? 'es')
   const [sourceText, setSourceText] = useState(draft.sourceText)
   const [sentences, setSentences] = useState<SentenceItem[]>(draft.sentences)
   const [results, setResults] = useState<Record<string, AnalysisResult>>(draft.results)
@@ -134,9 +138,15 @@ export function usePersistentConfig(): PersistentConfigState {
   useEffect(() => {
     localStorage.setItem(
       DRAFT_STORAGE_KEY,
-      JSON.stringify({ articleTitle, sourceText, sentences, results } satisfies PersistedDraft),
+      JSON.stringify({
+        articleTitle,
+        language: draftLanguage,
+        sourceText,
+        sentences,
+        results,
+      } satisfies PersistedDraft),
     )
-  }, [articleTitle, results, sentences, sourceText])
+  }, [articleTitle, draftLanguage, results, sentences, sourceText])
 
   useEffect(() => {
     localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history))
@@ -217,7 +227,9 @@ export function usePersistentConfig(): PersistentConfigState {
         [key]:
           key === 'contentWidth'
             ? clampReadingContentWidth(value)
-            : clampReadingFontSize(value),
+            : key === 'fontSize'
+              ? clampReadingFontSize(value)
+              : Boolean(value),
       }))
     },
     [],
@@ -241,6 +253,7 @@ export function usePersistentConfig(): PersistentConfigState {
     setVocabularyPromptConfig(defaultVocabularyPromptConfig)
     setReadingPreferences(defaultReadingPreferences)
     setArticleTitle('')
+    setDraftLanguage('es')
     setSourceText('')
     setSentences([])
     setResults({})
@@ -259,6 +272,7 @@ export function usePersistentConfig(): PersistentConfigState {
     ankiConfig,
     articleTitle,
     apiConfig,
+    draftLanguage,
     handleAnkiConfigChange,
     handleAnkiFieldMappingChange,
     handleConfigChange,
@@ -278,6 +292,7 @@ export function usePersistentConfig(): PersistentConfigState {
     resetVocabularyPromptConfig,
     results,
     setArticleTitle,
+    setDraftLanguage,
     sentences,
     setHistory,
     setResults,

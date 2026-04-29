@@ -1,4 +1,10 @@
-import type { AnalysisResult, BookChapterRecord, BookRecord, SentenceItem } from '../../types'
+import type {
+  AnalysisResult,
+  BookChapterRecord,
+  BookLanguage,
+  BookRecord,
+  SentenceItem,
+} from '../../types'
 import {
   createParagraphBlock,
   deriveBookAnalysisState,
@@ -7,6 +13,7 @@ import {
 
 export type CreateManualDraftBookPayloadInput = {
   articleTitle: string
+  language: BookLanguage
   results: Record<string, AnalysisResult>
   sentences: SentenceItem[]
   sourceText: string
@@ -41,6 +48,7 @@ export function buildManualParagraphBlocks(sourceText: string) {
 
 export function createManualDraftBookPayload({
   articleTitle,
+  language,
   results,
   sentences,
   sourceText,
@@ -72,6 +80,7 @@ export function createManualDraftBookPayload({
     id: bookId,
     title,
     author: '手动导入',
+    language,
     sourceType: 'manual',
     importedAt: timestamp,
     chapterCount: 1,

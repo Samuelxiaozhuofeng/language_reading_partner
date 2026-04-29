@@ -5,6 +5,7 @@ import { resolveReadingResumeAnchor } from '../lib/readingAnchor'
 import {
   buildChapterReadingParagraphs,
 } from '../lib/readingFlow'
+import type { JapaneseChunkSelection } from '../lib/japaneseUtils'
 import { ChapterReadingView } from './reading/ChapterReadingView'
 import { DraftReadingView } from './reading/DraftReadingView'
 import { SentenceInspector } from './reading/SentenceInspector'
@@ -23,6 +24,7 @@ import {
 import type {
   AnalysisHighlight,
   AnalysisResult,
+  BookLanguage,
   ChapterParagraphBlock,
   ReadingPreferences,
   ReadingResumeAnchor,
@@ -34,6 +36,7 @@ import type {
 
 type ReadingPageProps = {
   activeRange?: SentenceRange | null
+  bookLanguage: BookLanguage
   contextTitle?: {
     bookTitle: string
     chapterTitle: string
@@ -73,6 +76,7 @@ type ReadingPageProps = {
 
 function ReadingPage({
   activeRange,
+  bookLanguage,
   contextTitle,
   globalError,
   onAddToAnki,
@@ -96,6 +100,8 @@ function ReadingPage({
   const isChapterMode = workspaceSource === 'chapter'
   const readingTitle = isChapterMode ? contextTitle?.chapterTitle ?? '章节阅读' : '沉浸阅读'
   const [activeSelection, setActiveSelection] = useState<HighlightSelection | null>(null)
+  const [activeChunkSelection, setActiveChunkSelection] =
+    useState<JapaneseChunkSelection | null>(null)
   const [activeSentenceId, setActiveSentenceId] = useState<string | null>(null)
   const [currentChapterPage, setCurrentChapterPage] = useState(0)
   const [expandedSentenceIds, setExpandedSentenceIds] = useState<Set<string>>(() => new Set())
@@ -120,6 +126,10 @@ function ReadingPage({
     activeSelection && validSentenceIdSet.has(activeSelection.sentenceId)
       ? activeSelection
       : null
+  const effectiveActiveChunkSelection =
+    activeChunkSelection && validSentenceIdSet.has(activeChunkSelection.sentenceId)
+      ? activeChunkSelection
+      : null
   const effectiveActiveSentenceId =
     activeSentenceId && validSentenceIdSet.has(activeSentenceId) ? activeSentenceId : null
   const effectiveExpandedSentenceIds = useMemo(
@@ -133,9 +143,9 @@ function ReadingPage({
   const chapterParagraphs = useMemo(
     () =>
       isChapterMode
-        ? buildChapterReadingParagraphs(paragraphBlocks ?? [], sentences, activeRange)
+        ? buildChapterReadingParagraphs(paragraphBlocks ?? [], sentences, activeRange, bookLanguage)
         : [],
-    [activeRange, isChapterMode, paragraphBlocks, sentences],
+    [activeRange, bookLanguage, isChapterMode, paragraphBlocks, sentences],
   )
   const chapterReadingKey = useMemo(
     () =>
@@ -350,6 +360,7 @@ function ReadingPage({
 
       setActiveSentenceId(null)
       setActiveSelection(null)
+      setActiveChunkSelection(null)
     }
 
     window.addEventListener('pointerdown', handlePointerDown)
@@ -362,21 +373,37 @@ function ReadingPage({
         ? null
         : { sentenceId, highlightId },
     )
+    setActiveChunkSelection(null)
   }
 
   const handleOpenSentence = (sentenceId: string) => {
     setActiveSelection(null)
+    setActiveChunkSelection(null)
     setActiveSentenceId((current) => (current === sentenceId ? null : sentenceId))
+  }
+
+  const handleSelectChunk = (sentenceId: string, chunkIndex: number) => {
+    setActiveSelection(null)
+    setActiveSentenceId(sentenceId)
+    setActiveChunkSelection((current) =>
+      current?.sentenceId === sentenceId && current.chunkIndex === chunkIndex
+        ? null
+        : { sentenceId, chunkIndex },
+    )
   }
 
   const handleCloseSentence = () => {
     setActiveSentenceId(null)
     setActiveSelection(null)
+    setActiveChunkSelection(null)
   }
 
   const handleToggleSentence = (sentenceId: string) => {
     if (effectiveActiveSelection?.sentenceId === sentenceId) {
       setActiveSelection(null)
+    }
+    if (effectiveActiveChunkSelection?.sentenceId === sentenceId) {
+      setActiveChunkSelection(null)
     }
 
     setExpandedSentenceIds((current) => {
@@ -393,6 +420,7 @@ function ReadingPage({
   const handleToggleAllSentences = () => {
     if (areAllSentencesExpanded) {
       setActiveSelection(null)
+      setActiveChunkSelection(null)
       setExpandedSentenceIds(new Set())
       return
     }
@@ -421,6 +449,7 @@ function ReadingPage({
 
     setActiveSentenceId(null)
     setActiveSelection(null)
+    setActiveChunkSelection(null)
     setCurrentChapterPage(nextPage)
   }, [chapterPageCount, currentChapterPage])
 
@@ -476,15 +505,24 @@ function ReadingPage({
                 currentChapterPage={currentChapterPage}
                 currentChapterPageData={currentChapterPageData}
                 effectiveActiveSentenceId={effectiveActiveSentenceId}
+                activeChunkSelection={effectiveActiveChunkSelection}
+                bookLanguage={bookLanguage}
+                isReadingSettingsOpen={isReadingSettingsOpen}
                 onBackToWorkspace={onBackToWorkspace}
+                onCloseReadingSettings={() => setIsReadingSettingsOpen(false)}
                 onChangeChapterPage={handleChangeChapterPage}
                 onOpenSentence={handleOpenSentence}
+                onReadingPreferencesChange={onReadingPreferencesChange}
+                onSelectChunk={handleSelectChunk}
+                onToggleReadingSettings={() => setIsReadingSettingsOpen((current) => !current)}
+                readingPreferences={readingPreferences}
                 readingTitle={readingTitle}
                 resumeHighlightSentenceId={resumeHighlightSentenceId}
               />
             ) : (
               <DraftReadingView
                 activeSelection={effectiveActiveSelection}
+                activeChunkSelection={effectiveActiveChunkSelection}
                 areAllSentencesExpanded={areAllSentencesExpanded}
                 expandedSentenceIds={effectiveExpandedSentenceIds}
                 isReadingSettingsOpen={isReadingSettingsOpen}
@@ -498,9 +536,11 @@ function ReadingPage({
                 onRetrySentence={onRetrySentence}
                 onSaveHighlight={onSaveHighlight}
                 onSelectHighlight={handleSelectHighlight}
+                onSelectChunk={handleSelectChunk}
                 onToggleAllSentences={handleToggleAllSentences}
                 onToggleReadingSettings={() => setIsReadingSettingsOpen((current) => !current)}
                 onToggleSentence={handleToggleSentence}
+                bookLanguage={bookLanguage}
                 readingPreferences={readingPreferences}
                 readingTitle={readingTitle}
                 results={results}
@@ -513,6 +553,7 @@ function ReadingPage({
           {shouldDockInspector ? (
             <SentenceInspector
               activeSelection={effectiveActiveSelection}
+              activeChunkSelection={effectiveActiveChunkSelection}
               activeSentence={activeSentence}
               activeSentenceIndex={activeSentenceIndex}
               mode="docked"
@@ -524,11 +565,14 @@ function ReadingPage({
               onRetrySentence={onRetrySentence}
               onSaveHighlight={onSaveHighlight}
               onSelectHighlight={handleSelectHighlight}
+              onSelectChunk={handleSelectChunk}
               onSetCurrentResumeAnchor={handleSetCurrentResumeAnchor}
               resolveStatusLabel={(status) => statusLabelMap[status]}
               results={results}
+              bookLanguage={bookLanguage}
               resumeAnchorSentenceId={resumeAnchorSentenceId}
               savedHighlightSignatures={savedHighlightSignatures}
+              showFurigana={readingPreferences.showFurigana}
             />
           ) : null}
         </div>
@@ -547,6 +591,7 @@ function ReadingPage({
           <div className="reading-sheet-frame" onClick={(event) => event.stopPropagation()}>
             <SentenceInspector
               activeSelection={effectiveActiveSelection}
+              activeChunkSelection={effectiveActiveChunkSelection}
               activeSentence={activeSentence}
               activeSentenceIndex={activeSentenceIndex}
               mode="sheet"
@@ -558,11 +603,14 @@ function ReadingPage({
               onRetrySentence={onRetrySentence}
               onSaveHighlight={onSaveHighlight}
               onSelectHighlight={handleSelectHighlight}
+              onSelectChunk={handleSelectChunk}
               onSetCurrentResumeAnchor={handleSetCurrentResumeAnchor}
               resolveStatusLabel={(status) => statusLabelMap[status]}
               results={results}
+              bookLanguage={bookLanguage}
               resumeAnchorSentenceId={resumeAnchorSentenceId}
               savedHighlightSignatures={savedHighlightSignatures}
+              showFurigana={readingPreferences.showFurigana}
             />
           </div>
         </div>

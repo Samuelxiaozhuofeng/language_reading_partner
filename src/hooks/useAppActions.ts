@@ -9,6 +9,7 @@ import type {
   AnalysisResult,
   AnkiConfig,
   AppPage,
+  BookLanguage,
   BookChapterRecord,
   BookRecord,
   SentenceItem,
@@ -18,6 +19,7 @@ import type {
 type PersistentActionState = {
   ankiConfig: AnkiConfig
   articleTitle: string
+  draftLanguage: BookLanguage
   resetAll: () => void
   setArticleTitle: Dispatch<SetStateAction<string>>
 }
@@ -29,7 +31,7 @@ type AnalysisActionState = {
 type LibraryActionState = {
   clearLibrary: () => Promise<void>
   currentChapter: BookChapterRecord | null
-  importBook: (file: File) => Promise<{
+  importBook: (file: File, language: BookLanguage) => Promise<{
     chapters: BookChapterRecord[]
   }>
   openChapter: (chapterId: string) => Promise<BookChapterRecord | null>
@@ -41,6 +43,7 @@ type LibraryActionState = {
   removeKnowledgeResourceBySignature: (signature: string) => Promise<void>
   saveManualDraftAsBook: (input: {
     articleTitle: string
+    language: BookLanguage
     results: Record<string, AnalysisResult>
     sentences: SentenceItem[]
     sourceText: string
@@ -87,6 +90,7 @@ type UseAppActionsArgs = {
 
 type ManualDraftSaveInput = {
   articleTitle?: string
+  language?: BookLanguage
   results?: Record<string, AnalysisResult>
   sentences?: SentenceItem[]
   sourceText?: string
@@ -205,8 +209,8 @@ export function useAppActions({
     }
   }, [library, setWorkspaceSource])
 
-  const handleImportFile = useCallback(async (file: File) => {
-    const payload = await library.importBook(file)
+  const handleImportFile = useCallback(async (file: File, language: BookLanguage) => {
+    const payload = await library.importBook(file, language)
     if (payload.chapters[0]) {
       setWorkspaceSource('chapter')
       setActivePage('workspace')
@@ -223,6 +227,7 @@ export function useAppActions({
     try {
       const payload = await library.saveManualDraftAsBook({
         articleTitle: input.articleTitle ?? persistent.articleTitle,
+        language: input.language ?? persistent.draftLanguage,
         sourceText: input.sourceText ?? workspaceSourceText,
         sentences: input.sentences ?? workspaceSentences,
         results: input.results ?? workspaceResults,
@@ -241,6 +246,7 @@ export function useAppActions({
     effectiveWorkspaceSource,
     library,
     persistent.articleTitle,
+    persistent.draftLanguage,
     setActivePage,
     setIsSavingManualDraft,
     setWorkspaceSource,

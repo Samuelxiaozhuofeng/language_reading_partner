@@ -4,6 +4,7 @@ import {
   cleanSentences,
   collectSession,
   createSentenceItem,
+  defaultJapanesePromptConfig,
   formatTime,
   MAX_HISTORY_ITEMS,
   updateSentenceState,
@@ -26,12 +27,15 @@ import {
   type PendingEntry,
 } from '../lib/analysis/runState'
 import { validateApiConfig, validateRunStart } from '../lib/analysis/runValidation'
+import { doTokensMatchText } from '../lib/japaneseUtils'
+import { tokenizeJapanese } from '../lib/kuromoji'
 import { analyzeSentence, runConcurrentAnalysis, toUserFacingError } from '../lib/openai'
-import { segmentSpanishText } from '../lib/segment'
+import { segmentText } from '../lib/segment'
 import type {
   AnalysisDocumentContext,
   AnalysisResult,
   ApiConfig,
+  BookLanguage,
   PromptConfig,
   RunSession,
   SentenceItem,
@@ -45,6 +49,7 @@ type UseAnalysisRunnerArgs = {
   onChapterAnalysisCompleted?: (range: SentenceRange) => void | Promise<unknown>
   chapterRange?: SentenceRange | null
   initialNotice: string
+  language: BookLanguage
   onChapterRangeCommitted?: (range: SentenceRange) => void | Promise<unknown>
   onChapterSegmentReset?: (sentenceCount: number) => void
   promptConfig: PromptConfig
@@ -63,6 +68,7 @@ export function useAnalysisRunner({
   documentContext,
   chapterRange,
   initialNotice,
+  language,
   onChapterAnalysisCompleted,
   onChapterRangeCommitted,
   onChapterSegmentReset,
@@ -110,7 +116,7 @@ export function useAnalysisRunner({
       return
     }
 
-    const session = collectSession(nextSourceText, nextSentences, nextResults)
+    const session = collectSession(language, nextSourceText, nextSentences, nextResults)
     setHistory((current) => [session, ...current].slice(0, MAX_HISTORY_ITEMS))
   }
 
@@ -125,27 +131,51 @@ export function useAnalysisRunner({
     })
   }
 
-  const buildAnalysisJobs = (entries: PendingEntry[]) =>
+  const effectivePromptConfig = language === 'ja' ? defaultJapanesePromptConfig : promptConfig
+
+  const prepareSentencesForLanguage = async (nextSentences: SentenceItem[]) => {
+    if (language !== 'ja') {
+      return nextSentences
+    }
+
+    return Promise.all(
+      nextSentences.map(async (sentence) => {
+        const sentenceText = sentence.editedText.trim()
+        if (doTokensMatchText(sentence.tokens, sentenceText)) {
+          return sentence
+        }
+
+        return {
+          ...sentence,
+          tokens: sentenceText ? await tokenizeJapanese(sentenceText) : [],
+        }
+      }),
+    )
+  }
+
+  const buildAnalysisJobs = (entries: PendingEntry[], contextSentences: SentenceItem[]) =>
     entries.map(({ absoluteIndex, sentence }) => ({
       sentenceId: sentence.id,
       sentence: sentence.editedText,
       previousSentence: collectContextSentences(
-        trimmedSentences,
+        contextSentences,
         absoluteIndex,
-        promptConfig.previousSentenceCount,
+        effectivePromptConfig.previousSentenceCount,
         'previous',
       ),
       nextSentence: collectContextSentences(
-        trimmedSentences,
+        contextSentences,
         absoluteIndex,
-        promptConfig.nextSentenceCount,
+        effectivePromptConfig.nextSentenceCount,
         'next',
       ),
       documentContext,
+      language,
+      tokens: sentence.tokens,
     }))
 
-  const handleSegment = () => {
-    const pieces = segmentSpanishText(sourceText)
+  const handleSegment = async () => {
+    const pieces = segmentText(sourceText, language)
 
     if (pieces.length === 0) {
       setNotice('')
@@ -155,7 +185,12 @@ export function useAnalysisRunner({
       return null
     }
 
-    const nextSentences = pieces.map(createSentenceItem)
+    const nextSentences =
+      language === 'ja'
+        ? await Promise.all(
+            pieces.map(async (piece) => createSentenceItem(piece, await tokenizeJapanese(piece))),
+          )
+        : pieces.map((piece) => createSentenceItem(piece))
     commitSentences(nextSentences)
     setResults({})
     if (workspaceSource === 'chapter') {
@@ -205,11 +240,18 @@ export function useAnalysisRunner({
       return
     }
 
+    const preparedTrimmedSentences = await prepareSentencesForLanguage(trimmedSentences)
+    if (language === 'ja') {
+      commitSentences(preparedTrimmedSentences)
+    }
+
     const sanitized =
-      workspaceSource === 'chapter' ? trimmedSentences : cleanSentences(trimmedSentences)
+      workspaceSource === 'chapter'
+        ? preparedTrimmedSentences
+        : cleanSentences(preparedTrimmedSentences)
     const pendingEntries = buildPendingEntries({
       chapterRange,
-      sentences: trimmedSentences,
+      sentences: preparedTrimmedSentences,
       workspaceSource,
     })
     const pendingIds = new Set(pendingEntries.map(({ sentence }) => sentence.id))
@@ -260,8 +302,8 @@ export function useAnalysisRunner({
       const runEntries = async (entries: PendingEntry[]) =>
         runConcurrentAnalysis(
           apiConfig,
-          promptConfig,
-          buildAnalysisJobs(entries),
+          effectivePromptConfig,
+          buildAnalysisJobs(entries, preparedTrimmedSentences),
           {
             onStart: ({ sentenceId }) => {
               if (runTokenRef.current !== runToken) {
@@ -309,7 +351,7 @@ export function useAnalysisRunner({
             },
           },
           {
-            batchSize: promptConfig.batchSize ?? 1,
+            batchSize: effectivePromptConfig.batchSize ?? 1,
             signal: abortController.signal,
           },
         )
@@ -460,27 +502,40 @@ export function useAnalysisRunner({
     const sentenceIndex = sentences.findIndex((sentence) => sentence.id === sentenceId)
     setGlobalError('')
     setNotice(`正在重试第 ${sentenceIndex + 1} 句。`)
+    const retryTokens =
+      language === 'ja'
+        ? doTokensMatchText(target.tokens, target.editedText.trim())
+          ? target.tokens
+          : await tokenizeJapanese(target.editedText.trim())
+        : undefined
     commitSentences((current) =>
-      updateSentenceState(current, sentenceId, buildRetryRunningSentence),
+      updateSentenceState(current, sentenceId, (sentence) =>
+        buildRetryRunningSentence({
+          ...sentence,
+          tokens: retryTokens,
+        }),
+      ),
     )
 
     try {
-      const result = await analyzeSentence(apiConfig, promptConfig, {
+      const result = await analyzeSentence(apiConfig, effectivePromptConfig, {
         sentenceId,
         sentence: target.editedText.trim(),
         previousSentence: collectContextSentences(
           trimmedSentences,
           sentenceIndex,
-          promptConfig.previousSentenceCount,
+          effectivePromptConfig.previousSentenceCount,
           'previous',
         ),
         nextSentence: collectContextSentences(
           trimmedSentences,
           sentenceIndex,
-          promptConfig.nextSentenceCount,
+          effectivePromptConfig.nextSentenceCount,
           'next',
         ),
         documentContext,
+        language,
+        tokens: retryTokens,
       })
 
       setResults((current) => ({

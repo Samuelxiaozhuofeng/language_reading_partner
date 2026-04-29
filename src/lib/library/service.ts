@@ -1,5 +1,6 @@
 import type {
   BookChapterRecord,
+  BookLanguage,
   BookRecord,
   CollectionRecord,
   LibrarySelection,
@@ -185,8 +186,8 @@ export async function openChapterRecord(chapterId: string) {
   }
 }
 
-export async function importBookToLibrary(file: File) {
-  const payload = await importEpubBook(file)
+export async function importBookToLibrary(file: File, language: BookLanguage) {
+  const payload = await importEpubBook(file, language)
   const chapters = payload.chapters.map((chapter) => normalizeChapterRecord(chapter))
   await saveImportedBook(payload.book, chapters, payload.fileData)
 

@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
-import type { ReadingPreferences } from '../../types'
+import type { BookLanguage, ReadingPreferences } from '../../types'
 
 type ReadingDisplaySettingsProps = {
+  bookLanguage: BookLanguage
   isOpen: boolean
   onClose: () => void
   onReadingPreferencesChange: <Key extends keyof ReadingPreferences>(
@@ -28,6 +29,7 @@ function ReadingSettingsIcon() {
 }
 
 export function ReadingDisplaySettings({
+  bookLanguage,
   isOpen,
   onClose,
   onReadingPreferencesChange,
@@ -109,6 +111,19 @@ export function ReadingDisplaySettings({
               }
             />
           </label>
+
+          {bookLanguage === 'ja' ? (
+            <label className="reading-display-check">
+              <input
+                checked={readingPreferences.showFurigana ?? true}
+                type="checkbox"
+                onChange={(event) =>
+                  onReadingPreferencesChange('showFurigana', event.currentTarget.checked)
+                }
+              />
+              <span>振り仮名</span>
+            </label>
+          ) : null}
         </section>
       ) : null}
     </div>

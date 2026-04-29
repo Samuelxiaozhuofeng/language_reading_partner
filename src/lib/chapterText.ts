@@ -1,5 +1,6 @@
 import type {
   AnalysisResult,
+  BookLanguage,
   BookRecord,
   BookChapterRecord,
   ChapterAnalysisState,
@@ -9,7 +10,8 @@ import type {
 } from '../types'
 import { createSentenceItem } from './appState'
 import { normalizeSentenceRange } from './chapterRange'
-import { segmentSpanishText } from './segment'
+import { tokenizeJapanese } from './kuromoji'
+import { segmentText } from './segment'
 
 const PARAGRAPH_SEPARATOR = '\n\n'
 
@@ -44,11 +46,31 @@ export function paragraphsToText(paragraphs: ChapterParagraphBlock[]) {
 }
 
 export function createChapterSentences(sourceText: string) {
-  return createChapterSentenceItems(segmentSpanishText(sourceText))
+  return createChapterSentenceItems(segmentText(sourceText, 'es'))
 }
 
 export function createChapterSentenceItems(sentences: string[]) {
-  return sentences.map(createSentenceItem)
+  return sentences.map((sentence) => createSentenceItem(sentence))
+}
+
+export async function createSentenceItemsForLanguage(
+  sentences: string[],
+  language: BookLanguage,
+) {
+  if (language !== 'ja') {
+    return createChapterSentenceItems(sentences)
+  }
+
+  return Promise.all(
+    sentences.map(async (sentence) => createSentenceItem(sentence, await tokenizeJapanese(sentence))),
+  )
+}
+
+export async function createChapterSentencesForLanguage(
+  sourceText: string,
+  language: BookLanguage,
+) {
+  return createSentenceItemsForLanguage(segmentText(sourceText, language), language)
 }
 
 export function summarizeSentenceStats(sentences: SentenceItem[]): ChapterStats {

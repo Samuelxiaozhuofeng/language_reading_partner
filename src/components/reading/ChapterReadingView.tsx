@@ -4,7 +4,11 @@ import {
   getSentenceDisplayText,
   type ChapterReadingPage,
 } from './readingShared'
+import { JapaneseChunkView } from './JapaneseChunkView'
+import { ReadingDisplaySettings } from './ReadingDisplaySettings'
+import type { JapaneseChunkSelection } from '../../lib/japaneseUtils'
 import type { ChapterReadingParagraph } from '../../lib/readingFlow'
+import type { BookLanguage, ReadingPreferences } from '../../types'
 
 type ChapterReadingViewProps = {
   chapterParagraphs: ChapterReadingParagraph[]
@@ -13,9 +17,20 @@ type ChapterReadingViewProps = {
   currentChapterPage: number
   currentChapterPageData: ChapterReadingPage | null
   effectiveActiveSentenceId: string | null
+  activeChunkSelection: JapaneseChunkSelection | null
+  bookLanguage: BookLanguage
+  isReadingSettingsOpen: boolean
   onBackToWorkspace: () => void
+  onCloseReadingSettings: () => void
   onChangeChapterPage: (direction: 'previous' | 'next') => void
+  onSelectChunk: (sentenceId: string, chunkIndex: number) => void
   onOpenSentence: (sentenceId: string) => void
+  onReadingPreferencesChange: <Key extends keyof ReadingPreferences>(
+    key: Key,
+    value: ReadingPreferences[Key],
+  ) => void
+  onToggleReadingSettings: () => void
+  readingPreferences: ReadingPreferences
   readingTitle: string
   resumeHighlightSentenceId: string | null
 }
@@ -27,9 +42,17 @@ export function ChapterReadingView({
   currentChapterPage,
   currentChapterPageData,
   effectiveActiveSentenceId,
+  activeChunkSelection,
+  bookLanguage,
+  isReadingSettingsOpen,
   onBackToWorkspace,
+  onCloseReadingSettings,
   onChangeChapterPage,
+  onSelectChunk,
   onOpenSentence,
+  onReadingPreferencesChange,
+  onToggleReadingSettings,
+  readingPreferences,
   readingTitle,
   resumeHighlightSentenceId,
 }: ChapterReadingViewProps) {
@@ -62,26 +85,53 @@ export function ChapterReadingView({
             <div className="reading-flow is-paged">
               {(currentChapterPageData?.paragraphs ?? []).map((paragraph) => (
                 <div className={getReadingBlockClassName(paragraph)} key={paragraph.id}>
-                  {paragraph.sentences.map((sentence) => (
-                    <button
-                      className={`reading-inline-sentence ${
-                        effectiveActiveSentenceId === sentence.id ? 'is-active' : ''
-                      } ${resumeHighlightSentenceId === sentence.id ? 'is-resumed' : ''}`}
-                      key={sentence.id}
-                      type="button"
-                      onClick={() => onOpenSentence(sentence.id)}
-                    >
-                      {paragraph.sentenceHtmlById?.[sentence.id] ? (
-                        <span
-                          dangerouslySetInnerHTML={{
-                            __html: paragraph.sentenceHtmlById[sentence.id],
-                          }}
+                  {paragraph.sentences.map((sentence) => {
+                    const className = `reading-inline-sentence ${
+                      effectiveActiveSentenceId === sentence.id ? 'is-active' : ''
+                    } ${resumeHighlightSentenceId === sentence.id ? 'is-resumed' : ''}`
+
+                    return bookLanguage === 'ja' ? (
+                      <span
+                        className={className}
+                        key={sentence.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => onOpenSentence(sentence.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            onOpenSentence(sentence.id)
+                          }
+                        }}
+                      >
+                        <JapaneseChunkView
+                          activeChunkSelection={activeChunkSelection}
+                          sentenceId={sentence.id}
+                          showFurigana={readingPreferences.showFurigana}
+                          text={getSentenceDisplayText(sentence)}
+                          tokens={sentence.tokens}
+                          onChunkClick={(chunkIndex) => onSelectChunk(sentence.id, chunkIndex)}
                         />
-                      ) : (
-                        getSentenceDisplayText(sentence)
-                      )}
-                    </button>
-                  ))}
+                      </span>
+                    ) : (
+                      <button
+                        className={className}
+                        key={sentence.id}
+                        type="button"
+                        onClick={() => onOpenSentence(sentence.id)}
+                      >
+                        {paragraph.sentenceHtmlById?.[sentence.id] ? (
+                          <span
+                            dangerouslySetInnerHTML={{
+                              __html: paragraph.sentenceHtmlById[sentence.id],
+                            }}
+                          />
+                        ) : (
+                          getSentenceDisplayText(sentence)
+                        )}
+                      </button>
+                    )
+                  })}
                 </div>
               ))}
             </div>
@@ -106,6 +156,14 @@ export function ChapterReadingView({
             </div>
 
             <div className="reading-book-toolbar-actions">
+              <ReadingDisplaySettings
+                bookLanguage={bookLanguage}
+                isOpen={isReadingSettingsOpen}
+                onClose={onCloseReadingSettings}
+                onReadingPreferencesChange={onReadingPreferencesChange}
+                onToggle={onToggleReadingSettings}
+                readingPreferences={readingPreferences}
+              />
               <button
                 className="ghost-button"
                 disabled={currentChapterPage <= 0}

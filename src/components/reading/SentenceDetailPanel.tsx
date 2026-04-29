@@ -8,6 +8,7 @@ import type {
   VocabularyExplanation,
 } from '../../types'
 import { ClickableSentenceWords } from './ClickableSentenceWords'
+import { JapaneseChunkView } from './JapaneseChunkView'
 import { renderGrammarText } from './readingHighlights'
 import { buildSelectionKey, type HighlightSelection } from './readingShared'
 import {
@@ -15,9 +16,13 @@ import {
   type VocabularyExplanationInteraction,
 } from './useVocabularyExplanation'
 import { VocabularyExplanationPanel } from './VocabularyExplanationPanel'
+import type { JapaneseChunkSelection } from '../../lib/japaneseUtils'
+import type { BookLanguage } from '../../types'
 
 type SentenceDetailPanelProps = {
   activeSelection: HighlightSelection | null
+  activeChunkSelection: JapaneseChunkSelection | null
+  bookLanguage: BookLanguage
   onAddToAnki: (
     sentence: SentenceItem,
     result: AnalysisResult,
@@ -33,15 +38,19 @@ type SentenceDetailPanelProps = {
     highlight: AnalysisHighlight,
   ) => void
   onSelectHighlight: (sentenceId: string, highlightId: string) => void
+  onSelectChunk: (sentenceId: string, chunkIndex: number) => void
   result?: AnalysisResult
   renderVocabularySource?: boolean
   savedHighlightSignatures: Set<string>
   sentence: SentenceItem
+  showFurigana?: boolean
   vocabularyInteraction?: VocabularyExplanationInteraction
 }
 
 export function SentenceDetailPanel({
   activeSelection,
+  activeChunkSelection,
+  bookLanguage,
   onAddToAnki,
   onExplainVocabulary,
   onOpenResources,
@@ -49,10 +58,12 @@ export function SentenceDetailPanel({
   onRetrySentence,
   onSaveHighlight,
   onSelectHighlight,
+  onSelectChunk,
   result,
   renderVocabularySource = true,
   savedHighlightSignatures,
   sentence,
+  showFurigana = true,
   vocabularyInteraction,
 }: SentenceDetailPanelProps) {
   const knowledgeDetailCardRef = useRef<HTMLDivElement | null>(null)
@@ -74,6 +85,10 @@ export function SentenceDetailPanel({
   const activeVocabularyInteraction =
     vocabularyInteraction ?? internalVocabularyInteraction
   const highlights = result?.highlights ?? []
+  const activeChunk =
+    activeChunkSelection?.sentenceId === sentence.id
+      ? result?.chunkAnalysis?.[activeChunkSelection.chunkIndex]
+      : undefined
   const selectedHighlight = highlights.find(
     (highlight) =>
       activeSelection?.sentenceId === sentence.id &&
@@ -193,12 +208,23 @@ export function SentenceDetailPanel({
         <section>
           <h3>原句</h3>
           <p className="analysis-paragraph vocabulary-source-sentence">
-            <ClickableSentenceWords
-              activeWord={activeVocabularyInteraction.state?.word}
-              disabled={activeVocabularyInteraction.state?.status === 'loading'}
-              text={activeVocabularyInteraction.sentenceText}
-              onWordClick={(word) => void activeVocabularyInteraction.handleWordClick(word)}
-            />
+            {bookLanguage === 'ja' ? (
+              <JapaneseChunkView
+                activeChunkSelection={activeChunkSelection}
+                sentenceId={sentence.id}
+                showFurigana={showFurigana}
+                text={activeVocabularyInteraction.sentenceText}
+                tokens={sentence.tokens}
+                onChunkClick={(chunkIndex) => onSelectChunk(sentence.id, chunkIndex)}
+              />
+            ) : (
+              <ClickableSentenceWords
+                activeWord={activeVocabularyInteraction.state?.word}
+                disabled={activeVocabularyInteraction.state?.status === 'loading'}
+                text={activeVocabularyInteraction.sentenceText}
+                onWordClick={(word) => void activeVocabularyInteraction.handleWordClick(word)}
+              />
+            )}
           </p>
         </section>
       ) : null}
@@ -298,17 +324,53 @@ export function SentenceDetailPanel({
           </>
         ) : null}
       </section>
+      {bookLanguage === 'ja' && result.chunkAnalysis?.length ? (
+        <section>
+          <h3>词块解析</h3>
+          <div className="chunk-analysis-list">
+            {result.chunkAnalysis.map((chunk, index) => {
+              const isActive =
+                activeChunkSelection?.sentenceId === sentence.id &&
+                activeChunkSelection.chunkIndex === index
+
+              return (
+                <button
+                  className={`chunk-analysis-item ${isActive ? 'is-active-chunk' : ''}`}
+                  key={`${chunk.chunk}:${index}`}
+                  type="button"
+                  onClick={() => onSelectChunk(sentence.id, index)}
+                >
+                  <span className="chunk-main">{chunk.chunk}</span>
+                  {chunk.reading ? <span className="chunk-reading">{chunk.reading}</span> : null}
+                  {chunk.pos ? <span className="chunk-pos">{chunk.pos}</span> : null}
+                  <span className="chunk-explanation">{chunk.explanation}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {activeChunk ? (
+            <div className="chunk-analysis-focus">
+              <strong>{activeChunk.chunk}</strong>
+              <span>{[activeChunk.reading, activeChunk.pos].filter(Boolean).join(' / ')}</span>
+              <p>{activeChunk.explanation}</p>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
       <section>
         <h3>内容</h3>
         <p>{result.meaning || '模型未稳定返回内容解读。'}</p>
       </section>
 
-      <VocabularyExplanationPanel
-        detailRef={activeVocabularyInteraction.detailRef}
-        state={activeVocabularyInteraction.state}
-        onAddToAnki={activeVocabularyInteraction.handleAddToAnki}
-        onClose={activeVocabularyInteraction.handleClose}
-      />
+      {bookLanguage === 'es' ? (
+        <VocabularyExplanationPanel
+          detailRef={activeVocabularyInteraction.detailRef}
+          state={activeVocabularyInteraction.state}
+          onAddToAnki={activeVocabularyInteraction.handleAddToAnki}
+          onClose={activeVocabularyInteraction.handleClose}
+        />
+      ) : null}
     </div>
   )
 }

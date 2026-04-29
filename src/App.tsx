@@ -54,6 +54,7 @@ function App() {
     activeReadingRange,
     analysisDocumentContext,
     currentContextTitle,
+    currentLanguage,
     effectiveWorkspaceSource,
     initialNotice,
     manualHistory,
@@ -133,6 +134,7 @@ function App() {
       }))
     },
     promptConfig: persistent.promptConfig,
+    language: currentLanguage,
     results: workspaceResults,
     sentences: workspaceSentences,
     setHistory: effectiveWorkspaceSource === 'draft' ? persistent.setHistory : undefined,
@@ -238,7 +240,7 @@ function App() {
   }
 
   const handleSegment = async () => {
-    const nextSentences = analysis.handleSegment()
+    const nextSentences = await analysis.handleSegment()
     if (effectiveWorkspaceSource !== 'draft' || !nextSentences) {
       return
     }
@@ -247,6 +249,17 @@ function App() {
       sentences: nextSentences,
       results: {},
     })
+  }
+
+  const handleDraftLanguageChange = (language: typeof persistent.draftLanguage) => {
+    if (language === persistent.draftLanguage) {
+      return
+    }
+
+    persistent.setDraftLanguage(language)
+    setWorkspaceSentences([])
+    setWorkspaceResults({})
+    analysis.setNotice('已切换解析语言，请重新分句后再运行解析。')
   }
 
   const openSettings = () => {
@@ -324,6 +337,7 @@ function App() {
           }
           paragraphBlocks={activeChapter?.paragraphBlocks}
           readingPreferences={persistent.readingPreferences}
+          bookLanguage={currentLanguage}
           resumeAnchor={activeChapter?.resumeAnchor}
           results={workspaceResults}
           savedHighlightSignatures={savedResourceSignatures}
@@ -381,6 +395,7 @@ function App() {
         <WorkspacePage
           apiConfig={persistent.apiConfig}
           articleTitle={persistent.articleTitle}
+          draftLanguage={persistent.draftLanguage}
           chapterProgressPercent={chapterProgressPercent}
           chapterResolvedCount={completedResultCount}
           completedResultCount={completedResultCount}
@@ -399,13 +414,17 @@ function App() {
           onCancelAnalysis={analysis.cancelAnalysis}
           onOpenReading={() => setActivePage('reading')}
           onOpenSettings={openSettings}
-          onRestoreSession={analysis.restoreSession}
+          onRestoreSession={(session) => {
+            persistent.setDraftLanguage(session.language ?? 'es')
+            analysis.restoreSession(session)
+          }}
           onRetrySentence={analysis.retrySingleSentence}
           onSelectNextRange={handleUseNextChapterRange}
           onUpdateRange={handleChapterRangeChange}
           onRunAnalysis={() => void handleRunAnalysis()}
           onSegment={() => void handleSegment()}
           onSentenceChange={analysis.handleSentenceChange}
+          onDraftLanguageChange={handleDraftLanguageChange}
           onSourceTextChange={setWorkspaceSourceText}
           rangeSize={DEFAULT_CHAPTER_RANGE_SIZE}
           progressPercent={progressPercent}
@@ -424,6 +443,7 @@ function App() {
           sentences={workspaceVisibleSentences}
           sentenceStartIndex={selectedChapterRange?.start ?? 0}
           sourceText={workspaceSourceText}
+          bookLanguage={currentLanguage}
           successCount={successCount}
           totalSentenceCount={workspaceSentences.length}
           chapterSourceType={effectiveWorkspaceSource === 'chapter' ? library.selectedBook?.sourceType : undefined}

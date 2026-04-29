@@ -1,7 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { segmentSpanishText } from './segment.ts'
+import { sanitizeChunkAnalysis } from './analysisResult.ts'
+import {
+  doTokensMatchText,
+  hasKanji,
+  isParticle,
+  katakanaToHiragana,
+} from './japaneseUtils.ts'
+import { segmentJapaneseText, segmentSpanishText } from './segment.ts'
 
 test('keeps U.S. inside the same sentence when it is not sentence-final', () => {
   const input =
@@ -33,4 +40,59 @@ test('keeps paragraph boundaries even without ending punctuation', () => {
 
 test('keeps semicolon as a split point for shorter reading chunks', () => {
   assert.deepEqual(segmentSpanishText('Uno; dos. Tres?'), ['Uno;', 'dos.', 'Tres?'])
+})
+
+test('segments Japanese text by sentence punctuation', () => {
+  assert.deepEqual(segmentJapaneseText('私は学生です。明日、京都へ行きます！'), [
+    '私は学生です。',
+    '明日、京都へ行きます！',
+  ])
+})
+
+test('supports Japanese display helpers', () => {
+  assert.equal(hasKanji('日本語'), true)
+  assert.equal(hasKanji('かな'), false)
+  assert.equal(katakanaToHiragana('ニホンゴ'), 'にほんご')
+  assert.equal(isParticle('助詞'), true)
+  assert.equal(isParticle('名詞'), false)
+})
+
+test('checks Japanese token text alignment', () => {
+  assert.equal(
+    doTokensMatchText(
+      [
+        { surface: '私', reading: 'ワタシ', baseForm: '私', pos: '名詞' },
+        { surface: 'は', reading: 'ハ', baseForm: 'は', pos: '助詞' },
+      ],
+      '私は',
+    ),
+    true,
+  )
+})
+
+test('sanitizes Japanese chunk analysis from structured result values', () => {
+  assert.deepEqual(
+    sanitizeChunkAnalysis([
+      {
+        chunk: '私',
+        reading: 'わたし',
+        pos: '名詞',
+        explanation: '表示说话者自己。',
+      },
+      {
+        chunk: '',
+        reading: 'は',
+        pos: '助詞',
+        explanation: '缺少 chunk 时丢弃。',
+      },
+    ]),
+    [
+      {
+        chunk: '私',
+        reading: 'わたし',
+        pos: '名詞',
+        explanation: '表示说话者自己。',
+      },
+    ],
+  )
 })

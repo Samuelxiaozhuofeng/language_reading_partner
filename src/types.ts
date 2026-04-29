@@ -4,6 +4,7 @@ export type SettingsTab = 'ai' | 'prompt' | 'anki'
 export type WorkspaceSource = 'draft' | 'chapter'
 export type ChapterAnalysisState = 'idle' | 'partial' | 'running' | 'analyzed'
 export type KnowledgeKind = 'grammar' | 'phrase' | 'vocabulary'
+export type BookLanguage = 'es' | 'ja'
 export type AnkiFieldSource =
   | 'sentence'
   | 'grammar'
@@ -43,6 +44,7 @@ export type VocabularyExplanation = {
 export type ReadingPreferences = {
   contentWidth: number
   fontSize: number
+  showFurigana?: boolean
 }
 
 export type AnkiFieldMapping = Record<AnkiFieldSource, string>
@@ -60,6 +62,21 @@ export type SentenceItem = {
   editedText: string
   status: SentenceStatus
   error?: string
+  tokens?: JapaneseToken[]
+}
+
+export type JapaneseToken = {
+  surface: string
+  reading: string
+  baseForm: string
+  pos: string
+}
+
+export type JapaneseChunkExplanation = {
+  chunk: string
+  reading: string
+  pos: string
+  explanation: string
 }
 
 export type AnalysisHighlight = {
@@ -74,6 +91,7 @@ export type AnalysisResult = {
   grammar: string
   meaning: string
   highlights?: AnalysisHighlight[]
+  chunkAnalysis?: JapaneseChunkExplanation[]
   isPartial?: boolean
   rawText?: string
 }
@@ -84,10 +102,17 @@ export type AnalysisJob = {
   previousSentence?: string
   nextSentence?: string
   documentContext?: AnalysisDocumentContext
+  language?: BookLanguage
+  tokens?: JapaneseToken[]
 }
 
 export type BatchAnalysisJob = {
-  sentenceEntries: Array<{ sentenceId: string; sentence: string }>
+  sentenceEntries: Array<{
+    sentenceId: string
+    sentence: string
+    language?: BookLanguage
+    tokens?: JapaneseToken[]
+  }>
   previousSentence?: string
   nextSentence?: string
   documentContext?: AnalysisDocumentContext
@@ -121,6 +146,7 @@ export type BookRecord = {
   id: string
   title: string
   author: string
+  language?: BookLanguage
   sourceType?: 'epub' | 'manual'
   coverUrl?: string
   collectionId?: string
@@ -174,6 +200,7 @@ export type RunSession = {
   id: string
   title: string
   createdAt: string
+  language?: BookLanguage
   sourceText: string
   sentences: SentenceItem[]
   results: Record<string, AnalysisResult>

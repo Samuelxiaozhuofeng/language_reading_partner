@@ -1,9 +1,18 @@
 import { formatTime, statusLabelMap } from '../lib/appState'
-import type { ApiConfig, BookRecord, RunSession, SentenceItem, SentenceRange, WorkspaceSource } from '../types'
+import type {
+  ApiConfig,
+  BookLanguage,
+  BookRecord,
+  RunSession,
+  SentenceItem,
+  SentenceRange,
+  WorkspaceSource,
+} from '../types'
 
 type WorkspacePageProps = {
   apiConfig: ApiConfig
   articleTitle: string
+  bookLanguage: BookLanguage
   chapterProgressPercent: number
   chapterResolvedCount: number
   chapterSourceType?: BookRecord['sourceType']
@@ -13,6 +22,7 @@ type WorkspacePageProps = {
     chapterTitle: string
   }
   errorCount: number
+  draftLanguage: BookLanguage
   finishedCount: number
   globalError: string
   history: RunSession[]
@@ -32,6 +42,7 @@ type WorkspacePageProps = {
   onRunAnalysis: () => void
   onSegment: () => void
   onSentenceChange: (id: string, value: string) => void
+  onDraftLanguageChange: (language: BookLanguage) => void
   onSourceTextChange: (value: string) => void
   onUpdateRange: (range: SentenceRange) => void
   rangeSize: number
@@ -52,12 +63,14 @@ type WorkspacePageProps = {
 function WorkspacePage({
   apiConfig,
   articleTitle,
+  bookLanguage,
   chapterProgressPercent,
   chapterResolvedCount,
   chapterSourceType,
   completedResultCount,
   contextTitle,
   errorCount,
+  draftLanguage,
   finishedCount,
   globalError,
   history,
@@ -77,6 +90,7 @@ function WorkspacePage({
   onRunAnalysis,
   onSegment,
   onSentenceChange,
+  onDraftLanguageChange,
   onSourceTextChange,
   onUpdateRange,
   rangeSize,
@@ -125,6 +139,7 @@ function WorkspacePage({
           <span className="status-pill">模型 {apiConfig.model || '未设置'}</span>
           <span className="status-pill">并发 {apiConfig.concurrency}</span>
           <span className="status-pill">{currentSentenceCount} 句</span>
+          <span className="status-pill">{bookLanguage === 'ja' ? '日本語' : '西班牙语'}</span>
           <span className="status-pill">完成 {completedResultCount}</span>
           <span className="status-pill">失败 {errorCount}</span>
           {contextTitle?.bookTitle ? <span className="status-pill">{contextTitle.bookTitle}</span> : null}
@@ -161,15 +176,29 @@ function WorkspacePage({
           </div>
 
           {!isChapterMode ? (
-            <label className="field field-block">
-              <span>文章标题</span>
-              <input
-                type="text"
-                value={articleTitle}
-                onChange={(event) => onArticleTitleChange(event.target.value)}
-                placeholder="例如：El Sur / 第三章 / 本周阅读文章"
-              />
-            </label>
+            <div className="draft-meta-grid">
+              <label className="field field-block">
+                <span>文章标题</span>
+                <input
+                  type="text"
+                  value={articleTitle}
+                  onChange={(event) => onArticleTitleChange(event.target.value)}
+                  placeholder="例如：El Sur / 第三章 / 本周阅读文章"
+                />
+              </label>
+              <label className="field field-block">
+                <span>解析语言</span>
+                <select
+                  value={draftLanguage}
+                  onChange={(event) =>
+                    onDraftLanguageChange(event.currentTarget.value as BookLanguage)
+                  }
+                >
+                  <option value="es">西班牙语</option>
+                  <option value="ja">日本語</option>
+                </select>
+              </label>
+            </div>
           ) : null}
 
           {isEpubChapterMode ? (

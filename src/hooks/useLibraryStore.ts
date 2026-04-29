@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AnalysisResult,
+  BookLanguage,
   BookChapterRecord,
   BookRecord,
   CollectionRecord,
@@ -223,12 +224,12 @@ export function useLibraryStore() {
     [applyHydratedBook],
   )
 
-  const importBook = useCallback(async (file: File) => {
+  const importBook = useCallback(async (file: File, language: BookLanguage) => {
     setIsImporting(true)
     setLibraryError('')
 
     try {
-      const payload = await importBookToLibrary(file)
+      const payload = await importBookToLibrary(file, language)
       setActiveCollectionId(null)
       setAllBooks((current) => updateBookInList(current, payload.book))
       setChapters(payload.chapters)
@@ -249,11 +250,13 @@ export function useLibraryStore() {
 
   const saveManualDraftAsBook = useCallback(async ({
     articleTitle,
+    language,
     results,
     sentences,
     sourceText,
   }: {
     articleTitle: string
+    language: BookLanguage
     results: Record<string, AnalysisResult>
     sentences: SentenceItem[]
     sourceText: string
@@ -268,6 +271,7 @@ export function useLibraryStore() {
 
     const payload = await saveManualDraftToLibrary({
       articleTitle: articleTitle.trim(),
+      language,
       results,
       sentences,
       sourceText: trimmedSourceText,

@@ -1,5 +1,5 @@
-import { segmentSpanishText } from './segment'
-import type { ChapterParagraphBlock, SentenceItem, SentenceRange } from '../types'
+import { segmentText } from './segment'
+import type { BookLanguage, ChapterParagraphBlock, SentenceItem, SentenceRange } from '../types'
 
 export type ChapterReadingParagraph = {
   id: string
@@ -13,6 +13,7 @@ export function buildChapterReadingParagraphs(
   paragraphBlocks: ChapterParagraphBlock[],
   sentences: SentenceItem[],
   activeRange: SentenceRange | null | undefined,
+  language: BookLanguage,
 ): ChapterReadingParagraph[] {
   if (!activeRange || paragraphBlocks.length === 0 || sentences.length === 0) {
     return []
@@ -61,7 +62,7 @@ export function buildChapterReadingParagraphs(
       continue
     }
 
-    const paragraphSentences = segmentSpanishText(paragraph.text)
+    const paragraphSentences = segmentText(paragraph.text, language)
     const visibleSentences: SentenceItem[] = []
 
     for (let sentenceIndex = 0; sentenceIndex < paragraphSentences.length; sentenceIndex += 1) {

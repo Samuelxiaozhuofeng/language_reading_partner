@@ -4,7 +4,9 @@ import type {
   AnkiFieldMapping,
   AnkiFieldSource,
   ApiConfig,
+  BookLanguage,
   ChapterAnalysisState,
+  JapaneseToken,
   PromptConfig,
   ReadingPreferences,
   RunSession,
@@ -89,6 +91,52 @@ export const defaultPromptConfig: PromptConfig = {
   batchSize: 1,
 }
 
+export const defaultJapanesePromptConfig: PromptConfig = {
+  template: [
+    '你是一位日语教师，帮助中文母语者阅读日语文本。',
+    '我会给你一个日语句子及其分词结果（由形态素解析器生成）。',
+    '请基于句子语境，完成以下任务：',
+    '1. 解释句子整体语法结构和含义',
+    '2. 逐个解释每个语块在句中的功能和含义',
+    '',
+    '必须只输出一个 JSON 对象，不要输出 Markdown，不要输出额外说明。',
+    '',
+    'JSON 结构固定为：',
+    '{',
+    '  "grammar": "string",',
+    '  "meaning": "string",',
+    '  "chunkAnalysis": [',
+    '    {"chunk": "string", "reading": "string", "pos": "string", "explanation": "string"}',
+    '  ],',
+    '  "highlights": [',
+    '    {"text": "string", "kind": "grammar | phrase | vocabulary", "explanation": "string"}',
+    '  ]',
+    '}',
+    '',
+    '要求：',
+    '1. 必须使用中文回答。',
+    '2. grammar：解释句子中最值得学习的语法点、句型、助词用法、敬语层级等。',
+    '3. meaning：用自然中文说明句意、语气和上下文作用。',
+    '4. chunkAnalysis：逐个解释每个语块。reading 用平假名，pos 用日语词性名（名詞、動詞、助詞等），explanation 用中文简要说明该词块在句中的含义和功能。',
+    '5. chunkAnalysis 的顺序和数量必须与输入语块完全一致。',
+    '6. highlights：0-4 个最值得收藏的知识点。',
+    '7. highlights 的 text 必须是日语原文。',
+    '8. kind 只能是 grammar、phrase、vocabulary 三选一。',
+    '9. grammar 和 meaning 不要留空。',
+    '',
+    '文档元信息：',
+    '{documentMetadata}',
+    '',
+    '上文：{previousSentence}',
+    '当前句：{sentence}',
+    '语块：{tokens}',
+    '下文：{nextSentence}',
+  ].join('\n'),
+  previousSentenceCount: 1,
+  nextSentenceCount: 1,
+  batchSize: 1,
+}
+
 export const defaultVocabularyPromptConfig: VocabularyPromptConfig = {
   template: [
     '你是一名帮助中文母语者阅读西班牙语文学文本的词汇老师。请根据语境解释指定西语单词，并且必须只输出一个 JSON 对象，不要输出 Markdown，不要输出额外说明。',
@@ -112,6 +160,7 @@ export const defaultVocabularyPromptConfig: VocabularyPromptConfig = {
 export const defaultReadingPreferences: ReadingPreferences = {
   contentWidth: 940,
   fontSize: 18,
+  showFurigana: true,
 }
 
 const ankiFieldSources: AnkiFieldSource[] = [
@@ -147,6 +196,7 @@ Desgraciadamente, estuve condenado a permanecer ajeno a la vida de cualquier muj
 
 export type PersistedDraft = {
   articleTitle: string
+  language?: BookLanguage
   sourceText: string
   sentences: SentenceItem[]
   results: Record<string, AnalysisResult>
@@ -217,20 +267,22 @@ function convertLegacyPromptConfig(parsed: Partial<PromptConfig> & {
   } satisfies PromptConfig
 }
 
-export function createSentenceItem(text: string): SentenceItem {
+export function createSentenceItem(text: string, tokens?: JapaneseToken[]): SentenceItem {
   return {
     id: crypto.randomUUID(),
     text,
     editedText: text,
     status: 'idle',
+    tokens,
   }
 }
 
 export function createDefaultDraft(): PersistedDraft {
   return {
     articleTitle: '',
+    language: 'es',
     sourceText: defaultSourceText,
-    sentences: segmentSpanishText(defaultSourceText).map(createSentenceItem),
+    sentences: segmentSpanishText(defaultSourceText).map((sentence) => createSentenceItem(sentence)),
     results: {},
   }
 }
@@ -378,6 +430,10 @@ export function restoreReadingPreferences(): ReadingPreferences {
     return {
       contentWidth: clampReadingContentWidth(parsed.contentWidth),
       fontSize: clampReadingFontSize(parsed.fontSize),
+      showFurigana:
+        typeof parsed.showFurigana === 'boolean'
+          ? parsed.showFurigana
+          : defaultReadingPreferences.showFurigana,
     }
   } catch {
     return defaultReadingPreferences
@@ -433,6 +489,7 @@ export function restoreDraft(): PersistedDraft {
 
     return {
       articleTitle: typeof parsed.articleTitle === 'string' ? parsed.articleTitle : '',
+      language: parsed.language === 'ja' ? 'ja' : 'es',
       sourceText: parsed.sourceText ?? defaultSourceText,
       sentences: restoredSentences,
       results,
@@ -493,6 +550,7 @@ function buildSessionTitle(sentences: SentenceItem[]): string {
 }
 
 export function collectSession(
+  language: BookLanguage,
   sourceText: string,
   sentences: SentenceItem[],
   results: Record<string, AnalysisResult>,
@@ -501,12 +559,14 @@ export function collectSession(
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     title: buildSessionTitle(sentences),
+    language,
     sourceText,
     sentences: sentences.map((sentence) => ({
       id: sentence.id,
       text: sentence.text,
       editedText: sentence.editedText,
       status: 'success',
+      tokens: sentence.tokens,
     })),
     results,
   }

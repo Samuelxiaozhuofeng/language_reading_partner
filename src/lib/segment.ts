@@ -1,4 +1,7 @@
+import type { BookLanguage } from '../types'
+
 const CLOSING_PUNCTUATION = new Set(['"', "'", '”', '’', ')', ']', '»'])
+const JAPANESE_CLOSING_PUNCTUATION = new Set(['」', '』', '）', '】', '〕', '］', '》', '〉'])
 const SOFT_BREAKS = new Set([';', '…'])
 const TITLE_ABBREVIATIONS = new Set([
   'dr.',
@@ -16,6 +19,10 @@ const sentenceSegmenter =
   typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
     ? new Intl.Segmenter(undefined, { granularity: 'sentence' })
     : null
+const japaneseSentenceSegmenter =
+  typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
+    ? new Intl.Segmenter('ja', { granularity: 'sentence' })
+    : null
 
 function normalizeInput(text: string): string {
   return text
@@ -31,6 +38,10 @@ function normalizeSentenceText(text: string) {
 
 function hasMeaningfulContent(sentence: string) {
   return sentence.replace(/[¡¿!?.…;,]/g, '').trim().length > 0
+}
+
+function hasMeaningfulJapaneseContent(sentence: string) {
+  return sentence.replace(/[。！？!?、，・「」『』（）【】\s]/g, '').trim().length > 0
 }
 
 function splitIntoParagraphs(text: string) {
@@ -215,4 +226,71 @@ export function segmentSpanishText(text: string): string[] {
   return splitIntoParagraphs(normalized)
     .flatMap(segmentParagraph)
     .filter(hasMeaningfulContent)
+}
+
+function normalizeJapaneseSentenceText(text: string) {
+  return text.replace(/[ \t]+/g, ' ').trim()
+}
+
+function segmentJapaneseParagraphWithFallback(paragraph: string) {
+  const sentences: string[] = []
+  let buffer = ''
+
+  for (let index = 0; index < paragraph.length; index += 1) {
+    const char = paragraph[index]
+    buffer += char
+
+    if (!['。', '！', '？', '!', '?'].includes(char)) {
+      continue
+    }
+
+    while (
+      paragraph[index + 1] &&
+      JAPANESE_CLOSING_PUNCTUATION.has(paragraph[index + 1])
+    ) {
+      index += 1
+      buffer += paragraph[index]
+    }
+
+    const piece = normalizeJapaneseSentenceText(buffer)
+    if (piece) {
+      sentences.push(piece)
+    }
+    buffer = ''
+  }
+
+  const trailing = normalizeJapaneseSentenceText(buffer)
+  if (trailing) {
+    sentences.push(trailing)
+  }
+
+  return sentences
+}
+
+function segmentJapaneseParagraph(paragraph: string) {
+  if (!japaneseSentenceSegmenter) {
+    return segmentJapaneseParagraphWithFallback(paragraph)
+  }
+
+  const rawSentences = Array.from(
+    japaneseSentenceSegmenter.segment(paragraph),
+    (part) => normalizeJapaneseSentenceText(part.segment),
+  ).filter(Boolean)
+
+  return rawSentences.length > 0 ? rawSentences : segmentJapaneseParagraphWithFallback(paragraph)
+}
+
+export function segmentJapaneseText(text: string): string[] {
+  const normalized = normalizeInput(text)
+  if (!normalized) {
+    return []
+  }
+
+  return splitIntoParagraphs(normalized)
+    .flatMap(segmentJapaneseParagraph)
+    .filter(hasMeaningfulJapaneseContent)
+}
+
+export function segmentText(text: string, language: BookLanguage): string[] {
+  return language === 'ja' ? segmentJapaneseText(text) : segmentSpanishText(text)
 }

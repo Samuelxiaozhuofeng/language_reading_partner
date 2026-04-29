@@ -5,9 +5,11 @@ import type {
   ApiConfig,
   BatchAnalysisJob,
   PromptConfig,
+  JapaneseToken,
   VocabularyExplanation,
   VocabularyPromptConfig,
 } from '../types'
+import { sanitizeChunkAnalysis } from './analysisResult'
 import { sanitizeHighlights } from './knowledge'
 
 type ChatCompletionResponse = {
@@ -50,6 +52,7 @@ type StructuredAnalysisValue = {
   grammar?: unknown
   meaning?: unknown
   content?: unknown
+  chunkAnalysis?: unknown
   highlights?: unknown
 }
 
@@ -92,6 +95,23 @@ function buildDocumentMetadata(documentContext?: AnalysisDocumentContext) {
   ].join('\n')
 }
 
+function formatJapaneseTokens(tokens?: JapaneseToken[]) {
+  if (!tokens?.length) {
+    return '（无）'
+  }
+
+  return tokens
+    .map((token) =>
+      [
+        token.surface,
+        token.reading || '読みなし',
+        token.baseForm || token.surface,
+        token.pos || '品詞不明',
+      ].join(' / '),
+    )
+    .join('｜')
+}
+
 function interpolatePrompt(
   template: string,
   job: AnalysisJob,
@@ -100,6 +120,7 @@ function interpolatePrompt(
     .replaceAll('{previousSentence}', toPromptValue(job.previousSentence))
     .replaceAll('{sentence}', job.sentence)
     .replaceAll('{nextSentence}', toPromptValue(job.nextSentence))
+    .replaceAll('{tokens}', formatJapaneseTokens(job.tokens))
     .replaceAll('{documentMetadata}', buildDocumentMetadata(job.documentContext))
     .replaceAll('{documentType}', getDocumentTypeLabel(job.documentContext))
     .replaceAll('{documentTitle}', toPromptValue(job.documentContext?.title))
@@ -173,6 +194,7 @@ function parseAnalysisValue(value: StructuredAnalysisValue, rawText: string): An
   const meaningSource = typeof value.meaning === 'string' ? value.meaning : value.content
   const meaning = typeof meaningSource === 'string' ? meaningSource.trim() : ''
   const highlights = sanitizeHighlights(value.highlights)
+  const chunkAnalysis = sanitizeChunkAnalysis(value.chunkAnalysis)
 
   if (!grammar && !meaning) {
     throw new Error('empty')
@@ -183,12 +205,13 @@ function parseAnalysisValue(value: StructuredAnalysisValue, rawText: string): An
     grammar,
     meaning,
     highlights,
+    chunkAnalysis,
     isPartial: !grammar || !meaning,
     rawText,
   }
 }
 
-function parseStructuredResult(text: string): AnalysisResult {
+export function parseStructuredResult(text: string): AnalysisResult {
   const normalized = text.trim()
 
   if (!normalized) {
@@ -230,6 +253,65 @@ function createMalformedBatchResult(rawText: string): AnalysisResult {
     highlights: [],
     isPartial: true,
     rawText,
+  }
+}
+
+function buildJapaneseBatchRequestBody(config: ApiConfig, batchJob: BatchAnalysisJob) {
+  const numberedSentences = batchJob.sentenceEntries
+    .map(({ sentence, tokens }, index) =>
+      [
+        `句子 ${index + 1}: ${sentence}`,
+        `语块 ${index + 1}: ${formatJapaneseTokens(tokens)}`,
+      ].join('\n'),
+    )
+    .join('\n\n')
+
+  const prompt = [
+    '你是一位日语教师，帮助中文母语者阅读日语文本。',
+    '请根据每个日语句子及其形态素分词结果，逐句输出解析。',
+    '必须只输出一个 JSON 数组，不要输出 Markdown，不要输出额外说明。',
+    '',
+    'JSON 数组中每一项都必须对应同序号句子，结构固定为：',
+    '[',
+    '  {',
+    '    "grammar": "string",',
+    '    "meaning": "string",',
+    '    "chunkAnalysis": [',
+    '      {"chunk": "string", "reading": "string", "pos": "string", "explanation": "string"}',
+    '    ],',
+    '    "highlights": [',
+    '      {"text": "string", "kind": "grammar | phrase | vocabulary", "explanation": "string"}',
+    '    ]',
+    '  }',
+    ']',
+    '',
+    '要求：',
+    '1. 必须使用中文回答。',
+    '2. grammar：解释句子中最值得学习的语法点、句型、助词用法、敬语层级等。',
+    '3. meaning：用自然中文说明句意、语气和上下文作用。',
+    '4. chunkAnalysis 的顺序和数量必须与对应输入语块完全一致。',
+    '5. chunkAnalysis.reading 使用平假名，pos 使用日语词性名，explanation 用中文简要说明该词块在句中的含义和功能。',
+    '6. highlights 返回 0-4 个最值得收藏的知识点，text 必须是日语原文。',
+    `7. 必须返回 ${batchJob.sentenceEntries.length} 个数组元素，顺序必须与句子编号完全一致。`,
+    '',
+    '文档元信息：',
+    buildDocumentMetadata(batchJob.documentContext),
+    '',
+    `上文：${toPromptValue(batchJob.previousSentence)}`,
+    '待解析句子与语块：',
+    numberedSentences,
+    `下文：${toPromptValue(batchJob.nextSentence)}`,
+  ].join('\n')
+
+  return {
+    model: config.model,
+    temperature: 0.2,
+    messages: [
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ],
   }
 }
 
@@ -308,6 +390,10 @@ function buildRequestBody(config: ApiConfig, promptConfig: PromptConfig, job: An
 }
 
 function buildBatchRequestBody(config: ApiConfig, batchJob: BatchAnalysisJob) {
+  if (batchJob.sentenceEntries.some((entry) => entry.language === 'ja')) {
+    return buildJapaneseBatchRequestBody(config, batchJob)
+  }
+
   const numberedSentences = batchJob.sentenceEntries
     .map(({ sentence }, index) => `句子 ${index + 1}: ${sentence}`)
     .join('\n')
@@ -756,7 +842,12 @@ export async function runConcurrentAnalysis(
         const batchResults = await analyzeBatch(
           config,
           {
-            sentenceEntries: chunk.map(({ sentenceId, sentence }) => ({ sentenceId, sentence })),
+            sentenceEntries: chunk.map(({ sentenceId, sentence, language, tokens }) => ({
+              sentenceId,
+              sentence,
+              language,
+              tokens,
+            })),
             previousSentence: chunk[0]?.previousSentence,
             nextSentence: chunk[chunk.length - 1]?.nextSentence,
             documentContext: chunk[0]?.documentContext,

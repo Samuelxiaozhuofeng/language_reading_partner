@@ -5,17 +5,18 @@ import type Section from 'epubjs/types/section'
 import type { SpineItem } from 'epubjs/types/section'
 import type {
   BookChapterRecord,
+  BookLanguage,
   BookRecord,
   ChapterParagraphBlock,
 } from '../types'
 import {
-  createChapterSentenceItems,
-  createChapterSentences,
+  createChapterSentencesForLanguage,
+  createSentenceItemsForLanguage,
   createParagraphBlock,
   deriveChapterAnalysisState,
   paragraphsToText,
 } from './chapterText'
-import { segmentSpanishText } from './segment'
+import { segmentText } from './segment'
 
 type ImportedChapterDraft = Pick<
   BookChapterRecord,
@@ -289,9 +290,12 @@ function extractInlineSentenceHtml(element: HTMLElement, sentenceTexts: string[]
   }
 }
 
-function extractParagraphDraft(element: Element): ExtractedParagraphDraft | null {
+function extractParagraphDraft(
+  element: Element,
+  language: BookLanguage,
+): ExtractedParagraphDraft | null {
   const blockMeta = resolveParagraphBlockMeta(element.tagName)
-  const sentenceTexts = segmentSpanishText(element.textContent ?? '')
+  const sentenceTexts = segmentText(element.textContent ?? '', language)
   const inlineExtraction =
     element instanceof HTMLElement
       ? extractInlineSentenceHtml(element, sentenceTexts)
@@ -318,7 +322,10 @@ function extractParagraphDraft(element: Element): ExtractedParagraphDraft | null
   }
 }
 
-function extractParagraphBlocks(html: string): ChapterParagraphBlock[] {
+async function extractParagraphBlocks(html: string, language: BookLanguage): Promise<{
+  paragraphBlocks: ChapterParagraphBlock[]
+  sentences: Awaited<ReturnType<typeof createSentenceItemsForLanguage>>
+}> {
   const parser = new DOMParser()
   const document = parser.parseFromString(html, 'text/html')
   document.querySelectorAll('script, style, nav, aside, svg, noscript').forEach((node) => node.remove())
@@ -327,15 +334,15 @@ function extractParagraphBlocks(html: string): ChapterParagraphBlock[] {
     document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, li, blockquote, pre'),
   )
   const paragraphDrafts = candidates
-    .map((element) => extractParagraphDraft(element))
+    .map((element) => extractParagraphDraft(element, language))
     .filter((paragraph): paragraph is ExtractedParagraphDraft => Boolean(paragraph))
 
   if (paragraphDrafts.length > 0) {
     const sentenceTexts = paragraphDrafts.flatMap((paragraph) => paragraph.sentenceTexts)
-    const sentences = createChapterSentenceItems(sentenceTexts)
+    const sentences = await createSentenceItemsForLanguage(sentenceTexts, language)
     let sentenceCursor = 0
 
-    return paragraphDrafts.map((paragraph) => {
+    const paragraphBlocks = paragraphDrafts.map((paragraph) => {
       const paragraphSentenceIds = sentences
         .slice(sentenceCursor, sentenceCursor + paragraph.sentenceTexts.length)
         .map((sentence) => sentence.id)
@@ -353,10 +360,14 @@ function extractParagraphBlocks(html: string): ChapterParagraphBlock[] {
             : undefined,
       })
     })
+
+    return { paragraphBlocks, sentences }
   }
 
   const fallbackText = createParagraphBlock(document.body?.textContent ?? '')
-  return fallbackText.text ? [fallbackText] : []
+  const paragraphBlocks = fallbackText.text ? [fallbackText] : []
+  const sentences = await createChapterSentencesForLanguage(paragraphsToText(paragraphBlocks), language)
+  return { paragraphBlocks, sentences }
 }
 
 async function sectionToDraft(
@@ -364,18 +375,19 @@ async function sectionToDraft(
   request: (path: string) => Promise<object>,
   order: number,
   title: string,
+  language: BookLanguage,
   sourceHref?: string,
 ) {
   await section.load(request)
   const html = section.document?.documentElement?.outerHTML ?? ''
-  const paragraphBlocks = extractParagraphBlocks(html)
+  const { paragraphBlocks, sentences: extractedSentences } = await extractParagraphBlocks(html, language)
   const originalText = paragraphsToText(paragraphBlocks)
   const sourceText = originalText
   const storedSentenceTexts = paragraphBlocks.flatMap((paragraph) => paragraph.sentenceTexts ?? [])
   const sentences =
     storedSentenceTexts.length > 0 && storedSentenceTexts.every(Boolean)
-      ? createChapterSentenceItems(storedSentenceTexts)
-      : createChapterSentences(sourceText)
+      ? extractedSentences
+      : await createChapterSentencesForLanguage(sourceText, language)
   section.unload()
 
   if (storedSentenceTexts.length > 0 && storedSentenceTexts.every(Boolean)) {
@@ -427,11 +439,28 @@ async function resolveCoverDataUrl(bookInstance: ReturnType<typeof ePub>) {
   }
 }
 
-function buildBookRecord(metadata: PackagingMetadataObject, chapterCount: number, coverUrl?: string): BookRecord {
+function normalizeEpubLanguage(language?: string | null): BookLanguage | null {
+  const normalized = language?.trim().toLowerCase()
+  if (!normalized) {
+    return null
+  }
+
+  return normalized === 'ja' || normalized === 'jpn' || normalized.startsWith('ja-')
+    ? 'ja'
+    : null
+}
+
+function buildBookRecord(
+  metadata: PackagingMetadataObject,
+  chapterCount: number,
+  language: BookLanguage,
+  coverUrl?: string,
+): BookRecord {
   return {
     id: crypto.randomUUID(),
     title: metadata.title?.trim() || '未命名 EPUB',
     author: metadata.creator?.trim() || '作者未知',
+    language,
     sourceType: 'epub',
     coverUrl,
     importedAt: new Date().toISOString(),
@@ -440,9 +469,15 @@ function buildBookRecord(metadata: PackagingMetadataObject, chapterCount: number
   }
 }
 
+async function waitForBookOpened(bookInstance: ReturnType<typeof ePub>) {
+  await bookInstance.ready
+  await bookInstance.opened
+}
+
 async function buildChaptersFromToc(
   bookInstance: ReturnType<typeof ePub>,
   toc: NavItem[],
+  language: BookLanguage,
 ) {
   const flattened = flattenToc(toc)
   const seen = new Set<string>()
@@ -470,6 +505,7 @@ async function buildChaptersFromToc(
         bookInstance.load.bind(bookInstance) as (path: string) => Promise<object>,
         drafts.length,
         item.label || '未命名章节',
+        language,
         item.href,
       ),
     )
@@ -481,6 +517,7 @@ async function buildChaptersFromToc(
 async function buildChaptersFromSpine(
   bookInstance: ReturnType<typeof ePub>,
   spineItems: SpineItem[],
+  language: BookLanguage,
 ) {
   const drafts: ImportedChapterDraft[] = []
 
@@ -496,6 +533,7 @@ async function buildChaptersFromSpine(
         bookInstance.load.bind(bookInstance) as (path: string) => Promise<object>,
         drafts.length,
         item.href || `第 ${item.index + 1} 章`,
+        language,
         item.href,
       ),
     )
@@ -504,12 +542,31 @@ async function buildChaptersFromSpine(
   return drafts
 }
 
-export async function importEpubBook(file: File): Promise<ImportedBookPayload> {
+export async function detectEpubLanguage(file: File): Promise<BookLanguage | null> {
+  let bookInstance: ReturnType<typeof ePub> | null = null
+
+  try {
+    const arrayBuffer = await file.arrayBuffer()
+    bookInstance = ePub(arrayBuffer)
+    await waitForBookOpened(bookInstance)
+    const metadata = await bookInstance.loaded.metadata
+    return normalizeEpubLanguage(metadata.language)
+  } catch {
+    return null
+  } finally {
+    bookInstance?.destroy()
+  }
+}
+
+export async function importEpubBook(
+  file: File,
+  language: BookLanguage,
+): Promise<ImportedBookPayload> {
   const arrayBuffer = await file.arrayBuffer()
   const bookInstance = ePub(arrayBuffer)
 
   try {
-    await bookInstance.ready
+    await waitForBookOpened(bookInstance)
     const [metadata, navigation, spineItems, coverUrl] = await Promise.all([
       bookInstance.loaded.metadata,
       bookInstance.loaded.navigation,
@@ -519,14 +576,14 @@ export async function importEpubBook(file: File): Promise<ImportedBookPayload> {
 
     const chapterDrafts =
       navigation.toc.length > 0
-        ? await buildChaptersFromToc(bookInstance, navigation.toc)
-        : await buildChaptersFromSpine(bookInstance, spineItems)
+        ? await buildChaptersFromToc(bookInstance, navigation.toc, language)
+        : await buildChaptersFromSpine(bookInstance, spineItems, language)
 
     if (chapterDrafts.length === 0) {
       throw new Error('这本 EPUB 没有找到可导入的章节内容。')
     }
 
-    const book = buildBookRecord(metadata, chapterDrafts.length, coverUrl)
+    const book = buildBookRecord(metadata, chapterDrafts.length, language, coverUrl)
     const chapters: BookChapterRecord[] = chapterDrafts.map((chapterDraft) => ({
       id: crypto.randomUUID(),
       bookId: book.id,

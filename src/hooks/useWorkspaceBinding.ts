@@ -8,6 +8,7 @@ import {
 import type {
   AnalysisDocumentContext,
   AnalysisResult,
+  BookLanguage,
   BookChapterRecord,
   BookRecord,
   RunSession,
@@ -18,6 +19,7 @@ import type {
 
 type PersistentDraftState = {
   articleTitle: string
+  draftLanguage: BookLanguage
   history: RunSession[]
   initialNotice: string
   results: Record<string, AnalysisResult>
@@ -69,6 +71,10 @@ export function useWorkspaceBinding({
   const workspaceSourceText = activeChapter?.sourceText ?? persistent.sourceText
   const workspaceSentences = activeChapter?.sentences ?? persistent.sentences
   const workspaceResults = activeChapter?.results ?? persistent.results
+  const currentLanguage: BookLanguage =
+    effectiveWorkspaceSource === 'chapter'
+      ? library.selectedBook?.language ?? 'es'
+      : persistent.draftLanguage
   const chapterRangeOverride = activeChapter ? chapterRangeOverrides[activeChapter.id] : undefined
 
   const setWorkspaceSourceText: Dispatch<SetStateAction<string>> = useCallback((action) => {
@@ -185,6 +191,7 @@ export function useWorkspaceBinding({
     activeReadingRange,
     analysisDocumentContext,
     currentContextTitle,
+    currentLanguage,
     effectiveWorkspaceSource,
     initialNotice,
     manualHistory,

@@ -10,10 +10,13 @@ import type {
   VocabularyExplanation,
 } from '../../types'
 import { ClickableSentenceWords } from './ClickableSentenceWords'
+import { JapaneseChunkView } from './JapaneseChunkView'
 import { useVocabularyExplanation } from './useVocabularyExplanation'
+import type { JapaneseChunkSelection } from '../../lib/japaneseUtils'
 
 type SentenceInspectorProps = {
   activeSelection: HighlightSelection | null
+  activeChunkSelection: JapaneseChunkSelection | null
   activeSentence: SentenceItem | null
   activeSentenceIndex: number | null
   mode: InspectorMode
@@ -32,12 +35,15 @@ type SentenceInspectorProps = {
     result: AnalysisResult,
     highlight: AnalysisHighlight,
   ) => void
+  bookLanguage: 'es' | 'ja'
   onSelectHighlight: (sentenceId: string, highlightId: string) => void
+  onSelectChunk: (sentenceId: string, chunkIndex: number) => void
   onSetCurrentResumeAnchor: () => void
   resolveStatusLabel: (status: SentenceItem['status']) => string
   results: Record<string, AnalysisResult>
   resumeAnchorSentenceId: string | null
   savedHighlightSignatures: Set<string>
+  showFurigana?: boolean
 }
 
 export function SentenceInspector({
@@ -65,7 +71,9 @@ type ActiveSentenceInspectorProps = Omit<SentenceInspectorProps, 'activeSentence
 
 function ActiveSentenceInspector({
   activeSelection,
+  activeChunkSelection,
   activeSentence,
+  bookLanguage,
   activeSentenceIndex,
   mode,
   onAddToAnki,
@@ -76,11 +84,13 @@ function ActiveSentenceInspector({
   onRetrySentence,
   onSaveHighlight,
   onSelectHighlight,
+  onSelectChunk,
   onSetCurrentResumeAnchor,
   resolveStatusLabel,
   results,
   resumeAnchorSentenceId,
   savedHighlightSignatures,
+  showFurigana,
 }: ActiveSentenceInspectorProps) {
   const result = results[activeSentence.id]
   const vocabularyInteraction = useVocabularyExplanation({
@@ -131,16 +141,30 @@ function ActiveSentenceInspector({
       </div>
 
       <p className="reading-inspector-sentence">
-        <ClickableSentenceWords
-          activeWord={vocabularyInteraction.state?.word}
-          disabled={!result || vocabularyInteraction.state?.status === 'loading'}
-          text={vocabularyInteraction.sentenceText}
-          onWordClick={(word) => void vocabularyInteraction.handleWordClick(word)}
-        />
+        {bookLanguage === 'ja' ? (
+          <JapaneseChunkView
+            activeChunkSelection={activeChunkSelection}
+            disabled={!result}
+            sentenceId={activeSentence.id}
+            showFurigana={showFurigana}
+            text={vocabularyInteraction.sentenceText}
+            tokens={activeSentence.tokens}
+            onChunkClick={(chunkIndex) => onSelectChunk(activeSentence.id, chunkIndex)}
+          />
+        ) : (
+          <ClickableSentenceWords
+            activeWord={vocabularyInteraction.state?.word}
+            disabled={!result || vocabularyInteraction.state?.status === 'loading'}
+            text={vocabularyInteraction.sentenceText}
+            onWordClick={(word) => void vocabularyInteraction.handleWordClick(word)}
+          />
+        )}
       </p>
 
       <SentenceDetailPanel
         activeSelection={activeSelection}
+        activeChunkSelection={activeChunkSelection}
+        bookLanguage={bookLanguage}
         onAddToAnki={onAddToAnki}
         onExplainVocabulary={onExplainVocabulary}
         onOpenResources={onOpenResources}
@@ -148,10 +172,12 @@ function ActiveSentenceInspector({
         onRetrySentence={onRetrySentence}
         onSaveHighlight={onSaveHighlight}
         onSelectHighlight={onSelectHighlight}
+        onSelectChunk={onSelectChunk}
         renderVocabularySource={false}
         result={result}
         savedHighlightSignatures={savedHighlightSignatures}
         sentence={activeSentence}
+        showFurigana={showFurigana}
         vocabularyInteraction={vocabularyInteraction}
       />
     </section>
