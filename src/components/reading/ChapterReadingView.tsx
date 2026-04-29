@@ -86,13 +86,13 @@ export function ChapterReadingView({
               {(currentChapterPageData?.paragraphs ?? []).map((paragraph) => (
                 <div className={getReadingBlockClassName(paragraph)} key={paragraph.id}>
                   {paragraph.sentences.map((sentence) => {
-                    const className = `reading-inline-sentence ${
+                    const sentenceClassName = `reading-inline-sentence ${
                       effectiveActiveSentenceId === sentence.id ? 'is-active' : ''
                     } ${resumeHighlightSentenceId === sentence.id ? 'is-resumed' : ''}`
 
                     return bookLanguage === 'ja' ? (
                       <span
-                        className={className}
+                        className="reading-inline-sentence-ja"
                         key={sentence.id}
                         role="button"
                         tabIndex={0}
@@ -115,7 +115,7 @@ export function ChapterReadingView({
                       </span>
                     ) : (
                       <button
-                        className={className}
+                        className={sentenceClassName}
                         key={sentence.id}
                         type="button"
                         onClick={() => onOpenSentence(sentence.id)}

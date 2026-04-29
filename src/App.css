@@ -1430,6 +1430,22 @@ blockquote {
   margin-left: 0.18ch;
 }
 
+.reading-inline-sentence-ja {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.reading-inline-sentence-ja:focus-visible {
+  outline: 2px solid rgba(14, 125, 120, 0.48);
+  outline-offset: 3px;
+}
+
 .reading-inline-sentence--measure {
   cursor: default;
 }
