@@ -2278,9 +2278,10 @@ blockquote {
 
 .chunk-analysis-item {
   display: grid;
-  grid-template-columns: minmax(80px, auto) minmax(80px, auto) auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: baseline;
+  grid-template-columns: minmax(80px, max-content) minmax(80px, max-content) minmax(0, 1fr);
+  column-gap: 28px;
+  row-gap: 6px;
+  align-items: start;
   width: 100%;
   border: 1px solid rgba(69, 72, 82, 0.12);
   border-radius: 10px;
@@ -2297,18 +2298,42 @@ blockquote {
 }
 
 .chunk-main {
+  grid-column: 1;
   color: var(--ink-strong);
   font-weight: 700;
 }
 
-.chunk-reading,
-.chunk-pos {
+.chunk-reading {
+  grid-column: 2;
   color: var(--muted);
   font-size: 0.84rem;
 }
 
+.chunk-meta {
+  display: grid;
+  grid-column: 3;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chunk-meta-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.chunk-pos {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
 .chunk-explanation {
   min-width: 0;
+  line-height: 1.68;
+  overflow-wrap: anywhere;
 }
 
 .chunk-analysis-focus {
@@ -2442,6 +2467,12 @@ blockquote {
   .draft-meta-grid,
   .chunk-analysis-item {
     grid-template-columns: 1fr;
+  }
+
+  .chunk-main,
+  .chunk-reading,
+  .chunk-meta {
+    grid-column: 1;
   }
 
   .book-card-main {

@@ -396,6 +396,9 @@ export function SentenceDetailPanel({
               const isActive =
                 activeChunkSelection?.sentenceId === sentence.id &&
                 activeChunkSelection.chunkIndex === index
+              const chunkLabels = [chunk.pos, chunk.grammarRole].filter(
+                (label): label is string => Boolean(label),
+              )
 
               return (
                 <button
@@ -406,14 +409,18 @@ export function SentenceDetailPanel({
                 >
                   <span className="chunk-main">{chunk.chunk}</span>
                   {chunk.reading ? <span className="chunk-reading">{chunk.reading}</span> : null}
-                  {[chunk.pos, chunk.grammarRole]
-                    .filter((label): label is string => Boolean(label))
-                    .map((label) => (
-                      <span className="chunk-pos" key={label}>
-                        {label}
+                  <span className="chunk-meta">
+                    {chunkLabels.length ? (
+                      <span className="chunk-meta-labels">
+                        {chunkLabels.map((label) => (
+                          <span className="chunk-pos" key={label}>
+                            {label}
+                          </span>
+                        ))}
                       </span>
-                    ))}
-                  <span className="chunk-explanation">{chunk.explanation}</span>
+                    ) : null}
+                    <span className="chunk-explanation">{chunk.explanation}</span>
+                  </span>
                 </button>
               )
             })}
