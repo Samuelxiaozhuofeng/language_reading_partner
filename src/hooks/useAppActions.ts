@@ -20,6 +20,7 @@ type PersistentActionState = {
   ankiConfig: AnkiConfig
   articleTitle: string
   draftLanguage: BookLanguage
+  jaAnkiConfig: AnkiConfig
   resetAll: () => void
   setArticleTitle: Dispatch<SetStateAction<string>>
 }
@@ -77,6 +78,7 @@ type LibraryActionState = {
 type UseAppActionsArgs = {
   activeChapter: BookChapterRecord | null
   analysis: AnalysisActionState
+  currentLanguage: BookLanguage
   effectiveWorkspaceSource: WorkspaceSource
   library: LibraryActionState
   persistent: PersistentActionState
@@ -99,6 +101,7 @@ type ManualDraftSaveInput = {
 export function useAppActions({
   activeChapter,
   analysis,
+  currentLanguage,
   effectiveWorkspaceSource,
   library,
   persistent,
@@ -291,12 +294,14 @@ export function useAppActions({
       ...highlight,
       id: `${sentence.id}:${highlight.kind}:${highlight.text}`,
     }
+    const targetAnkiConfig =
+      currentLanguage === 'ja' ? persistent.jaAnkiConfig : persistent.ankiConfig
 
     await addNoteToAnki(
-      persistent.ankiConfig,
+      targetAnkiConfig,
       buildAnkiNotePayload(sentence, result, noteHighlight),
     )
-  }, [persistent.ankiConfig])
+  }, [currentLanguage, persistent.ankiConfig, persistent.jaAnkiConfig])
 
   const handleSetResumeAnchor = useCallback(async (sentence: SentenceItem, sentenceIndex: number) => {
     if (effectiveWorkspaceSource !== 'chapter') {

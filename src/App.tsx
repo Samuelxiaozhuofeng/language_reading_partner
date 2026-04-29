@@ -195,6 +195,7 @@ function App() {
   } = useAppActions({
     activeChapter,
     analysis,
+    currentLanguage,
     effectiveWorkspaceSource,
     library,
     persistent,
@@ -294,11 +295,14 @@ function App() {
       apiConfig={persistent.apiConfig}
       isOpen={isSettingsOpen}
       isVocabularyAiShared={persistent.isVocabularyAiShared}
+      jaAnkiConfig={persistent.jaAnkiConfig}
       onAnkiConfigChange={persistent.handleAnkiConfigChange}
       onAnkiFieldMappingChange={persistent.handleAnkiFieldMappingChange}
       onClearLocalData={() => void handleClearLocalData()}
       onClose={() => setIsSettingsOpen(false)}
       onConfigChange={persistent.handleConfigChange}
+      onJaAnkiConfigChange={persistent.handleJaAnkiConfigChange}
+      onJaAnkiFieldMappingChange={persistent.handleJaAnkiFieldMappingChange}
       onPromptChange={persistent.handlePromptChange}
       onResetPrompt={persistent.resetPromptConfig}
       onSettingsTabChange={setActiveSettingsTab}

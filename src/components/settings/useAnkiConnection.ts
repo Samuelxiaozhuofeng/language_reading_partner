@@ -13,10 +13,10 @@ import {
   fetchAnkiNoteTypes,
   fetchAnkiVersion,
   getAnkiCompatibilityIssue,
-  SRA_NOTE_TYPE_NAME,
+  getSraNoteTypeName,
   toUserFacingAnkiError,
 } from '../../lib/anki'
-import type { AnkiCompatibilityIssue } from '../../lib/anki'
+import type { AnkiCompatibilityIssue, SraNoteTypeLanguage } from '../../lib/anki'
 import { ankiFieldSourceOrder } from '../../lib/anki'
 import type { AnkiConfig } from '../../types'
 
@@ -24,6 +24,7 @@ type UseAnkiConnectionOptions = {
   ankiConfig: AnkiConfig
   isActive: boolean
   isOpen: boolean
+  language: SraNoteTypeLanguage
   onAnkiConfigChange: AnkiConfigChangeHandler
   onAnkiFieldMappingChange: AnkiFieldMappingChangeHandler
 }
@@ -43,6 +44,7 @@ export function useAnkiConnection({
   ankiConfig,
   isActive,
   isOpen,
+  language,
   onAnkiConfigChange,
   onAnkiFieldMappingChange,
 }: UseAnkiConnectionOptions): UseAnkiConnectionResult {
@@ -190,16 +192,18 @@ export function useAnkiConnection({
     }
 
     setAnkiFetchStatus('loading')
-    setAnkiFetchMessage('正在创建或修复 SRA note type...')
+    const noteTypeName = getSraNoteTypeName(language)
+    const languageLabel = language === 'ja' ? '日语' : '通用/西语'
+    setAnkiFetchMessage(`正在创建或修复 ${noteTypeName} note type...`)
 
     try {
-      const result = await createOrRepairSraAnkiNoteType(endpoint)
+      const result = await createOrRepairSraAnkiNoteType(endpoint, language)
       const { decks, noteTypes, fields, nextDeck } = await loadAnkiConnectionData(
         undefined,
-        SRA_NOTE_TYPE_NAME,
+        noteTypeName,
       )
 
-      applyAnkiSelection(nextDeck, SRA_NOTE_TYPE_NAME)
+      applyAnkiSelection(nextDeck, noteTypeName)
       syncAnkiFieldMapping(fields)
 
       setAvailableDecks(decks)
@@ -208,8 +212,8 @@ export function useAnkiConnection({
       setAnkiFetchStatus('success')
       setAnkiFetchMessage(
         result.created
-          ? '已创建 SRA note type，并自动选中和映射 6 个字段。'
-          : '已修复 SRA note type，并自动选中和映射 6 个字段。',
+          ? `已创建 ${languageLabel} ${noteTypeName} note type，并自动选中和映射 6 个字段。`
+          : `已修复 ${languageLabel} ${noteTypeName} note type，并自动选中和映射 6 个字段。`,
       )
     } catch (error) {
       setAnkiFetchStatus('error')
@@ -218,6 +222,7 @@ export function useAnkiConnection({
   }, [
     ankiConfig.endpoint,
     applyAnkiSelection,
+    language,
     loadAnkiConnectionData,
     syncAnkiFieldMapping,
   ])

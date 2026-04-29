@@ -21,6 +21,7 @@ import {
   CONFIG_STORAGE_KEY,
   defaultAnkiConfig,
   defaultConfig,
+  defaultJaAnkiConfig,
   defaultPromptConfig,
   defaultReadingPreferences,
   defaultSourceText,
@@ -28,12 +29,14 @@ import {
   defaultVocabularyPromptConfig,
   DRAFT_STORAGE_KEY,
   HISTORY_STORAGE_KEY,
+  JA_ANKI_STORAGE_KEY,
   PROMPT_STORAGE_KEY,
   READING_PREFERENCES_STORAGE_KEY,
   restoreAnkiConfig,
   restoreConfig,
   restoreDraft,
   restoreHistory,
+  restoreJaAnkiConfig,
   restorePromptConfig,
   restoreReadingPreferences,
   restoreVocabularyAiShared,
@@ -60,11 +63,14 @@ type PersistentConfigState = {
   handleAnkiConfigChange: AnkiConfigChangeHandler
   handleAnkiFieldMappingChange: AnkiFieldMappingChangeHandler
   handleConfigChange: ConfigChangeHandler
+  handleJaAnkiConfigChange: AnkiConfigChangeHandler
+  handleJaAnkiFieldMappingChange: AnkiFieldMappingChangeHandler
   handlePromptChange: PromptConfigChangeHandler
   hasSavedDraft: boolean
   history: RunSession[]
   initialNotice: string
   isVocabularyAiShared: boolean
+  jaAnkiConfig: AnkiConfig
   promptConfig: PromptConfig
   readingPreferences: ReadingPreferences
   resetAll: () => void
@@ -90,6 +96,7 @@ type PersistentConfigState = {
 export function usePersistentConfig(): PersistentConfigState {
   const [draft] = useState(restoreDraft)
   const [ankiConfig, setAnkiConfig] = useState<AnkiConfig>(restoreAnkiConfig)
+  const [jaAnkiConfig, setJaAnkiConfig] = useState<AnkiConfig>(restoreJaAnkiConfig)
   const [apiConfig, setApiConfig] = useState<ApiConfig>(restoreConfig)
   const [vocabularyApiConfig, setVocabularyApiConfig] =
     useState<ApiConfig>(restoreVocabularyConfig)
@@ -110,6 +117,10 @@ export function usePersistentConfig(): PersistentConfigState {
   useEffect(() => {
     localStorage.setItem(ANKI_STORAGE_KEY, JSON.stringify(ankiConfig))
   }, [ankiConfig])
+
+  useEffect(() => {
+    localStorage.setItem(JA_ANKI_STORAGE_KEY, JSON.stringify(jaAnkiConfig))
+  }, [jaAnkiConfig])
 
   useEffect(() => {
     localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(apiConfig))
@@ -187,6 +198,23 @@ export function usePersistentConfig(): PersistentConfigState {
     }))
   }, [])
 
+  const handleJaAnkiConfigChange: AnkiConfigChangeHandler = useCallback((key, value) => {
+    setJaAnkiConfig((current) => ({
+      ...current,
+      [key]: value,
+    }))
+  }, [])
+
+  const handleJaAnkiFieldMappingChange: AnkiFieldMappingChangeHandler = useCallback((source, value) => {
+    setJaAnkiConfig((current) => ({
+      ...current,
+      fieldMapping: {
+        ...current.fieldMapping,
+        [source]: value,
+      },
+    }))
+  }, [])
+
   const handlePromptChange: PromptConfigChangeHandler = useCallback((key, value) => {
     if (key === 'previousSentenceCount' || key === 'nextSentenceCount') {
       setPromptConfig((current) => ({
@@ -246,6 +274,7 @@ export function usePersistentConfig(): PersistentConfigState {
   const resetAll = useCallback(() => {
     clearPersistedStorage()
     setAnkiConfig(defaultAnkiConfig)
+    setJaAnkiConfig(defaultJaAnkiConfig)
     setApiConfig(defaultConfig)
     setVocabularyApiConfig(defaultVocabularyConfig)
     setIsVocabularyAiShared(true)
@@ -276,6 +305,8 @@ export function usePersistentConfig(): PersistentConfigState {
     handleAnkiConfigChange,
     handleAnkiFieldMappingChange,
     handleConfigChange,
+    handleJaAnkiConfigChange,
+    handleJaAnkiFieldMappingChange,
     handlePromptChange,
     handleReadingPreferencesChange,
     handleVocabularyAiSharedChange,
@@ -285,6 +316,7 @@ export function usePersistentConfig(): PersistentConfigState {
     history,
     initialNotice,
     isVocabularyAiShared,
+    jaAnkiConfig,
     promptConfig,
     readingPreferences,
     resetAll,

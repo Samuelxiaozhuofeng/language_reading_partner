@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type {
   AnkiConfigChangeHandler,
   AnkiFieldMappingChangeHandler,
@@ -7,7 +7,7 @@ import type {
   SettingsTab,
   VocabularyPromptConfigChangeHandler,
 } from '../lib/appState'
-import type { AnkiConfig, ApiConfig, PromptConfig, VocabularyPromptConfig } from '../types'
+import type { AnkiConfig, ApiConfig, BookLanguage, PromptConfig, VocabularyPromptConfig } from '../types'
 import AiSettingsTab from './settings/AiSettingsTab'
 import AnkiSettingsTab from './settings/AnkiSettingsTab'
 import PromptSettingsTab from './settings/PromptSettingsTab'
@@ -21,11 +21,14 @@ type SettingsDialogProps = {
   apiConfig: ApiConfig
   isOpen: boolean
   isVocabularyAiShared: boolean
+  jaAnkiConfig: AnkiConfig
   onAnkiConfigChange: AnkiConfigChangeHandler
   onAnkiFieldMappingChange: AnkiFieldMappingChangeHandler
   onClearLocalData: () => void
   onClose: () => void
   onConfigChange: ConfigChangeHandler
+  onJaAnkiConfigChange: AnkiConfigChangeHandler
+  onJaAnkiFieldMappingChange: AnkiFieldMappingChangeHandler
   onPromptChange: PromptConfigChangeHandler
   onResetPrompt: () => void
   onResetVocabularyPrompt: () => void
@@ -44,11 +47,14 @@ function SettingsDialog({
   apiConfig,
   isOpen,
   isVocabularyAiShared,
+  jaAnkiConfig,
   onAnkiConfigChange,
   onAnkiFieldMappingChange,
   onClearLocalData,
   onClose,
   onConfigChange,
+  onJaAnkiConfigChange,
+  onJaAnkiFieldMappingChange,
   onPromptChange,
   onResetPrompt,
   onResetVocabularyPrompt,
@@ -60,6 +66,13 @@ function SettingsDialog({
   vocabularyApiConfig,
   vocabularyPromptConfig,
 }: SettingsDialogProps) {
+  const [activeAnkiLanguage, setActiveAnkiLanguage] = useState<BookLanguage>('es')
+  const activeAnkiConfig = activeAnkiLanguage === 'ja' ? jaAnkiConfig : ankiConfig
+  const activeAnkiConfigChange =
+    activeAnkiLanguage === 'ja' ? onJaAnkiConfigChange : onAnkiConfigChange
+  const activeAnkiFieldMappingChange =
+    activeAnkiLanguage === 'ja' ? onJaAnkiFieldMappingChange : onAnkiFieldMappingChange
+
   const sentenceModelFetch = useModelFetch({
     apiConfig,
     isActive: activeSettingsTab === 'ai',
@@ -74,11 +87,12 @@ function SettingsDialog({
   })
 
   const ankiConnection = useAnkiConnection({
-    ankiConfig,
+    ankiConfig: activeAnkiConfig,
     isActive: activeSettingsTab === 'anki',
     isOpen,
-    onAnkiConfigChange,
-    onAnkiFieldMappingChange,
+    language: activeAnkiLanguage,
+    onAnkiConfigChange: activeAnkiConfigChange,
+    onAnkiFieldMappingChange: activeAnkiFieldMappingChange,
   })
 
   useEffect(() => {
@@ -206,15 +220,17 @@ function SettingsDialog({
           />
         ) : (
           <AnkiSettingsTab
+            activeAnkiLanguage={activeAnkiLanguage}
             ankiCompatibilityIssue={ankiConnection.ankiCompatibilityIssue}
-            ankiConfig={ankiConfig}
+            ankiConfig={activeAnkiConfig}
             ankiFetchMessage={ankiConnection.ankiFetchMessage}
             ankiFetchStatus={ankiConnection.ankiFetchStatus}
             availableDecks={ankiConnection.availableDecks}
             availableNoteFields={ankiConnection.availableNoteFields}
             availableNoteTypes={ankiConnection.availableNoteTypes}
-            onAnkiConfigChange={onAnkiConfigChange}
-            onAnkiFieldMappingChange={onAnkiFieldMappingChange}
+            onAnkiConfigChange={activeAnkiConfigChange}
+            onAnkiFieldMappingChange={activeAnkiFieldMappingChange}
+            onAnkiLanguageChange={setActiveAnkiLanguage}
             onCreateSraNoteType={() => void ankiConnection.handleCreateSraNoteType()}
             onRunAnkiFetch={() => void ankiConnection.runAnkiFetch()}
           />

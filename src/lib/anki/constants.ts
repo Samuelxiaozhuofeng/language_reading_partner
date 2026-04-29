@@ -1,6 +1,10 @@
 import type { AnkiFieldSource } from '../../types'
 
-export const SRA_NOTE_TYPE_NAME = 'SRA'
+export type SraNoteTypeLanguage = 'es' | 'ja'
+
+export const SRA_ES_NOTE_TYPE_NAME = 'SRA-ES'
+export const SRA_JA_NOTE_TYPE_NAME = 'SRA-JA'
+export const SRA_NOTE_TYPE_NAME = SRA_ES_NOTE_TYPE_NAME
 
 export const ankiFieldSourceOrder: AnkiFieldSource[] = [
   'sentence',
@@ -33,6 +37,19 @@ export const sraFrontTemplate = `<div class="es-card">
     <div class="es-grammar-hint">  这里的「{{知识点}}」如何理解？
 </div>
     {{/语法}}
+  </div>
+</div>`
+
+export const sraJaFrontTemplate = `<div class="es-card">
+  <div class="es-header">
+    <span class="es-badge">Japanese</span>
+  </div>
+
+  <div class="es-sentence-wrap">
+    <div class="es-sentence">{{句子}}</div>
+    {{#知识点}}
+    <div class="es-grammar-hint">「{{知识点}}」在这里如何理解？</div>
+    {{/知识点}}
   </div>
 </div>`
 
@@ -69,6 +86,65 @@ export const sraBackTemplate = `<div class="es-card">
   </div>
   {{/知识点}}
 </div>`
+
+export const sraJaBackTemplate = `<div class="es-card">
+  <div class="es-header">
+    <span class="es-badge">Japanese</span>
+    {{#知识点类型}}<span class="es-badge es-badge-grammar">{{知识点类型}}</span>{{/知识点类型}}
+  </div>
+
+  <div class="es-sentence-wrap">
+    <div class="es-sentence">{{句子}}</div>
+  </div>
+
+  {{#语法}}
+  <div class="es-divider"></div>
+
+  <div class="es-content-wrap">
+    <div class="es-label">Grammar / 语法解析</div>
+    <div class="es-content">{{语法}}</div>
+  </div>
+  {{/语法}}
+
+  {{#内容}}
+  <div class="es-divider"></div>
+
+  <div class="es-content-wrap">
+    <div class="es-label">Meaning / 翻译</div>
+    <div class="es-content">{{内容}}</div>
+  </div>
+  {{/内容}}
+
+  {{#知识点}}
+  <div class="es-knowledge-wrap">
+    <div class="es-knowledge-box">
+      <div class="es-knowledge-header">
+        <span class="es-knowledge-word">{{知识点}}</span>
+        {{#知识点类型}}<span class="es-knowledge-type">{{知识点类型}}</span>{{/知识点类型}}
+      </div>
+      {{#知识点解释}}
+      <div class="es-knowledge-explanation">{{知识点解释}}</div>
+      {{/知识点解释}}
+    </div>
+  </div>
+  {{/知识点}}
+</div>`
+
+export function getSraNoteTypeName(language: SraNoteTypeLanguage) {
+  return language === 'ja' ? SRA_JA_NOTE_TYPE_NAME : SRA_ES_NOTE_TYPE_NAME
+}
+
+export function getSraNoteTypeTemplates(language: SraNoteTypeLanguage) {
+  return language === 'ja'
+    ? {
+        front: sraJaFrontTemplate,
+        back: sraJaBackTemplate,
+      }
+    : {
+        front: sraFrontTemplate,
+        back: sraBackTemplate,
+      }
+}
 
 export const sraStyling = `* { box-sizing: border-box; margin: 0; padding: 0; }
 

@@ -23,6 +23,7 @@ export const VOCABULARY_AI_SHARED_STORAGE_KEY = 'spanish-reading-assistant/vocab
 export const PROMPT_STORAGE_KEY = 'spanish-reading-assistant/prompt'
 export const VOCABULARY_PROMPT_STORAGE_KEY = 'spanish-reading-assistant/vocabulary-prompt'
 export const ANKI_STORAGE_KEY = 'spanish-reading-assistant/anki'
+export const JA_ANKI_STORAGE_KEY = 'spanish-reading-assistant/ja-anki'
 export const DRAFT_STORAGE_KEY = 'spanish-reading-assistant/draft'
 export const HISTORY_STORAGE_KEY = 'spanish-reading-assistant/history'
 export const READING_PREFERENCES_STORAGE_KEY = 'spanish-reading-assistant/reading-preferences'
@@ -185,6 +186,12 @@ export const defaultAnkiConfig: AnkiConfig = {
   endpoint: 'http://127.0.0.1:8765',
   deck: '',
   noteType: '',
+  fieldMapping: createDefaultAnkiFieldMapping(),
+}
+
+export const defaultJaAnkiConfig: AnkiConfig = {
+  ...defaultAnkiConfig,
+  deck: 'Japanese',
   fieldMapping: createDefaultAnkiFieldMapping(),
 }
 
@@ -438,10 +445,13 @@ export function restoreReadingPreferences(): ReadingPreferences {
   }
 }
 
-export function restoreAnkiConfig(): AnkiConfig {
-  const saved = localStorage.getItem(ANKI_STORAGE_KEY)
+function restoreAnkiConfigFromStorage(
+  storageKey: string,
+  fallbackConfig: AnkiConfig,
+): AnkiConfig {
+  const saved = localStorage.getItem(storageKey)
   if (!saved) {
-    return defaultAnkiConfig
+    return fallbackConfig
   }
 
   try {
@@ -458,14 +468,22 @@ export function restoreAnkiConfig(): AnkiConfig {
 
     return {
       endpoint:
-        typeof parsed.endpoint === 'string' ? parsed.endpoint : defaultAnkiConfig.endpoint,
-      deck: typeof parsed.deck === 'string' ? parsed.deck : '',
-      noteType: typeof parsed.noteType === 'string' ? parsed.noteType : '',
+        typeof parsed.endpoint === 'string' ? parsed.endpoint : fallbackConfig.endpoint,
+      deck: typeof parsed.deck === 'string' ? parsed.deck : fallbackConfig.deck,
+      noteType: typeof parsed.noteType === 'string' ? parsed.noteType : fallbackConfig.noteType,
       fieldMapping,
     }
   } catch {
-    return defaultAnkiConfig
+    return fallbackConfig
   }
+}
+
+export function restoreAnkiConfig(): AnkiConfig {
+  return restoreAnkiConfigFromStorage(ANKI_STORAGE_KEY, defaultAnkiConfig)
+}
+
+export function restoreJaAnkiConfig(): AnkiConfig {
+  return restoreAnkiConfigFromStorage(JA_ANKI_STORAGE_KEY, defaultJaAnkiConfig)
 }
 
 export function restoreDraft(): PersistedDraft {
@@ -518,6 +536,7 @@ export function clearPersistedStorage() {
   localStorage.removeItem(PROMPT_STORAGE_KEY)
   localStorage.removeItem(VOCABULARY_PROMPT_STORAGE_KEY)
   localStorage.removeItem(ANKI_STORAGE_KEY)
+  localStorage.removeItem(JA_ANKI_STORAGE_KEY)
   localStorage.removeItem(DRAFT_STORAGE_KEY)
   localStorage.removeItem(HISTORY_STORAGE_KEY)
   localStorage.removeItem(READING_PREFERENCES_STORAGE_KEY)

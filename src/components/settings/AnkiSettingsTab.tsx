@@ -6,11 +6,13 @@ import type {
 import {
   ankiFieldSourceLabelMap,
   ankiFieldSourceOrder,
+  getSraNoteTypeName,
   type AnkiCompatibilityIssue,
 } from '../../lib/anki'
-import type { AnkiConfig } from '../../types'
+import type { AnkiConfig, BookLanguage } from '../../types'
 
 type AnkiSettingsTabProps = {
+  activeAnkiLanguage: BookLanguage
   ankiCompatibilityIssue: AnkiCompatibilityIssue | null
   ankiConfig: AnkiConfig
   ankiFetchMessage: string
@@ -20,11 +22,13 @@ type AnkiSettingsTabProps = {
   availableNoteTypes: string[]
   onAnkiConfigChange: AnkiConfigChangeHandler
   onAnkiFieldMappingChange: AnkiFieldMappingChangeHandler
+  onAnkiLanguageChange: (language: BookLanguage) => void
   onCreateSraNoteType: () => void
   onRunAnkiFetch: () => void
 }
 
 function AnkiSettingsTab({
+  activeAnkiLanguage,
   ankiCompatibilityIssue,
   ankiConfig,
   ankiFetchMessage,
@@ -34,9 +38,19 @@ function AnkiSettingsTab({
   availableNoteTypes,
   onAnkiConfigChange,
   onAnkiFieldMappingChange,
+  onAnkiLanguageChange,
   onCreateSraNoteType,
   onRunAnkiFetch,
 }: AnkiSettingsTabProps) {
+  const deckOptions = ankiConfig.deck.trim() && !availableDecks.includes(ankiConfig.deck)
+    ? [ankiConfig.deck, ...availableDecks]
+    : availableDecks
+  const noteTypeOptions =
+    ankiConfig.noteType.trim() && !availableNoteTypes.includes(ankiConfig.noteType)
+      ? [ankiConfig.noteType, ...availableNoteTypes]
+      : availableNoteTypes
+  const sraNoteTypeName = getSraNoteTypeName(activeAnkiLanguage)
+
   return (
     <div className="settings-panel prompt-panel">
       <div className="panel-header settings-subheader">
@@ -70,9 +84,30 @@ function AnkiSettingsTab({
             }
             onClick={onCreateSraNoteType}
           >
-            {ankiFetchStatus === 'loading' ? '处理中...' : '创建 / 修复 SRA Note Type'}
+            {ankiFetchStatus === 'loading' ? '处理中...' : `创建 / 修复 ${sraNoteTypeName}`}
           </button>
         </div>
+      </div>
+
+      <div className="settings-tabs" role="tablist" aria-label="Anki 配置语言">
+        <button
+          className={`settings-tab ${activeAnkiLanguage === 'es' ? 'is-active' : ''}`}
+          type="button"
+          role="tab"
+          aria-selected={activeAnkiLanguage === 'es'}
+          onClick={() => onAnkiLanguageChange('es')}
+        >
+          通用/西语
+        </button>
+        <button
+          className={`settings-tab ${activeAnkiLanguage === 'ja' ? 'is-active' : ''}`}
+          type="button"
+          role="tab"
+          aria-selected={activeAnkiLanguage === 'ja'}
+          onClick={() => onAnkiLanguageChange('ja')}
+        >
+          日语
+        </button>
       </div>
 
       {ankiCompatibilityIssue ? (
@@ -100,7 +135,7 @@ function AnkiSettingsTab({
           <span>Deck</span>
           <select value={ankiConfig.deck} onChange={(event) => onAnkiConfigChange('deck', event.target.value)}>
             <option value="">请选择 deck</option>
-            {availableDecks.map((deck) => (
+            {deckOptions.map((deck) => (
               <option key={deck} value={deck}>
                 {deck}
               </option>
@@ -115,7 +150,7 @@ function AnkiSettingsTab({
             onChange={(event) => onAnkiConfigChange('noteType', event.target.value)}
           >
             <option value="">请选择 note type</option>
-            {availableNoteTypes.map((noteType) => (
+            {noteTypeOptions.map((noteType) => (
               <option key={noteType} value={noteType}>
                 {noteType}
               </option>
@@ -156,8 +191,8 @@ function AnkiSettingsTab({
       </p>
 
       <p className="panel-tip">
-        “创建 / 修复 SRA Note Type”会先请求当前页面访问 AnkiConnect 的权限，再自动创建或更新 SRA
-        模板，并把 6 个字段映射到同名字段。
+        “创建 / 修复 {sraNoteTypeName}”会先请求当前页面访问 AnkiConnect 的权限，再自动创建或更新当前语言模板，并把
+        6 个字段映射到同名字段。
       </p>
 
       <p className="panel-tip">
