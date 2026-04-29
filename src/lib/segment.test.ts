@@ -177,6 +177,66 @@ test('validates Japanese chunk analysis token coverage', () => {
         ],
         tokens,
       ),
-    /覆盖所有原始 token/,
+    /覆盖所有非标点 token/,
+  )
+})
+
+test('allows Japanese chunk token indices to skip punctuation tokens', () => {
+  const tokens = [
+    { surface: '「', reading: '「', baseForm: '「', pos: '記号' },
+    { surface: 'という', reading: 'トイウ', baseForm: 'という', pos: '助詞' },
+    { surface: '事', reading: 'コト', baseForm: '事', pos: '名詞' },
+    { surface: 'で', reading: 'デ', baseForm: 'で', pos: '助動詞' },
+    { surface: '」', reading: '」', baseForm: '」', pos: '記号' },
+    { surface: 'の', reading: 'ノ', baseForm: 'の', pos: '助詞' },
+  ]
+
+  assert.deepEqual(
+    sanitizeChunkAnalysis(
+      [
+        {
+          chunk: 'という事での',
+          reading: 'ということでの',
+          pos: '連語',
+          token_indices: [1, 2, 3, 5],
+          explanation: '引用符をまたぐ表現として説明する。',
+        },
+      ],
+      tokens,
+    ),
+    [
+      {
+        chunk: 'という事での',
+        reading: 'ということでの',
+        pos: '連語',
+        tokenIndices: [1, 2, 3, 5],
+        explanation: '引用符をまたぐ表現として説明する。',
+      },
+    ],
+  )
+})
+
+test('rejects Japanese chunk token index gaps over non-punctuation tokens', () => {
+  const tokens = [
+    { surface: '私', reading: 'ワタシ', baseForm: '私', pos: '名詞' },
+    { surface: 'は', reading: 'ハ', baseForm: 'は', pos: '助詞' },
+    { surface: '読む', reading: 'ヨム', baseForm: '読む', pos: '動詞' },
+  ]
+
+  assert.throws(
+    () =>
+      sanitizeChunkAnalysis(
+        [
+          {
+            chunk: '私読む',
+            reading: 'わたしよむ',
+            pos: '不正な語块',
+            token_indices: [0, 2],
+            explanation: '非标点 token を飛ばしている。',
+          },
+        ],
+        tokens,
+      ),
+    /連続|连续递增/,
   )
 })

@@ -36,7 +36,26 @@ function parseNullableIndex(value: unknown) {
   return numericValue
 }
 
-function parseTokenIndices(value: unknown) {
+function canSkipOnlyPunctuation(
+  tokens: JapaneseToken[] | undefined,
+  previousIndex: number,
+  currentIndex: number,
+) {
+  if (!tokens) {
+    return false
+  }
+
+  for (let tokenIndex = previousIndex + 1; tokenIndex < currentIndex; tokenIndex += 1) {
+    const token = tokens[tokenIndex]
+    if (!token || !isJapaneseAnalysisPunctuation(token)) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function parseTokenIndices(value: unknown, tokens?: JapaneseToken[]) {
   if (!Array.isArray(value)) {
     return undefined
   }
@@ -61,7 +80,14 @@ function parseTokenIndices(value: unknown) {
   }
 
   for (let index = 1; index < indices.length; index += 1) {
-    if (indices[index] !== indices[index - 1] + 1) {
+    const previousIndex = indices[index - 1]
+    const currentIndex = indices[index]
+    const isAdjacent = currentIndex === previousIndex + 1
+    const onlySkipsPunctuation =
+      currentIndex > previousIndex + 1 &&
+      canSkipOnlyPunctuation(tokens, previousIndex, currentIndex)
+
+    if (!isAdjacent && !onlySkipsPunctuation) {
       throw new Error('chunkAnalysis.token_indices 必须连续递增。')
     }
   }
@@ -146,7 +172,7 @@ export function sanitizeChunkAnalysis(
     const reading = toTrimmedString(candidate.reading)
     const pos = toTrimmedString(candidate.pos)
     const grammarRole = toTrimmedString(candidate.grammarRole ?? candidate.grammar_role)
-    const tokenIndices = parseTokenIndices(candidate.tokenIndices ?? candidate.token_indices)
+    const tokenIndices = parseTokenIndices(candidate.tokenIndices ?? candidate.token_indices, tokens)
     const headChunkIndex = parseNullableIndex(
       candidate.headChunkIndex ?? candidate.head_chunk_index,
     )
