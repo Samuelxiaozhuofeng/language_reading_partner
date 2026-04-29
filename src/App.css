@@ -1639,6 +1639,11 @@ blockquote {
   font-size: 0.86rem;
 }
 
+.reading-book-toolbar .reading-display-popover {
+  top: auto;
+  bottom: calc(100% + 10px);
+}
+
 .reading-book-toolbar.is-draft-toolbar {
   margin-bottom: 14px;
   padding-top: 0;
