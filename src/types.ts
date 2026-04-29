@@ -79,6 +79,10 @@ export type JapaneseChunkExplanation = {
   chunk: string
   reading: string
   pos: string
+  grammarRole?: string
+  tokenIndices?: number[]
+  headChunkIndex?: number | null
+  dependsOn?: string | null
   explanation: string
 }
 

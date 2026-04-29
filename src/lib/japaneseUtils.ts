@@ -1,4 +1,4 @@
-import type { JapaneseToken } from '../types'
+import type { JapaneseChunkExplanation, JapaneseToken } from '../types'
 
 const KANJI_PATTERN = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/
 const KATAKANA_START = 0x30a1
@@ -67,4 +67,32 @@ export function doTokensMatchText(tokens: JapaneseToken[] | undefined, text: str
   }
 
   return tokens.map((token) => token.surface).join('') === text.replace(/\s+/g, '')
+}
+
+export function getChunkTokenIndices(
+  chunk: JapaneseChunkExplanation | undefined,
+  fallbackIndex: number,
+  tokenCount: number,
+) {
+  const tokenIndices = chunk?.tokenIndices
+
+  if (
+    tokenIndices?.length &&
+    tokenIndices.every((tokenIndex) => tokenIndex >= 0 && tokenIndex < tokenCount)
+  ) {
+    return tokenIndices
+  }
+
+  return fallbackIndex >= 0 && fallbackIndex < tokenCount ? [fallbackIndex] : []
+}
+
+export function findChunkIndexByTokenIndex(
+  chunks: JapaneseChunkExplanation[] | undefined,
+  tokenIndex: number,
+) {
+  if (!chunks?.length) {
+    return tokenIndex
+  }
+
+  return chunks.findIndex((chunk) => chunk.tokenIndices?.includes(tokenIndex))
 }

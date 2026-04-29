@@ -1,13 +1,16 @@
 import {
   hasKanji,
+  findChunkIndexByTokenIndex,
+  getChunkTokenIndices,
   isParticle,
   katakanaToHiragana,
   type JapaneseChunkSelection,
 } from '../../lib/japaneseUtils'
-import type { JapaneseToken } from '../../types'
+import type { JapaneseChunkExplanation, JapaneseToken } from '../../types'
 
 type JapaneseChunkViewProps = {
   activeChunkSelection?: JapaneseChunkSelection | null
+  chunks?: JapaneseChunkExplanation[]
   disabled?: boolean
   onChunkClick?: (chunkIndex: number) => void
   sentenceId: string
@@ -18,6 +21,7 @@ type JapaneseChunkViewProps = {
 
 export function JapaneseChunkView({
   activeChunkSelection,
+  chunks,
   disabled = false,
   onChunkClick,
   sentenceId,
@@ -32,9 +36,14 @@ export function JapaneseChunkView({
   return (
     <span className="ja-chunk-line">
       {tokens.map((token, index) => {
+        const tokenChunkIndex = findChunkIndexByTokenIndex(chunks, index)
         const isActive =
           activeChunkSelection?.sentenceId === sentenceId &&
-          activeChunkSelection.chunkIndex === index
+          getChunkTokenIndices(
+            chunks?.[activeChunkSelection.chunkIndex],
+            activeChunkSelection.chunkIndex,
+            tokens.length,
+          ).includes(index)
         const className = [
           'ja-chunk',
           isParticle(token.pos) ? 'is-particle' : '',
@@ -59,7 +68,7 @@ export function JapaneseChunkView({
             type="button"
             onClick={(event) => {
               event.stopPropagation()
-              onChunkClick(index)
+              onChunkClick(tokenChunkIndex >= 0 ? tokenChunkIndex : index)
             }}
           >
             {content}

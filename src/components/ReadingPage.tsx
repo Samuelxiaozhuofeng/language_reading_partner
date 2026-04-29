@@ -517,6 +517,7 @@ function ReadingPage({
                 onToggleReadingSettings={() => setIsReadingSettingsOpen((current) => !current)}
                 readingPreferences={readingPreferences}
                 readingTitle={readingTitle}
+                results={results}
                 resumeHighlightSentenceId={resumeHighlightSentenceId}
               />
             ) : (

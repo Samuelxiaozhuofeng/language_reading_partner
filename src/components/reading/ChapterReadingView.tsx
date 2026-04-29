@@ -8,7 +8,7 @@ import { JapaneseChunkView } from './JapaneseChunkView'
 import { ReadingDisplaySettings } from './ReadingDisplaySettings'
 import type { JapaneseChunkSelection } from '../../lib/japaneseUtils'
 import type { ChapterReadingParagraph } from '../../lib/readingFlow'
-import type { BookLanguage, ReadingPreferences } from '../../types'
+import type { AnalysisResult, BookLanguage, ReadingPreferences } from '../../types'
 
 type ChapterReadingViewProps = {
   chapterParagraphs: ChapterReadingParagraph[]
@@ -32,6 +32,7 @@ type ChapterReadingViewProps = {
   onToggleReadingSettings: () => void
   readingPreferences: ReadingPreferences
   readingTitle: string
+  results: Record<string, AnalysisResult>
   resumeHighlightSentenceId: string | null
 }
 
@@ -54,6 +55,7 @@ export function ChapterReadingView({
   onToggleReadingSettings,
   readingPreferences,
   readingTitle,
+  results,
   resumeHighlightSentenceId,
 }: ChapterReadingViewProps) {
   const visiblePageProgressCount = Math.min(chapterPageCount, 12)
@@ -106,6 +108,7 @@ export function ChapterReadingView({
                       >
                         <JapaneseChunkView
                           activeChunkSelection={activeChunkSelection}
+                          chunks={results[sentence.id]?.chunkAnalysis}
                           sentenceId={sentence.id}
                           showFurigana={readingPreferences.showFurigana}
                           text={getSentenceDisplayText(sentence)}

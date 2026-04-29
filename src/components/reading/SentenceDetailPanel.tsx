@@ -274,6 +274,7 @@ export function SentenceDetailPanel({
             {bookLanguage === 'ja' ? (
               <JapaneseChunkView
                 activeChunkSelection={activeChunkSelection}
+                chunks={result.chunkAnalysis}
                 sentenceId={sentence.id}
                 showFurigana={showFurigana}
                 text={activeVocabularyInteraction.sentenceText}
@@ -405,7 +406,13 @@ export function SentenceDetailPanel({
                 >
                   <span className="chunk-main">{chunk.chunk}</span>
                   {chunk.reading ? <span className="chunk-reading">{chunk.reading}</span> : null}
-                  {chunk.pos ? <span className="chunk-pos">{chunk.pos}</span> : null}
+                  {[chunk.pos, chunk.grammarRole]
+                    .filter((label): label is string => Boolean(label))
+                    .map((label) => (
+                      <span className="chunk-pos" key={label}>
+                        {label}
+                      </span>
+                    ))}
                   <span className="chunk-explanation">{chunk.explanation}</span>
                 </button>
               )
@@ -421,7 +428,11 @@ export function SentenceDetailPanel({
               <div className="chunk-analysis-focus-header">
                 <div>
                   <strong>{activeChunk.chunk}</strong>
-                  <span>{[activeChunk.reading, activeChunk.pos].filter(Boolean).join(' / ')}</span>
+                  <span>
+                    {[activeChunk.reading, activeChunk.pos, activeChunk.grammarRole]
+                      .filter((label): label is string => Boolean(label))
+                      .join(' / ')}
+                  </span>
                 </div>
                 <button
                   className="secondary-button"
@@ -432,6 +443,9 @@ export function SentenceDetailPanel({
                   {visibleChunkAnkiStatus === 'loading' ? '添加到 Anki 中...' : '添加到 Anki'}
                 </button>
               </div>
+              {activeChunk.dependsOn ? (
+                <p className="section-kicker">{activeChunk.dependsOn}</p>
+              ) : null}
               <p>{activeChunk.explanation}</p>
               {visibleChunkAnkiStatus !== 'idle' ? (
                 <p className={`notice ${visibleChunkAnkiStatus === 'success' ? 'success' : visibleChunkAnkiStatus === 'error' ? 'error' : ''}`}>

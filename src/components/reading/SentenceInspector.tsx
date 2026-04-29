@@ -144,6 +144,7 @@ function ActiveSentenceInspector({
         {bookLanguage === 'ja' ? (
           <JapaneseChunkView
             activeChunkSelection={activeChunkSelection}
+            chunks={result?.chunkAnalysis}
             disabled={!result}
             sentenceId={activeSentence.id}
             showFurigana={showFurigana}

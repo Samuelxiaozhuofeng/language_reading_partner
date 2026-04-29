@@ -144,6 +144,7 @@ export function DraftReadingView({
                     <span className="reading-sentence-quote">
                       <JapaneseChunkView
                         activeChunkSelection={activeChunkSelection}
+                        chunks={results[sentence.id]?.chunkAnalysis}
                         sentenceId={sentence.id}
                         showFurigana={readingPreferences.showFurigana}
                         text={getSentenceDisplayText(sentence)}

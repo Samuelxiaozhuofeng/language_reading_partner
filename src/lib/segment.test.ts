@@ -108,3 +108,75 @@ test('sanitizes Japanese chunk analysis from structured result values', () => {
     ],
   )
 })
+
+test('validates Japanese chunk analysis token coverage', () => {
+  const tokens = [
+    { surface: '私', reading: 'ワタシ', baseForm: '私', pos: '名詞' },
+    { surface: 'は', reading: 'ハ', baseForm: 'は', pos: '助詞' },
+    { surface: '読ん', reading: 'ヨン', baseForm: '読む', pos: '動詞' },
+    { surface: 'だ', reading: 'ダ', baseForm: 'だ', pos: '助動詞' },
+  ]
+
+  assert.deepEqual(
+    sanitizeChunkAnalysis(
+      [
+        {
+          chunk: '私は',
+          reading: 'わたしは',
+          pos: '名詞句',
+          grammar_role: '主题',
+          token_indices: [0, 1],
+          depends_on: '提示整句主题',
+          explanation: '表示整句的主题。',
+        },
+        {
+          chunk: '読んだ',
+          reading: 'よんだ',
+          pos: '動詞句',
+          grammar_role: '谓语核心',
+          token_indices: [2, 3],
+          head_chunk_index: null,
+          depends_on: null,
+          explanation: '表示过去发生的动作。',
+        },
+      ],
+      tokens,
+    ),
+    [
+      {
+        chunk: '私は',
+        reading: 'わたしは',
+        pos: '名詞句',
+        grammarRole: '主题',
+        tokenIndices: [0, 1],
+        dependsOn: '提示整句主题',
+        explanation: '表示整句的主题。',
+      },
+      {
+        chunk: '読んだ',
+        reading: 'よんだ',
+        pos: '動詞句',
+        grammarRole: '谓语核心',
+        tokenIndices: [2, 3],
+        explanation: '表示过去发生的动作。',
+      },
+    ],
+  )
+
+  assert.throws(
+    () =>
+      sanitizeChunkAnalysis(
+        [
+          {
+            chunk: '私',
+            reading: 'わたし',
+            pos: '名詞',
+            token_indices: [0],
+            explanation: '漏掉了后续 token。',
+          },
+        ],
+        tokens,
+      ),
+    /覆盖所有原始 token/,
+  )
+})
