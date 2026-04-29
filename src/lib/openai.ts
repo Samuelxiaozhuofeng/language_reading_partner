@@ -57,6 +57,7 @@ type StructuredAnalysisValue = {
 }
 
 const REQUEST_TIMEOUT_MS = 60_000
+const JAPANESE_ANALYSIS_TIMEOUT_MS = 180_000
 const DEBUG_TEXT_PREVIEW_LENGTH = 1200
 const DEBUG_SENTENCE_PREVIEW_LENGTH = 240
 const DEBUG_TOKEN_PREVIEW_COUNT = 12
@@ -97,6 +98,7 @@ type JapaneseAnalysisDebugContext = {
   responseStatusText?: string
   responsePreview?: string
   reason?: string
+  timeoutMs?: number
 }
 
 function previewDebugText(value: string | undefined, maxLength = DEBUG_TEXT_PREVIEW_LENGTH) {
@@ -168,6 +170,7 @@ function createJapaneseAnalysisDebugError(
     `调试信息：阶段=${context.stage}`,
     context.reason ? `原因=${context.reason}` : '',
     context.responseStatus ? `HTTP=${context.responseStatus} ${context.responseStatusText ?? ''}`.trim() : '',
+    context.timeoutMs ? `超时=${Math.round(context.timeoutMs / 1000)} 秒` : '',
     `句子=${context.sentence}`,
     `token数量=${context.tokenCount}`,
     context.responsePreview ? `模型返回片段=${context.responsePreview}` : '',
@@ -584,10 +587,11 @@ export async function analyzeSentence(
   const controller = new AbortController()
   let didTimeout = false
   const handleExternalAbort = () => controller.abort()
+  const timeoutMs = job.language === 'ja' ? JAPANESE_ANALYSIS_TIMEOUT_MS : REQUEST_TIMEOUT_MS
   const timeoutId = window.setTimeout(() => {
     didTimeout = true
     controller.abort()
-  }, REQUEST_TIMEOUT_MS)
+  }, timeoutMs)
 
   if (signal) {
     if (signal.aborted) {
@@ -713,7 +717,8 @@ export async function analyzeSentence(
       if (job.language === 'ja') {
         throw createJapaneseAnalysisDebugError(config, job, '日语解析请求超时。', {
           stage: 'timeout',
-          reason: '请求超过 60 秒未完成。',
+          reason: `请求超过 ${Math.round(timeoutMs / 1000)} 秒未完成。`,
+          timeoutMs,
         })
       }
 
