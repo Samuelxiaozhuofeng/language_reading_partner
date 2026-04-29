@@ -7,6 +7,7 @@ import {
   hasKanji,
   isParticle,
   katakanaToHiragana,
+  toHtmlRuby,
 } from './japaneseUtils.ts'
 import { segmentJapaneseText, segmentSpanishText } from './segment.ts'
 
@@ -67,6 +68,17 @@ test('checks Japanese token text alignment', () => {
       '私は',
     ),
     true,
+  )
+})
+
+test('converts Japanese tokens with kanji readings to escaped ruby HTML', () => {
+  assert.equal(
+    toHtmlRuby([
+      { surface: '日本語', reading: 'ニホンゴ', baseForm: '日本語', pos: '名詞' },
+      { surface: 'を', reading: 'ヲ', baseForm: 'を', pos: '助詞' },
+      { surface: '<読む>', reading: 'ヨム', baseForm: '読む', pos: '動詞' },
+    ]),
+    '<ruby>日本語<rt>にほんご</rt></ruby>を<ruby>&lt;読む&gt;<rt>よむ</rt></ruby>',
   )
 })
 

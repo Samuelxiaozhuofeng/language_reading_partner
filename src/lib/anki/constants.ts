@@ -6,7 +6,7 @@ export const SRA_ES_NOTE_TYPE_NAME = 'SRA-ES'
 export const SRA_JA_NOTE_TYPE_NAME = 'SRA-JA'
 export const SRA_NOTE_TYPE_NAME = SRA_ES_NOTE_TYPE_NAME
 
-export const ankiFieldSourceOrder: AnkiFieldSource[] = [
+export const baseAnkiFieldSourceOrder: AnkiFieldSource[] = [
   'sentence',
   'grammar',
   'meaning',
@@ -15,16 +15,43 @@ export const ankiFieldSourceOrder: AnkiFieldSource[] = [
   'knowledgeExplanation',
 ]
 
+export const jaAnkiFieldSourceOrder: AnkiFieldSource[] = [
+  'sentence',
+  'sentenceFurigana',
+  'grammar',
+  'meaning',
+  'knowledge',
+  'knowledgeFurigana',
+  'knowledgeKind',
+  'knowledgeExplanation',
+]
+
+export const ankiFieldSourceOrder: AnkiFieldSource[] = jaAnkiFieldSourceOrder
+
 export const ankiFieldSourceLabelMap: Record<AnkiFieldSource, string> = {
   sentence: '句子',
+  sentenceFurigana: '句子振假名',
   grammar: '语法',
   meaning: '内容',
   knowledge: '知识点',
+  knowledgeFurigana: '知识点振假名',
   knowledgeKind: '知识点类型',
   knowledgeExplanation: '知识点解释',
 }
 
-export const sraFieldNames = ankiFieldSourceOrder.map((source) => ankiFieldSourceLabelMap[source])
+export const ankiFieldSourceCandidateLabelsMap: Record<AnkiFieldSource, string[]> = {
+  sentence: ['句子', 'Sentence'],
+  sentenceFurigana: ['句子振假名', 'SentenceFurigana', 'Reading'],
+  grammar: ['语法', 'Grammar'],
+  meaning: ['内容', 'Meaning', 'Translation'],
+  knowledge: ['知识点', 'Knowledge', 'Expression'],
+  knowledgeFurigana: ['知识点振假名', 'KnowledgeFurigana', 'ExpressionFurigana'],
+  knowledgeKind: ['知识点类型', 'KnowledgeKind', 'Type'],
+  knowledgeExplanation: ['知识点解释', 'KnowledgeExplanation', 'Explanation'],
+}
+
+export const sraFieldNames = baseAnkiFieldSourceOrder.map((source) => ankiFieldSourceLabelMap[source])
+export const sraJaFieldNames = jaAnkiFieldSourceOrder.map((source) => ankiFieldSourceLabelMap[source])
 
 export const sraFrontTemplate = `<div class="es-card">
   <div class="es-header">
@@ -94,7 +121,7 @@ export const sraJaBackTemplate = `<div class="es-card">
   </div>
 
   <div class="es-sentence-wrap">
-    <div class="es-sentence">{{句子}}</div>
+    <div class="es-sentence">{{句子振假名}}</div>
   </div>
 
   {{#语法}}
@@ -119,7 +146,7 @@ export const sraJaBackTemplate = `<div class="es-card">
   <div class="es-knowledge-wrap">
     <div class="es-knowledge-box">
       <div class="es-knowledge-header">
-        <span class="es-knowledge-word">{{知识点}}</span>
+        <span class="es-knowledge-word">{{知识点振假名}}</span>
         {{#知识点类型}}<span class="es-knowledge-type">{{知识点类型}}</span>{{/知识点类型}}
       </div>
       {{#知识点解释}}
@@ -132,6 +159,14 @@ export const sraJaBackTemplate = `<div class="es-card">
 
 export function getSraNoteTypeName(language: SraNoteTypeLanguage) {
   return language === 'ja' ? SRA_JA_NOTE_TYPE_NAME : SRA_ES_NOTE_TYPE_NAME
+}
+
+export function getAnkiFieldSourceOrder(language: SraNoteTypeLanguage) {
+  return language === 'ja' ? jaAnkiFieldSourceOrder : baseAnkiFieldSourceOrder
+}
+
+export function getSraFieldNames(language: SraNoteTypeLanguage) {
+  return language === 'ja' ? sraJaFieldNames : sraFieldNames
 }
 
 export function getSraNoteTypeTemplates(language: SraNoteTypeLanguage) {
@@ -237,6 +272,24 @@ export const sraStyling = `* { box-sizing: border-box; margin: 0; padding: 0; }
 
 .nightMode .es-sentence {
   color: #e8e8e8;
+}
+
+.es-sentence ruby,
+.es-knowledge-word ruby {
+  ruby-position: over;
+}
+
+.es-sentence rt,
+.es-knowledge-word rt {
+  font-size: 0.55em;
+  line-height: 1.2;
+  color: #888;
+  font-weight: 400;
+}
+
+.nightMode .es-sentence rt,
+.nightMode .es-knowledge-word rt {
+  color: #aaa;
 }
 
 .es-sentence em,

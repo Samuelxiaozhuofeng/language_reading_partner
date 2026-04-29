@@ -15,6 +15,7 @@ import type {
   SentenceStatus,
   VocabularyPromptConfig,
 } from '../types'
+import { ankiFieldSourceOrder } from './anki/constants'
 import { segmentSpanishText } from './segment'
 
 export const CONFIG_STORAGE_KEY = 'spanish-reading-assistant/config'
@@ -162,24 +163,16 @@ export const defaultReadingPreferences: ReadingPreferences = {
   showFurigana: true,
 }
 
-const ankiFieldSources: AnkiFieldSource[] = [
-  'sentence',
-  'grammar',
-  'meaning',
-  'knowledge',
-  'knowledgeKind',
-  'knowledgeExplanation',
-]
-
-function createDefaultAnkiFieldMapping(): AnkiFieldMapping {
-  return {
-    sentence: '',
-    grammar: '',
-    meaning: '',
-    knowledge: '',
-    knowledgeKind: '',
-    knowledgeExplanation: '',
-  }
+function createDefaultAnkiFieldMapping(
+  overrides: Partial<AnkiFieldMapping> = {},
+): AnkiFieldMapping {
+  return ankiFieldSourceOrder.reduce<AnkiFieldMapping>(
+    (mapping, source) => ({
+      ...mapping,
+      [source]: overrides[source] ?? '',
+    }),
+    {} as AnkiFieldMapping,
+  )
 }
 
 export const defaultAnkiConfig: AnkiConfig = {
@@ -192,7 +185,10 @@ export const defaultAnkiConfig: AnkiConfig = {
 export const defaultJaAnkiConfig: AnkiConfig = {
   ...defaultAnkiConfig,
   deck: 'Japanese',
-  fieldMapping: createDefaultAnkiFieldMapping(),
+  fieldMapping: createDefaultAnkiFieldMapping({
+    sentence: 'Sentence',
+    sentenceFurigana: 'Reading',
+  }),
 }
 
 export const defaultSourceText = `La verdad es que muchas veces habia pensado y planeado minuciosamente mi actitud en caso de encontrarla.
@@ -458,7 +454,7 @@ function restoreAnkiConfigFromStorage(
     const parsed = JSON.parse(saved) as Partial<AnkiConfig> & {
       fieldMapping?: Partial<Record<AnkiFieldSource, unknown>>
     }
-    const fieldMapping = ankiFieldSources.reduce<AnkiFieldMapping>((mapping, source) => {
+    const fieldMapping = ankiFieldSourceOrder.reduce<AnkiFieldMapping>((mapping, source) => {
       const value = parsed.fieldMapping?.[source]
       return {
         ...mapping,

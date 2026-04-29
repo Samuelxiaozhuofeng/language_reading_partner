@@ -7,7 +7,13 @@ import type {
   KnowledgeKind,
   SentenceItem,
 } from '../../types'
-import { ankiFieldSourceLabelMap, ankiFieldSourceOrder } from './constants'
+import { doTokensMatchText, toHtmlRuby } from '../japaneseUtils'
+import {
+  ankiFieldSourceCandidateLabelsMap,
+  ankiFieldSourceLabelMap,
+  getAnkiFieldSourceOrder,
+  type SraNoteTypeLanguage,
+} from './constants'
 import { invokeAnkiAction } from './client'
 import { toUserFacingAnkiError } from './errors'
 
@@ -22,9 +28,11 @@ const ankiKnowledgeKindLabelMap: Record<KnowledgeKind, string> = {
 function createEmptyAnkiFieldMapping(): AnkiFieldMapping {
   return {
     sentence: '',
+    sentenceFurigana: '',
     grammar: '',
     meaning: '',
     knowledge: '',
+    knowledgeFurigana: '',
     knowledgeKind: '',
     knowledgeExplanation: '',
   }
@@ -62,8 +70,59 @@ export function highlightKnowledgeInSentence(sentence: string, knowledge: string
   ].join('')
 }
 
-export function getAnkiFieldMappingIssues(config: AnkiConfig) {
+function findTokenSliceBySurfaceText(
+  tokens: SentenceItem['tokens'],
+  text: string,
+) {
+  const target = text.replace(/\s+/g, '')
+  if (!tokens?.length || !target) {
+    return null
+  }
+
+  for (let startIndex = 0; startIndex < tokens.length; startIndex += 1) {
+    let surfaceText = ''
+
+    for (let endIndex = startIndex; endIndex < tokens.length; endIndex += 1) {
+      surfaceText += tokens[endIndex].surface
+
+      if (surfaceText === target) {
+        return tokens.slice(startIndex, endIndex + 1)
+      }
+
+      if (surfaceText.length >= target.length) {
+        break
+      }
+    }
+  }
+
+  return null
+}
+
+function buildSentenceFurigana(sentence: SentenceItem, sentenceText: string) {
+  const tokens = sentence.tokens
+
+  if (!tokens?.length || !doTokensMatchText(tokens, sentenceText)) {
+    return escapeHtml(sentenceText.trim())
+  }
+
+  return toHtmlRuby(tokens)
+}
+
+function buildKnowledgeFurigana(sentence: SentenceItem, knowledge: string) {
+  const tokenSlice = findTokenSliceBySurfaceText(sentence.tokens, knowledge)
+  if (!tokenSlice) {
+    return escapeHtml(knowledge.trim())
+  }
+
+  return toHtmlRuby(tokenSlice)
+}
+
+export function getAnkiFieldMappingIssues(
+  config: AnkiConfig,
+  language: SraNoteTypeLanguage = 'es',
+) {
   const issues: string[] = []
+  const fieldSourceOrder = getAnkiFieldSourceOrder(language)
 
   if (!config.endpoint.trim()) {
     issues.push('请先在设置的 Anki 标签页里填写 AnkiConnect URL。')
@@ -77,14 +136,14 @@ export function getAnkiFieldMappingIssues(config: AnkiConfig) {
     issues.push('请先在设置的 Anki 标签页里选择 note type。')
   }
 
-  const assignedFields = ankiFieldSourceOrder
+  const assignedFields = fieldSourceOrder
     .map((source) => ({
       source,
       field: config.fieldMapping[source].trim(),
     }))
     .filter((item) => item.field.length > 0)
 
-  for (const source of ankiFieldSourceOrder) {
+  for (const source of fieldSourceOrder) {
     if (!config.fieldMapping[source].trim()) {
       issues.push(`请先为「${ankiFieldSourceLabelMap[source]}」选择字段映射。`)
       break
@@ -107,8 +166,9 @@ export function getAnkiFieldMappingIssues(config: AnkiConfig) {
 export function buildFields(
   config: AnkiConfig,
   payload: AnkiNotePayload,
+  language: SraNoteTypeLanguage = 'es',
 ) {
-  return ankiFieldSourceOrder.reduce<Record<string, string>>((fields, source) => {
+  return getAnkiFieldSourceOrder(language).reduce<Record<string, string>>((fields, source) => {
     const targetField = config.fieldMapping[source].trim()
     if (!targetField) {
       return fields
@@ -123,15 +183,16 @@ export function buildFields(
 
 export function createAnkiFieldMappingFromFieldNames(
   fieldNames: readonly string[],
+  language: SraNoteTypeLanguage = 'es',
 ): AnkiFieldMapping {
   const normalizedFieldNames = new Set(fieldNames)
 
-  return ankiFieldSourceOrder.reduce<AnkiFieldMapping>(
+  return getAnkiFieldSourceOrder(language).reduce<AnkiFieldMapping>(
     (mapping, source) => ({
       ...mapping,
-      [source]: normalizedFieldNames.has(ankiFieldSourceLabelMap[source])
-        ? ankiFieldSourceLabelMap[source]
-        : '',
+      [source]: ankiFieldSourceCandidateLabelsMap[source].find((fieldName) =>
+        normalizedFieldNames.has(fieldName),
+      ) ?? '',
     }),
     createEmptyAnkiFieldMapping(),
   )
@@ -141,14 +202,20 @@ export function buildAnkiNotePayload(
   sentence: SentenceItem,
   result: AnalysisResult,
   highlight: AnalysisHighlight,
+  language: SraNoteTypeLanguage = 'es',
 ): AnkiNotePayload {
   const sentenceText = sentence.editedText || sentence.text
+  const isJapanese = language === 'ja'
 
   return {
-    sentence: highlightKnowledgeInSentence(sentenceText, highlight.text),
+    sentence: isJapanese
+      ? escapeHtml(sentenceText.trim())
+      : highlightKnowledgeInSentence(sentenceText, highlight.text),
+    sentenceFurigana: isJapanese ? buildSentenceFurigana(sentence, sentenceText) : '',
     grammar: result.grammar,
     meaning: result.meaning,
-    knowledge: highlight.text,
+    knowledge: isJapanese ? escapeHtml(highlight.text.trim()) : highlight.text,
+    knowledgeFurigana: isJapanese ? buildKnowledgeFurigana(sentence, highlight.text) : '',
     knowledgeKind: ankiKnowledgeKindLabelMap[highlight.kind],
     knowledgeExplanation: highlight.explanation,
   }
@@ -157,8 +224,9 @@ export function buildAnkiNotePayload(
 export async function addNoteToAnki(
   config: AnkiConfig,
   payload: AnkiNotePayload,
+  language: SraNoteTypeLanguage = 'es',
 ) {
-  const issue = getAnkiFieldMappingIssues(config)[0]
+  const issue = getAnkiFieldMappingIssues(config, language)[0]
   if (issue) {
     throw new Error(issue)
   }
@@ -168,7 +236,7 @@ export async function addNoteToAnki(
       note: {
         deckName: config.deck,
         modelName: config.noteType,
-        fields: buildFields(config, payload),
+        fields: buildFields(config, payload, language),
         options: {
           allowDuplicate: true,
         },

@@ -1,7 +1,7 @@
 import {
+  getSraFieldNames,
   getSraNoteTypeName,
   getSraNoteTypeTemplates,
-  sraFieldNames,
   sraStyling,
   type SraNoteTypeLanguage,
 } from './constants'
@@ -33,13 +33,14 @@ export async function createOrRepairSraAnkiNoteType(
 
     const modelName = getSraNoteTypeName(language)
     const templates = getSraNoteTypeTemplates(language)
+    const fieldNames = getSraFieldNames(language)
     const existingNoteTypes = await invokeAnkiAction<string[]>(endpoint, 'modelNames', {}, signal)
     const modelExists = existingNoteTypes.includes(modelName)
 
     if (!modelExists) {
       await invokeAnkiAction(endpoint, 'createModel', {
         modelName,
-        inOrderFields: sraFieldNames,
+        inOrderFields: fieldNames,
         css: sraStyling,
         isCloze: false,
         cardTemplates: [
@@ -53,7 +54,7 @@ export async function createOrRepairSraAnkiNoteType(
 
       return {
         created: true,
-        fieldNames: [...sraFieldNames],
+        fieldNames: [...fieldNames],
       }
     }
 
@@ -64,7 +65,7 @@ export async function createOrRepairSraAnkiNoteType(
       signal,
     )
 
-    for (const [index, fieldName] of sraFieldNames.entries()) {
+    for (const [index, fieldName] of fieldNames.entries()) {
       if (!existingFields.includes(fieldName)) {
         await invokeAnkiAction(endpoint, 'modelFieldAdd', {
           modelName,
@@ -74,7 +75,7 @@ export async function createOrRepairSraAnkiNoteType(
       }
     }
 
-    for (const [index, fieldName] of sraFieldNames.entries()) {
+    for (const [index, fieldName] of fieldNames.entries()) {
       await invokeAnkiAction(endpoint, 'modelFieldReposition', {
         modelName,
         fieldName,
@@ -117,7 +118,7 @@ export async function createOrRepairSraAnkiNoteType(
 
     return {
       created: false,
-      fieldNames: [...sraFieldNames],
+      fieldNames: [...fieldNames],
     }
   } catch (error) {
     throw new Error(toUserFacingAnkiError(error))

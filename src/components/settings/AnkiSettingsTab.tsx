@@ -5,7 +5,7 @@ import type {
 } from '../../lib/appState'
 import {
   ankiFieldSourceLabelMap,
-  ankiFieldSourceOrder,
+  getAnkiFieldSourceOrder,
   getSraNoteTypeName,
   type AnkiCompatibilityIssue,
 } from '../../lib/anki'
@@ -50,6 +50,8 @@ function AnkiSettingsTab({
       ? [ankiConfig.noteType, ...availableNoteTypes]
       : availableNoteTypes
   const sraNoteTypeName = getSraNoteTypeName(activeAnkiLanguage)
+  const fieldSourceOrder = getAnkiFieldSourceOrder(activeAnkiLanguage)
+  const isJapaneseAnki = activeAnkiLanguage === 'ja'
 
   return (
     <div className="settings-panel prompt-panel">
@@ -164,7 +166,7 @@ function AnkiSettingsTab({
       </div>
 
       <div className="anki-mapping-grid">
-        {ankiFieldSourceOrder.map((source) => (
+        {fieldSourceOrder.map((source) => (
           <label className="field" key={source}>
             <span>{ankiFieldSourceLabelMap[source]}</span>
             <select
@@ -186,13 +188,15 @@ function AnkiSettingsTab({
       </div>
 
       <p className="panel-tip">
-        当前会把 6 个内容源写进你映射的字段：句子、语法、内容、知识点、知识点类型、知识点解释。添加到
-        Anki 时允许重复卡片，失败会直接提示，不会静默跳过。
+        {isJapaneseAnki
+          ? '当前会把 8 个内容源写进你映射的字段：句子、句子振假名、语法、内容、知识点、知识点振假名、知识点类型、知识点解释。'
+          : '当前会把 6 个内容源写进你映射的字段：句子、语法、内容、知识点、知识点类型、知识点解释。'}
+        添加到 Anki 时允许重复卡片，失败会直接提示，不会静默跳过。
       </p>
 
       <p className="panel-tip">
         “创建 / 修复 {sraNoteTypeName}”会先请求当前页面访问 AnkiConnect 的权限，再自动创建或更新当前语言模板，并把
-        6 个字段映射到同名字段。
+        {isJapaneseAnki ? '8 个字段映射到同名字段。日语模板会在背面显示自动生成的振假名字段。' : '6 个字段映射到同名字段。'}
       </p>
 
       <p className="panel-tip">

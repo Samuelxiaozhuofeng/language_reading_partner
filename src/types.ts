@@ -8,9 +8,11 @@ export type KnowledgeKind = 'grammar' | 'phrase' | 'vocabulary'
 export type BookLanguage = 'es' | 'ja'
 export type AnkiFieldSource =
   | 'sentence'
+  | 'sentenceFurigana'
   | 'grammar'
   | 'meaning'
   | 'knowledge'
+  | 'knowledgeFurigana'
   | 'knowledgeKind'
   | 'knowledgeExplanation'
 export type SentenceRange = {

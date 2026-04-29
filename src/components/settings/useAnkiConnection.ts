@@ -12,12 +12,12 @@ import {
   fetchAnkiNoteFields,
   fetchAnkiNoteTypes,
   fetchAnkiVersion,
+  getAnkiFieldSourceOrder,
   getAnkiCompatibilityIssue,
   getSraNoteTypeName,
   toUserFacingAnkiError,
 } from '../../lib/anki'
 import type { AnkiCompatibilityIssue, SraNoteTypeLanguage } from '../../lib/anki'
-import { ankiFieldSourceOrder } from '../../lib/anki'
 import type { AnkiConfig } from '../../types'
 
 type UseAnkiConnectionOptions = {
@@ -56,25 +56,26 @@ export function useAnkiConnection({
     '填写 AnkiConnect URL 后会自动检测连接并加载 deck / note type。',
   )
   const ankiCompatibilityIssue = getAnkiCompatibilityIssue(ankiConfig.endpoint)
+  const fieldSourceOrder = getAnkiFieldSourceOrder(language)
 
   const syncAnkiFieldMapping = useCallback((nextFieldNames: string[]) => {
-    const nextMapping = createAnkiFieldMappingFromFieldNames(nextFieldNames)
+    const nextMapping = createAnkiFieldMappingFromFieldNames(nextFieldNames, language)
 
-    for (const source of ankiFieldSourceOrder) {
+    for (const source of fieldSourceOrder) {
       if (ankiConfig.fieldMapping[source] !== nextMapping[source]) {
         onAnkiFieldMappingChange(source, nextMapping[source])
       }
     }
-  }, [ankiConfig.fieldMapping, onAnkiFieldMappingChange])
+  }, [ankiConfig.fieldMapping, fieldSourceOrder, language, onAnkiFieldMappingChange])
 
   const clearInvalidAnkiFieldMapping = useCallback((nextFieldNames: string[]) => {
-    for (const source of ankiFieldSourceOrder) {
+    for (const source of fieldSourceOrder) {
       const mappedField = ankiConfig.fieldMapping[source]
       if (mappedField && !nextFieldNames.includes(mappedField)) {
         onAnkiFieldMappingChange(source, '')
       }
     }
-  }, [ankiConfig.fieldMapping, onAnkiFieldMappingChange])
+  }, [ankiConfig.fieldMapping, fieldSourceOrder, onAnkiFieldMappingChange])
 
   const applyAnkiSelection = useCallback((nextDeck: string, nextNoteType: string) => {
     if (nextDeck && nextDeck !== ankiConfig.deck) {
@@ -210,10 +211,11 @@ export function useAnkiConnection({
       setAvailableNoteTypes(noteTypes)
       setAvailableNoteFields(fields)
       setAnkiFetchStatus('success')
+      const fieldCount = result.fieldNames.length
       setAnkiFetchMessage(
         result.created
-          ? `已创建 ${languageLabel} ${noteTypeName} note type，并自动选中和映射 6 个字段。`
-          : `已修复 ${languageLabel} ${noteTypeName} note type，并自动选中和映射 6 个字段。`,
+          ? `已创建 ${languageLabel} ${noteTypeName} note type，并自动选中和映射 ${fieldCount} 个字段。`
+          : `已修复 ${languageLabel} ${noteTypeName} note type，并自动选中和映射 ${fieldCount} 个字段。`,
       )
     } catch (error) {
       setAnkiFetchStatus('error')

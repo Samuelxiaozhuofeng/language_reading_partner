@@ -299,7 +299,8 @@ export function useAppActions({
 
     await addNoteToAnki(
       targetAnkiConfig,
-      buildAnkiNotePayload(sentence, result, noteHighlight),
+      buildAnkiNotePayload(sentence, result, noteHighlight, currentLanguage),
+      currentLanguage,
     )
   }, [currentLanguage, persistent.ankiConfig, persistent.jaAnkiConfig])
 
