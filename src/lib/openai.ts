@@ -57,6 +57,9 @@ type StructuredAnalysisValue = {
 }
 
 const REQUEST_TIMEOUT_MS = 60_000
+const DEBUG_TEXT_PREVIEW_LENGTH = 1200
+const DEBUG_SENTENCE_PREVIEW_LENGTH = 240
+const DEBUG_TOKEN_PREVIEW_COUNT = 12
 const DOCUMENT_PLACEHOLDERS = [
   '{documentMetadata}',
   '{documentType}',
@@ -64,6 +67,114 @@ const DOCUMENT_PLACEHOLDERS = [
   '{documentAuthor}',
   '{chapterTitle}',
 ]
+
+type JapaneseAnalysisDebugStage =
+  | 'request'
+  | 'http_error'
+  | 'api_error'
+  | 'response_json'
+  | 'empty_response'
+  | 'parse_response'
+  | 'response'
+  | 'timeout'
+  | 'network'
+
+type JapaneseAnalysisDebugContext = {
+  stage: JapaneseAnalysisDebugStage
+  sentenceId: string
+  model: string
+  sentence: string
+  tokenCount: number
+  tokenPreview: Array<{
+    index: number
+    surface: string
+    reading: string
+    baseForm: string
+    pos: string
+  }>
+  promptPreview?: string
+  responseStatus?: number
+  responseStatusText?: string
+  responsePreview?: string
+  reason?: string
+}
+
+function previewDebugText(value: string | undefined, maxLength = DEBUG_TEXT_PREVIEW_LENGTH) {
+  const text = value?.trim() ?? ''
+
+  if (!text) {
+    return '（空）'
+  }
+
+  if (text.length <= maxLength) {
+    return text
+  }
+
+  return `${text.slice(0, maxLength)}...（已截断，原长度 ${text.length}）`
+}
+
+function toErrorDebugMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message || error.name
+  }
+
+  return String(error)
+}
+
+function buildJapaneseAnalysisDebugContext(
+  config: ApiConfig,
+  job: AnalysisJob,
+  stage: JapaneseAnalysisDebugStage,
+  details: Partial<JapaneseAnalysisDebugContext> = {},
+): JapaneseAnalysisDebugContext {
+  return {
+    stage,
+    sentenceId: job.sentenceId,
+    model: config.model,
+    sentence: previewDebugText(job.sentence, DEBUG_SENTENCE_PREVIEW_LENGTH),
+    tokenCount: job.tokens?.length ?? 0,
+    tokenPreview:
+      job.tokens?.slice(0, DEBUG_TOKEN_PREVIEW_COUNT).map((token, index) => ({
+        index,
+        surface: token.surface,
+        reading: token.reading,
+        baseForm: token.baseForm,
+        pos: token.pos,
+      })) ?? [],
+    ...details,
+  }
+}
+
+function logJapaneseAnalysisDebug(context: JapaneseAnalysisDebugContext) {
+  console.debug('[日语解析调试]', context)
+}
+
+function createJapaneseAnalysisDebugError(
+  config: ApiConfig,
+  job: AnalysisJob,
+  message: string,
+  details: Partial<JapaneseAnalysisDebugContext>,
+) {
+  const context = buildJapaneseAnalysisDebugContext(
+    config,
+    job,
+    details.stage ?? 'parse_response',
+    details,
+  )
+  console.error('[日语解析失败]', context)
+
+  const debugLines = [
+    message,
+    `调试信息：阶段=${context.stage}`,
+    context.reason ? `原因=${context.reason}` : '',
+    context.responseStatus ? `HTTP=${context.responseStatus} ${context.responseStatusText ?? ''}`.trim() : '',
+    `句子=${context.sentence}`,
+    `token数量=${context.tokenCount}`,
+    context.responsePreview ? `模型返回片段=${context.responsePreview}` : '',
+  ].filter(Boolean)
+
+  return new Error(debugLines.join('；'))
+}
 
 function toPromptValue(value?: string) {
   const trimmed = value?.trim()
@@ -487,38 +598,107 @@ export async function analyzeSentence(
   }
 
   try {
+    const requestBody = buildRequestBody(config, promptConfig, job)
+    if (job.language === 'ja') {
+      logJapaneseAnalysisDebug(buildJapaneseAnalysisDebugContext(config, job, 'request', {
+        promptPreview: previewDebugText(requestBody.messages[0]?.content),
+      }))
+    }
+
     const response = await fetch(normalizeBaseUrl(config.baseUrl), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${config.apiKey.trim()}`,
       },
-      body: JSON.stringify(buildRequestBody(config, promptConfig, job)),
+      body: JSON.stringify(requestBody),
       signal: controller.signal,
     })
 
+    const buildHttpDebugError = async (message: string) => {
+      const text = await response.text()
+
+      if (job.language === 'ja') {
+        return createJapaneseAnalysisDebugError(config, job, message, {
+          stage: 'http_error',
+          responseStatus: response.status,
+          responseStatusText: response.statusText,
+          responsePreview: previewDebugText(text),
+          reason: text ? '接口返回非 2xx 状态，响应正文见模型返回片段。' : '接口返回非 2xx 状态，且响应正文为空。',
+        })
+      }
+
+      return new Error(text ? `${message}${text.slice(0, 120)}` : message)
+    }
+
     if (response.status === 401 || response.status === 403) {
-      throw new Error('鉴权失败，请检查 API Key 是否正确。')
+      throw await buildHttpDebugError('鉴权失败，请检查 API Key 是否正确。')
     }
 
     if (response.status === 429) {
-      throw new Error('请求过于频繁，可能触发了限流，请降低并发数后重试。')
+      throw await buildHttpDebugError('请求过于频繁，可能触发了限流，请降低并发数后重试。')
     }
 
     if (!response.ok) {
-      const text = await response.text()
-      throw new Error(
-        `接口请求失败（${response.status}）。${text ? `返回：${text.slice(0, 120)}` : ''}`,
-      )
+      throw await buildHttpDebugError(`接口请求失败（${response.status}）。返回：`)
     }
 
-    const payload = (await response.json()) as ChatCompletionResponse
+    const responseText = await response.text()
+    let payload: ChatCompletionResponse
+    try {
+      payload = JSON.parse(responseText) as ChatCompletionResponse
+    } catch (jsonError) {
+      if (job.language === 'ja') {
+        throw createJapaneseAnalysisDebugError(config, job, '日语解析失败：AI 接口响应体不是可解析的 JSON。', {
+          stage: 'response_json',
+          responseStatus: response.status,
+          responseStatusText: response.statusText,
+          responsePreview: previewDebugText(responseText),
+          reason: toErrorDebugMessage(jsonError),
+        })
+      }
+
+      throw new Error('接口返回内容不是可解析的 JSON。')
+    }
+
     if (payload.error?.message) {
+      if (job.language === 'ja') {
+        throw createJapaneseAnalysisDebugError(config, job, 'AI 接口返回错误。', {
+          stage: 'api_error',
+          reason: payload.error.message,
+          responseStatus: response.status,
+          responseStatusText: response.statusText,
+        })
+      }
+
       throw new Error(payload.error.message)
     }
 
     const text = extractTextContent(payload.choices)
-    const parsed = parseStructuredResult(text, job.tokens)
+    if (job.language === 'ja') {
+      logJapaneseAnalysisDebug(buildJapaneseAnalysisDebugContext(config, job, 'response', {
+        responseStatus: response.status,
+        responseStatusText: response.statusText,
+        responsePreview: previewDebugText(text),
+      }))
+    }
+
+    let parsed: AnalysisResult
+    try {
+      parsed = parseStructuredResult(text, job.tokens)
+    } catch (parseError) {
+      if (job.language === 'ja') {
+        throw createJapaneseAnalysisDebugError(config, job, '日语解析失败：模型返回内容未通过 JSON 解析或语块校验。', {
+          stage: text.trim() ? 'parse_response' : 'empty_response',
+          responseStatus: response.status,
+          responseStatusText: response.statusText,
+          responsePreview: previewDebugText(text),
+          reason: toErrorDebugMessage(parseError),
+        })
+      }
+
+      throw parseError
+    }
 
     return {
       ...parsed,
@@ -530,10 +710,24 @@ export async function analyzeSentence(
         throw error
       }
 
+      if (job.language === 'ja') {
+        throw createJapaneseAnalysisDebugError(config, job, '日语解析请求超时。', {
+          stage: 'timeout',
+          reason: '请求超过 60 秒未完成。',
+        })
+      }
+
       throw new Error('请求超时，请检查网络或缩短单次处理内容。')
     }
 
     if (error instanceof TypeError) {
+      if (job.language === 'ja') {
+        throw createJapaneseAnalysisDebugError(config, job, '日语解析网络请求失败。', {
+          stage: 'network',
+          reason: toErrorDebugMessage(error),
+        })
+      }
+
       throw new Error('网络请求失败，请检查 API URL、浏览器跨域设置或网络连通性。')
     }
 
