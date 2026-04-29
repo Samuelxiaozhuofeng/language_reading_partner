@@ -116,7 +116,12 @@ export function useAnalysisRunner({
       return
     }
 
-    const session = collectSession(language, nextSourceText, nextSentences, nextResults)
+    const session = collectSession({
+      language,
+      sourceText: nextSourceText,
+      sentences: nextSentences,
+      results: nextResults,
+    })
     setHistory((current) => [session, ...current].slice(0, MAX_HISTORY_ITEMS))
   }
 

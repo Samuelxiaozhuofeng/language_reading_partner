@@ -4,6 +4,7 @@ export type SettingsTab = 'ai' | 'prompt' | 'anki'
 export type WorkspaceSource = 'draft' | 'chapter'
 export type ChapterAnalysisState = 'idle' | 'partial' | 'running' | 'analyzed'
 export type KnowledgeKind = 'grammar' | 'phrase' | 'vocabulary'
+// Current language routes. The product direction is multilingual; add new routes here with matching segmentation and prompt handling.
 export type BookLanguage = 'es' | 'ja'
 export type AnkiFieldSource =
   | 'sentence'

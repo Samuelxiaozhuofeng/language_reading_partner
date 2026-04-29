@@ -48,7 +48,7 @@ export const defaultVocabularyConfig: ApiConfig = {
 
 export const defaultPromptConfig: PromptConfig = {
   template: [
-    '你是一名帮助中文母语者阅读西班牙语文学文本的老师。请严格围绕当前句子进行解释，并且必须只输出一个 JSON 对象，不要输出 Markdown，不要输出额外说明。',
+    '你是一名帮助中文母语者阅读外语文本的多语言阅读老师。请先根据当前句子自动判断主要学习语言、文本类型和大致难度，再严格围绕当前句子进行解释，并且必须只输出一个 JSON 对象，不要输出 Markdown，不要输出额外说明。',
     '',
     'JSON 结构固定为：',
     '{',
@@ -65,19 +65,17 @@ export const defaultPromptConfig: PromptConfig = {
     '',
     '要求：',
     '1. 必须使用中文回答。',
-    '2. grammar：只解释当前句子里最值得讲的 B1 及以上语法点、固定搭配、习语表达或有学习价值的结构。要简洁，不要长篇大论。',
-    '3. meaning：用自然中文说明这句话在上下文中的含义、叙述作用或人物心理。',
+    '2. grammar：解释当前句子里最值得学习的语法点、固定搭配、习语表达、句型结构或有学习价值的表达。应根据句子实际难度选择，不要强行只讲高级语法。',
+    '3. meaning：用自然中文说明这句话在上下文中的意思、语气、叙述作用或说话人意图。',
     '4. highlights：返回 0 到 4 个最值得收藏的知识点。',
-    '5. highlights 里的 text 必须是西语原词、短语或结构片段，例如 "Has pronunciado"、"tan... como..."。',
+    '5. highlights 里的 text 必须严格来自原句，保留原文语言，不要翻译、不要改写。',
     '6. kind 只能是 grammar、phrase、vocabulary 三选一。',
     '7. explanation 必须是简短中文解释，适合后续复习。',
     '8. 如果句子没有明显值得收藏的点，highlights 返回空数组 []。',
     '9. grammar 和 meaning 即使很短也要尽量给出，不要留空。',
-    '',
-    '参考风格：',
-    '- había pensado（过去完成时）表示在见到她之前，这些念头早已存在。',
-    '- en caso de 表示“万一……；如果发生……”。',
-    '- estar condenado a 表示“注定……；被迫一直……”。',
+    '10. 不要假设文本一定是某一种语言；请根据当前句子内容和上下文判断。',
+    '11. 如果文本中混有多种语言，以当前句子的主要学习语言为准。',
+    '12. 不要输出语言判断、难度判断或文本类型字段，只在内部判断后用于解释。',
     '',
     '文档元信息：',
     '{documentMetadata}',
@@ -139,7 +137,7 @@ export const defaultJapanesePromptConfig: PromptConfig = {
 
 export const defaultVocabularyPromptConfig: VocabularyPromptConfig = {
   template: [
-    '你是一名帮助中文母语者阅读西班牙语文学文本的词汇老师。请根据语境解释指定西语单词，并且必须只输出一个 JSON 对象，不要输出 Markdown，不要输出额外说明。',
+    '你是一名帮助中文母语者阅读外语文本的多语言词汇老师。请根据语境解释指定外语单词或短语，并且必须只输出一个 JSON 对象，不要输出 Markdown，不要输出额外说明。',
     '',
     'JSON 结构固定为：',
     '{',
@@ -549,12 +547,19 @@ function buildSessionTitle(sentences: SentenceItem[]): string {
   return seed.length > 40 ? `${seed.slice(0, 40)}...` : seed
 }
 
-export function collectSession(
-  language: BookLanguage,
-  sourceText: string,
-  sentences: SentenceItem[],
-  results: Record<string, AnalysisResult>,
-): RunSession {
+type CollectSessionOptions = {
+  language: BookLanguage
+  sourceText: string
+  sentences: SentenceItem[]
+  results: Record<string, AnalysisResult>
+}
+
+export function collectSession({
+  language,
+  sourceText,
+  sentences,
+  results,
+}: CollectSessionOptions): RunSession {
   return {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),

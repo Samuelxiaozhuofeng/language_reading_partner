@@ -121,7 +121,7 @@ function ResourcesPage({
       <header className="panel resources-header">
         <div className="resources-header-top">
           <div className="resources-header-copy">
-            <p className="eyebrow">Spanish Reading Copilot</p>
+            <p className="eyebrow">Multilingual Reading Copilot</p>
             <h1>{title}</h1>
           </div>
           <div className="hero-actions">

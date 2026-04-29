@@ -229,7 +229,7 @@ export function usePersistentConfig(): PersistentConfigState {
             ? clampReadingContentWidth(value)
             : key === 'fontSize'
               ? clampReadingFontSize(value)
-              : Boolean(value),
+              : value,
       }))
     },
     [],

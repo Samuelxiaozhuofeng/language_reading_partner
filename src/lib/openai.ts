@@ -315,6 +315,32 @@ function buildJapaneseBatchRequestBody(config: ApiConfig, batchJob: BatchAnalysi
   }
 }
 
+function createLanguageConsistentChunks(jobs: AnalysisJob[], batchSize: number) {
+  const chunks: AnalysisJob[][] = []
+  let currentChunk: AnalysisJob[] = []
+  let currentLanguage: AnalysisJob['language'] | null = null
+
+  for (const job of jobs) {
+    if (
+      currentChunk.length >= batchSize ||
+      (currentChunk.length > 0 && currentLanguage !== job.language)
+    ) {
+      chunks.push(currentChunk)
+      currentChunk = []
+      currentLanguage = null
+    }
+
+    currentChunk.push(job)
+    currentLanguage = job.language
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk)
+  }
+
+  return chunks
+}
+
 function parseStructuredBatchResult(text: string, count: number): AnalysisResult[] {
   const normalized = text.trim()
 
@@ -390,8 +416,17 @@ function buildRequestBody(config: ApiConfig, promptConfig: PromptConfig, job: An
 }
 
 function buildBatchRequestBody(config: ApiConfig, batchJob: BatchAnalysisJob) {
-  if (batchJob.sentenceEntries.some((entry) => entry.language === 'ja')) {
+  const hasJapaneseEntry = batchJob.sentenceEntries.some((entry) => entry.language === 'ja')
+  const isJapaneseBatch =
+    batchJob.sentenceEntries.length > 0 &&
+    batchJob.sentenceEntries.every((entry) => entry.language === 'ja')
+
+  if (isJapaneseBatch) {
     return buildJapaneseBatchRequestBody(config, batchJob)
+  }
+
+  if (hasJapaneseEntry) {
+    throw new Error('批量解析不支持混合语言句子，请将不同语言分开解析。')
   }
 
   const numberedSentences = batchJob.sentenceEntries
@@ -783,9 +818,7 @@ export async function runConcurrentAnalysis(
   const batchSize = Math.max(1, Math.round(options.batchSize ?? 1))
   const chunks =
     batchSize > 1
-      ? Array.from({ length: Math.ceil(jobs.length / batchSize) }, (_, index) =>
-          jobs.slice(index * batchSize, index * batchSize + batchSize),
-        )
+      ? createLanguageConsistentChunks(jobs, batchSize)
       : []
   const concurrency = Math.max(
     1,

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { chapterStatusLabelMap, formatTime } from '../lib/appState'
 import { detectEpubLanguage } from '../lib/epub'
+import { getTokenizer } from '../lib/kuromoji'
 import type { BookChapterRecord, BookLanguage, BookRecord, CollectionRecord } from '../types'
 import CollectionsBar from './library/CollectionsBar'
 
@@ -69,6 +70,12 @@ function LibraryPage({
   const [detectedLanguage, setDetectedLanguage] = useState<BookLanguage | null>(null)
   const [selectedImportLanguage, setSelectedImportLanguage] = useState<BookLanguage>('es')
   const [showLanguageDialog, setShowLanguageDialog] = useState(false)
+  const [japaneseTokenizerStatus, setJapaneseTokenizerStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle')
+  const [japaneseTokenizerError, setJapaneseTokenizerError] = useState('')
+  const languageDialogRef = useRef<HTMLDialogElement | null>(null)
+  const japaneseTokenizerPromiseRef = useRef<ReturnType<typeof getTokenizer> | null>(null)
   const hasRecentChapter = Boolean(selectedBook?.lastReadChapterId && recentChapterTitle)
   const totalChapterCount = books.reduce((sum, book) => sum + book.chapterCount, 0)
   const activeCollectionName = activeCollectionId
@@ -77,22 +84,63 @@ function LibraryPage({
   const selectedBookLastOpenedAt = selectedBook?.lastOpenedAt
     ? formatTime(selectedBook.lastOpenedAt)
     : '未开始阅读'
+  const isPreparingJapaneseImport =
+    selectedImportLanguage === 'ja' && japaneseTokenizerStatus === 'loading'
+
+  const preloadJapaneseTokenizer = useCallback(async () => {
+    setJapaneseTokenizerError('')
+    setJapaneseTokenizerStatus('loading')
+
+    try {
+      japaneseTokenizerPromiseRef.current ??= getTokenizer()
+      await japaneseTokenizerPromiseRef.current
+      setJapaneseTokenizerStatus('ready')
+    } catch (error) {
+      japaneseTokenizerPromiseRef.current = null
+      setJapaneseTokenizerStatus('error')
+      setJapaneseTokenizerError(
+        error instanceof Error ? error.message : '日语分词字典加载失败，请稍后重试。',
+      )
+    }
+  }, [])
+
+  useEffect(() => {
+    const dialog = languageDialogRef.current
+    if (!showLanguageDialog || !dialog || dialog.open) {
+      return
+    }
+
+    dialog.showModal()
+  }, [showLanguageDialog])
+
+  useEffect(() => {
+    if (showLanguageDialog && selectedImportLanguage === 'ja' && japaneseTokenizerStatus === 'idle') {
+      void preloadJapaneseTokenizer()
+    }
+  }, [japaneseTokenizerStatus, preloadJapaneseTokenizer, selectedImportLanguage, showLanguageDialog])
 
   const handleFileSelected = async (file: File) => {
     setPendingImportFile(file)
     setDetectedLanguage(null)
     setSelectedImportLanguage('es')
+    setJapaneseTokenizerStatus('idle')
+    setJapaneseTokenizerError('')
 
     const detected = await detectEpubLanguage(file)
     setDetectedLanguage(detected)
     setSelectedImportLanguage(detected ?? 'es')
     setShowLanguageDialog(true)
+    if (detected === 'ja') {
+      void preloadJapaneseTokenizer()
+    }
   }
 
   const handleCancelLanguageDialog = () => {
     setPendingImportFile(null)
     setDetectedLanguage(null)
     setSelectedImportLanguage('es')
+    setJapaneseTokenizerStatus('idle')
+    setJapaneseTokenizerError('')
     setShowLanguageDialog(false)
   }
 
@@ -336,7 +384,7 @@ function LibraryPage({
       </main>
 
       {showLanguageDialog ? (
-        <dialog className="language-dialog" open>
+        <dialog ref={languageDialogRef} className="language-dialog" onCancel={handleCancelLanguageDialog}>
           <form method="dialog" className="language-dialog-card">
             <div className="panel-header">
               <div>
@@ -359,17 +407,28 @@ function LibraryPage({
                 <option value="ja">日本語</option>
               </select>
             </label>
+            {selectedImportLanguage === 'ja' ? (
+              <p className={`notice ${japaneseTokenizerStatus === 'error' ? 'error' : ''}`}>
+                {japaneseTokenizerStatus === 'loading'
+                  ? '正在加载日语分词字典，首次加载可能需要几秒。'
+                  : japaneseTokenizerStatus === 'ready'
+                    ? '日语分词字典已就绪。'
+                    : japaneseTokenizerStatus === 'error'
+                      ? japaneseTokenizerError
+                      : '确认导入前会加载日语分词字典。'}
+              </p>
+            ) : null}
             <div className="panel-actions">
               <button className="ghost-button" type="button" onClick={handleCancelLanguageDialog}>
                 取消
               </button>
               <button
                 className="primary-button"
-                disabled={isImporting}
+                disabled={isImporting || isPreparingJapaneseImport}
                 type="button"
                 onClick={() => void handleConfirmLanguage()}
               >
-                {isImporting ? '导入中...' : '确认导入'}
+                {isImporting ? '导入中...' : isPreparingJapaneseImport ? '准备日语字典...' : '确认导入'}
               </button>
             </div>
           </form>

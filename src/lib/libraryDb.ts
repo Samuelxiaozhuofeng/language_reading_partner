@@ -1,4 +1,4 @@
-import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
+import { openDB, unwrap, type DBSchema, type IDBPDatabase } from 'idb'
 import type {
   BookChapterRecord,
   BookRecord,
@@ -61,7 +61,7 @@ let dbPromise: Promise<IDBPDatabase<LibraryDbSchema>> | null = null
 function getDb() {
   if (!dbPromise) {
     dbPromise = openDB<LibraryDbSchema>(DB_NAME, DB_VERSION, {
-      async upgrade(database, oldVersion, _newVersion, transaction) {
+      upgrade(database, oldVersion, _newVersion, transaction) {
         const bookStore = database.objectStoreNames.contains('books')
           ? transaction.objectStore('books')
           : database.createObjectStore('books', { keyPath: 'id' })
@@ -93,16 +93,22 @@ function getDb() {
         }
 
         if (oldVersion < 5) {
-          let cursor = await bookStore.openCursor()
-          while (cursor) {
+          const cursorRequest = unwrap(bookStore).openCursor()
+          cursorRequest.onsuccess = () => {
+            const cursor = cursorRequest.result
+            if (!cursor) {
+              return
+            }
+
             const book = cursor.value
             if (!book.language) {
-              await cursor.update({
+              cursor.update({
                 ...book,
                 language: 'es',
               })
             }
-            cursor = await cursor.continue()
+
+            cursor.continue()
           }
         }
       },

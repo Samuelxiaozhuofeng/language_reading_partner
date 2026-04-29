@@ -3,6 +3,22 @@
 ## Project Structure & Module Organization
 这是一个基于 Vite + React + TypeScript 的前端项目，应用代码放在 `src/`。
 
+## Product Positioning
+
+这是一个面向中文母语者的多语言阅读助手，不是单纯西语阅读器。
+
+当前实现支持的语言入口是：
+
+- `es`：历史默认语言，复用通用外语分句与通用多语言 prompt 路径。
+- `ja`：日语路径，使用 kuromoji 分词、假名显示和日语专用 prompt。
+
+后续 agent 修改 prompt、文案或分析流程时必须保持多语言定位：
+
+- 默认 prompt 应描述为多语言/外语阅读助手，不要重新写死为西语教师。
+- 只有明确处于 `ja` 专用路径时，才使用日语专用分词、语块和 furigana 逻辑。
+- 历史 localStorage/IndexedDB key 中的 `spanish-reading-assistant` 是兼容旧数据的持久化标识，不代表产品只能支持西语，不能为了改名随意迁移或重置。
+- 新增语言时优先扩展 `BookLanguage`、分句策略、显示标签和 prompt 路由，不要把新语言硬塞进页面组件。
+
 当前仓库已经完成 6 个阶段的职责拆分，后续开发必须延续这个分层，而不是把职责重新塞回大文件：
 
 - `src/App.tsx`
