@@ -160,7 +160,7 @@ export const defaultJapanesePromptConfig: PromptConfig = {
   ].join('\n'),
   previousSentenceCount: 1,
   nextSentenceCount: 1,
-  batchSize: 3,
+  batchSize: 1,
 }
 
 export const defaultVocabularyPromptConfig: VocabularyPromptConfig = {

@@ -267,92 +267,6 @@ function createMalformedBatchResult(rawText: string): AnalysisResult {
   }
 }
 
-function buildJapaneseBatchRequestBody(config: ApiConfig, batchJob: BatchAnalysisJob) {
-  const numberedSentences = batchJob.sentenceEntries
-    .map(({ sentence, tokens }, index) =>
-      [
-        `句子 ${index + 1}: ${sentence}`,
-        `token ${index + 1}:`,
-        formatJapaneseTokens(tokens),
-      ].join('\n'),
-    )
-    .join('\n\n')
-
-  const prompt = [
-    '你是一位日语教师，帮助中文母语者阅读日语文本。',
-    `本批次包含 ${batchJob.sentenceEntries.length} 个日语句子。每个句子都附带形态素解析器生成的原始 token 列表。`,
-    '你的任务是逐句完成“语法语块重组”和中文解释。',
-    '不要跳过、合并或重排任何句子。',
-    '必须只输出一个 JSON 数组，不要输出 Markdown，不要输出额外说明。',
-    '',
-    '对每个句子，必须遵守以下规则：',
-    '1. 基于原始 token 重组成更适合阅读理解的语法语块。',
-    '2. 每个语法语块必须返回 token_indices。',
-    '3. token_indices 必须引用该句自己的 token index。',
-    '4. chunk 必须等于 token_indices 对应 token.surface 直接拼接后的字符串。',
-    '5. 每个语法语块只能覆盖连续 token。',
-    '6. 所有 token 必须被覆盖一次且仅一次。',
-    '7. 不允许增删、改写、重排原文。',
-    '8. 助词、助动词、补助动词、接尾词如果与前后成分构成明确语法功能，应优先合并。',
-    '9. 输出解释语言固定使用中文。',
-    '',
-    'JSON 数组中每一项都必须按顺序对应同编号句子，结构固定为：',
-    '[',
-    '  {',
-    '    "grammar": "string",',
-    '    "meaning": "string",',
-    '    "chunkAnalysis": [',
-    '      {',
-    '        "chunk": "string",',
-    '        "reading": "string",',
-    '        "pos": "string",',
-    '        "grammar_role": "string",',
-    '        "token_indices": [0],',
-    '        "head_chunk_index": null,',
-    '        "depends_on": null,',
-    '        "explanation": "string"',
-    '      }',
-    '    ],',
-    '    "highlights": [',
-    '      {"text": "string", "kind": "grammar | phrase | vocabulary", "explanation": "string"}',
-    '    ]',
-    '  }',
-    ']',
-    '',
-    '要求：',
-    '1. 必须使用中文回答。',
-    '2. grammar：解释该句最重要的语法结构和阅读难点。',
-    '3. meaning：自然中文句意。',
-    '4. chunkAnalysis：按原句顺序排列语法语块，不要求数量等于输入 token 数量。',
-    '5. pos 使用教学标签，例如 名詞句、動詞句、連体修飾句、連用修飾句、補助動詞句、引用句、接続表現、形式名詞句、慣用表現、句読点。',
-    '6. grammar_role 说明语块功能，例如 主题、主语、宾语、时间状语、地点状语、连体修饰、连用修饰、谓语核心、补助说明、引用内容、条件从句、原因说明、转折连接、句末语气。',
-    '7. head_chunk_index：如果该语块修饰或依赖另一个语块，填写目标语块在当前句 chunkAnalysis 中的 index；否则填 null。',
-    '8. depends_on：用中文说明依赖关系；否则填 null。',
-    '9. explanation：用中文简要说明语块的意思和语法功能。',
-    '10. highlights 返回 0-4 个最值得收藏的知识点，text 必须严格来自原句，kind 只能是 grammar、phrase、vocabulary。',
-    `11. 必须返回 ${batchJob.sentenceEntries.length} 个数组元素，第 1 项对应句子 1，第 2 项对应句子 2，依此类推，顺序必须与句子编号完全一致。`,
-    '',
-    '文档元信息：',
-    buildDocumentMetadata(batchJob.documentContext),
-    '',
-    `上文：${toPromptValue(batchJob.previousSentence)}`,
-    '待解析句子与 token：',
-    numberedSentences,
-    `下文：${toPromptValue(batchJob.nextSentence)}`,
-  ].join('\n')
-
-  return {
-    model: config.model,
-    temperature: 0.2,
-    messages: [
-      {
-        role: 'user',
-        content: prompt,
-      },
-    ],
-  }
-}
-
 function createLanguageConsistentChunks(jobs: AnalysisJob[], batchSize: number) {
   const chunks: AnalysisJob[][] = []
   let currentChunk: AnalysisJob[] = []
@@ -458,16 +372,9 @@ function buildRequestBody(config: ApiConfig, promptConfig: PromptConfig, job: An
 
 function buildBatchRequestBody(config: ApiConfig, batchJob: BatchAnalysisJob) {
   const hasJapaneseEntry = batchJob.sentenceEntries.some((entry) => entry.language === 'ja')
-  const isJapaneseBatch =
-    batchJob.sentenceEntries.length > 0 &&
-    batchJob.sentenceEntries.every((entry) => entry.language === 'ja')
-
-  if (isJapaneseBatch) {
-    return buildJapaneseBatchRequestBody(config, batchJob)
-  }
 
   if (hasJapaneseEntry) {
-    throw new Error('批量解析不支持混合语言句子，请将不同语言分开解析。')
+    throw new Error('日语解析固定使用单句模式，不支持批量解析。')
   }
 
   const numberedSentences = batchJob.sentenceEntries
@@ -856,7 +763,8 @@ export async function runConcurrentAnalysis(
   callbacks: AnalysisCallbacks,
   options: RunConcurrentAnalysisOptions = {},
 ) {
-  const batchSize = Math.max(1, Math.round(options.batchSize ?? 1))
+  const requestedBatchSize = Math.max(1, Math.round(options.batchSize ?? 1))
+  const batchSize = jobs.some((job) => job.language === 'ja') ? 1 : requestedBatchSize
   const chunks =
     batchSize > 1
       ? createLanguageConsistentChunks(jobs, batchSize)
