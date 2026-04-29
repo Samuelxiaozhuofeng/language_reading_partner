@@ -20,11 +20,16 @@ export type SentenceRange = {
   end: number
 }
 
+export type ApiLanguageOverride = {
+  concurrency?: number
+}
+
 export type ApiConfig = {
   baseUrl: string
   apiKey: string
   model: string
   concurrency: number
+  languageOverrides?: Partial<Record<BookLanguage, ApiLanguageOverride>>
 }
 
 export type PromptConfig = {

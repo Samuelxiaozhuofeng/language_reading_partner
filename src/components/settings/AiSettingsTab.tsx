@@ -1,5 +1,5 @@
 import type { ConfigChangeHandler, ModelFetchStatus } from '../../lib/appState'
-import { MAX_CONCURRENCY } from '../../lib/appState'
+import { MAX_CONCURRENCY, updateLanguageConcurrencyOverride } from '../../lib/appState'
 import type { ApiConfig } from '../../types'
 
 type ModelPickerProps = {
@@ -81,6 +81,8 @@ function AiConfigForm({
   totalModelPages,
   visibleModels,
 }: ModelPickerProps) {
+  const japaneseConcurrency = apiConfig.languageOverrides?.ja?.concurrency
+
   return (
     <section className="ai-config-section">
       <div className="panel-header settings-subheader">
@@ -148,11 +150,34 @@ function AiConfigForm({
             />
           </label>
         ) : null}
+
+        {showConcurrency ? (
+          <label className="field">
+            <span>日语解析并发数</span>
+            <input
+              type="number"
+              min={1}
+              max={MAX_CONCURRENCY}
+              value={japaneseConcurrency ?? ''}
+              onChange={(event) =>
+                onConfigChange(
+                  'languageOverrides',
+                  updateLanguageConcurrencyOverride(
+                    apiConfig.languageOverrides,
+                    'ja',
+                    event.currentTarget.value,
+                  ),
+                )
+              }
+              placeholder={`${apiConfig.concurrency}`}
+            />
+          </label>
+        ) : null}
       </div>
 
       {showConcurrency ? (
         <p className="panel-tip">
-          可设置范围为 1-{MAX_CONCURRENCY}。这里控制的是句子批量解析时同时发出的请求数。
+          可设置范围为 1-{MAX_CONCURRENCY}。日语解析固定为单句请求，留空则继承通用并发数。
         </p>
       ) : null}
 

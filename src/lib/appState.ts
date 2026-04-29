@@ -36,6 +36,7 @@ export const MIN_READING_CONTENT_WIDTH = 720
 export const MAX_READING_CONTENT_WIDTH = 1180
 export const MIN_READING_FONT_SIZE = 16
 export const MAX_READING_FONT_SIZE = 24
+const supportedBookLanguages = ['es', 'ja'] satisfies BookLanguage[]
 
 export const defaultConfig: ApiConfig = {
   baseUrl: 'https://api.openai.com/v1',
@@ -307,6 +308,52 @@ export function clampConcurrency(value: unknown): number {
   return Math.min(MAX_CONCURRENCY, Math.max(1, Math.round(numeric)))
 }
 
+export function normalizeApiLanguageOverrides(value: unknown): ApiConfig['languageOverrides'] {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+
+  const parsed = value as Partial<Record<BookLanguage, { concurrency?: unknown }>>
+  const overrides: NonNullable<ApiConfig['languageOverrides']> = {}
+
+  supportedBookLanguages.forEach((language) => {
+    const languageOverride = parsed[language]
+    if (!languageOverride || typeof languageOverride !== 'object') {
+      return
+    }
+
+    if (languageOverride.concurrency === undefined) {
+      return
+    }
+
+    overrides[language] = {
+      concurrency: clampConcurrency(languageOverride.concurrency),
+    }
+  })
+
+  return Object.keys(overrides).length > 0 ? overrides : undefined
+}
+
+export function updateLanguageConcurrencyOverride(
+  current: ApiConfig['languageOverrides'],
+  language: BookLanguage,
+  value: unknown,
+): ApiConfig['languageOverrides'] {
+  if (value === '' || value === null || value === undefined) {
+    const next: NonNullable<ApiConfig['languageOverrides']> = { ...(current ?? {}) }
+    delete next[language]
+    return Object.keys(next).length > 0 ? next : undefined
+  }
+
+  return normalizeApiLanguageOverrides({
+    ...(current ?? {}),
+    [language]: {
+      ...(current?.[language] ?? {}),
+      concurrency: value,
+    },
+  })
+}
+
 export function clampPromptContextSentenceCount(value: unknown): number {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) {
@@ -358,6 +405,7 @@ export function restoreConfig(): ApiConfig {
       ...defaultConfig,
       ...parsed,
       concurrency: clampConcurrency(parsed.concurrency),
+      languageOverrides: normalizeApiLanguageOverrides(parsed.languageOverrides),
     }
   } catch {
     return defaultConfig
@@ -376,6 +424,7 @@ export function restoreVocabularyConfig(): ApiConfig {
       ...defaultVocabularyConfig,
       ...parsed,
       concurrency: clampConcurrency(parsed.concurrency),
+      languageOverrides: normalizeApiLanguageOverrides(parsed.languageOverrides),
     }
   } catch {
     return defaultVocabularyConfig

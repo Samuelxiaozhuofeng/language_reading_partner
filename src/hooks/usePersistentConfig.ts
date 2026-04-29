@@ -30,6 +30,7 @@ import {
   DRAFT_STORAGE_KEY,
   HISTORY_STORAGE_KEY,
   JA_ANKI_STORAGE_KEY,
+  normalizeApiLanguageOverrides,
   PROMPT_STORAGE_KEY,
   READING_PREFERENCES_STORAGE_KEY,
   restoreAnkiConfig,
@@ -166,14 +167,24 @@ export function usePersistentConfig(): PersistentConfigState {
   const handleConfigChange: ConfigChangeHandler = useCallback((key, value) => {
     setApiConfig((current) => ({
       ...current,
-      [key]: key === 'concurrency' ? clampConcurrency(value) : value,
+      [key]:
+        key === 'concurrency'
+          ? clampConcurrency(value)
+          : key === 'languageOverrides'
+            ? normalizeApiLanguageOverrides(value)
+            : value,
     }))
   }, [])
 
   const handleVocabularyConfigChange: ConfigChangeHandler = useCallback((key, value) => {
     setVocabularyApiConfig((current) => ({
       ...current,
-      [key]: key === 'concurrency' ? clampConcurrency(value) : value,
+      [key]:
+        key === 'concurrency'
+          ? clampConcurrency(value)
+          : key === 'languageOverrides'
+            ? normalizeApiLanguageOverrides(value)
+            : value,
     }))
   }, [])
 

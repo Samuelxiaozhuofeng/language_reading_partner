@@ -110,6 +110,10 @@ function WorkspacePage({
   const isChapterMode = workspaceSource === 'chapter'
   const isEpubChapterMode = isChapterMode && chapterSourceType === 'epub'
   const currentSentenceCount = isChapterMode ? totalSentenceCount : sentences.length
+  const effectiveConcurrency =
+    bookLanguage === 'ja'
+      ? apiConfig.languageOverrides?.ja?.concurrency ?? apiConfig.concurrency
+      : apiConfig.concurrency
   const workspaceTitle = isChapterMode
     ? contextTitle?.chapterTitle ?? '章节工作区'
     : articleTitle.trim() || '文章解析工作区'
@@ -137,7 +141,7 @@ function WorkspacePage({
 
         <div className="workspace-status-strip">
           <span className="status-pill">模型 {apiConfig.model || '未设置'}</span>
-          <span className="status-pill">并发 {apiConfig.concurrency}</span>
+          <span className="status-pill">并发 {effectiveConcurrency}</span>
           <span className="status-pill">{currentSentenceCount} 句</span>
           <span className="status-pill">{bookLanguage === 'ja' ? '日本語' : '西班牙语'}</span>
           <span className="status-pill">完成 {completedResultCount}</span>

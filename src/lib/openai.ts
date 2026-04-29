@@ -976,9 +976,12 @@ export async function runConcurrentAnalysis(
     batchSize > 1
       ? createLanguageConsistentChunks(jobs, batchSize)
       : []
+  const requestedConcurrency = jobs.some((job) => job.language === 'ja')
+    ? config.languageOverrides?.ja?.concurrency ?? config.concurrency
+    : config.concurrency
   const concurrency = Math.max(
     1,
-    Math.min(config.concurrency, batchSize > 1 ? chunks.length || 1 : jobs.length || 1),
+    Math.min(requestedConcurrency, batchSize > 1 ? chunks.length || 1 : jobs.length || 1),
   )
   let cursor = 0
   const { signal } = options
