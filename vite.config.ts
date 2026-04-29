@@ -1,21 +1,59 @@
 import { defineConfig } from 'vite'
 import type { Connect, Plugin, PreviewServer, ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react'
-import { createReadStream, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+
+const DICTIONARY_FILE_PATTERN = /^[a-z_]+\.dat\.gz$/u
+const localDictionaryDirectory = join(import.meta.dirname, 'public', 'dict')
+const packageDictionaryDirectory = join(import.meta.dirname, 'node_modules', 'kuromoji', 'dict')
 
 function kuromojiDictionaryMiddleware(): Plugin {
-  const dictionaryDirectory = join(import.meta.dirname, 'public', 'dict')
+  const dictionaryDirectory = resolveDictionaryDirectory()
+  let outputDirectory = join(import.meta.dirname, 'dist')
 
   return {
     name: 'kuromoji-dictionary-middleware',
+    configResolved(config) {
+      outputDirectory = resolve(config.root, config.build.outDir)
+    },
     configureServer(server: ViteDevServer) {
       server.middlewares.use('/dict', serveDictionaryFile(dictionaryDirectory))
     },
     configurePreviewServer(server: PreviewServer) {
       server.middlewares.use('/dict', serveDictionaryFile(dictionaryDirectory))
     },
+    closeBundle() {
+      copyDictionaryFiles(dictionaryDirectory, join(outputDirectory, 'dict'))
+    },
   }
+}
+
+function resolveDictionaryDirectory() {
+  if (existsSync(localDictionaryDirectory)) {
+    return localDictionaryDirectory
+  }
+
+  if (existsSync(packageDictionaryDirectory)) {
+    return packageDictionaryDirectory
+  }
+
+  throw new Error('未找到 kuromoji 字典目录，请先运行 npm install。')
+}
+
+function copyDictionaryFiles(sourceDirectory: string, targetDirectory: string) {
+  const filenames = readdirSync(sourceDirectory).filter((filename) =>
+    DICTIONARY_FILE_PATTERN.test(filename),
+  )
+
+  if (filenames.length === 0) {
+    throw new Error(`kuromoji 字典目录没有可复制的 .dat.gz 文件：${sourceDirectory}`)
+  }
+
+  mkdirSync(targetDirectory, { recursive: true })
+  filenames.forEach((filename) => {
+    copyFileSync(join(sourceDirectory, filename), join(targetDirectory, filename))
+  })
 }
 
 function serveDictionaryFile(dictionaryDirectory: string): Connect.NextHandleFunction {
@@ -23,7 +61,7 @@ function serveDictionaryFile(dictionaryDirectory: string): Connect.NextHandleFun
     const pathname = new URL(request.url ?? '', 'http://localhost').pathname
     const filename = pathname.split('/').pop() ?? ''
 
-    if (!/^[a-z_]+\.dat\.gz$/u.test(filename)) {
+    if (!DICTIONARY_FILE_PATTERN.test(filename)) {
       next()
       return
     }
