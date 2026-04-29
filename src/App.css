@@ -2316,6 +2316,25 @@ blockquote {
   border-radius: 8px;
 }
 
+.chunk-analysis-focus:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(14, 125, 120, 0.12);
+}
+
+.chunk-analysis-focus-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chunk-analysis-focus-header > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .chunk-analysis-focus span {
   color: var(--muted);
   font-size: 0.86rem;

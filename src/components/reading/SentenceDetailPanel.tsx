@@ -19,6 +19,33 @@ import { VocabularyExplanationPanel } from './VocabularyExplanationPanel'
 import type { JapaneseChunkSelection } from '../../lib/japaneseUtils'
 import type { BookLanguage } from '../../types'
 
+function scrollElementIntoInspector(element: HTMLElement) {
+  const scrollContainer = element.closest('.reading-inspector')
+
+  if (!(scrollContainer instanceof HTMLElement)) {
+    return
+  }
+
+  const detailRect = element.getBoundingClientRect()
+  const containerRect = scrollContainer.getBoundingClientRect()
+  const scrollPadding = 16
+  const isAboveViewport = detailRect.top < containerRect.top + scrollPadding
+  const isBelowViewport = detailRect.bottom > containerRect.bottom - scrollPadding
+
+  if (!isAboveViewport && !isBelowViewport) {
+    return
+  }
+
+  const nextScrollTop = isAboveViewport
+    ? scrollContainer.scrollTop + detailRect.top - containerRect.top - scrollPadding
+    : scrollContainer.scrollTop + detailRect.bottom - containerRect.bottom + scrollPadding
+
+  scrollContainer.scrollTo({
+    top: Math.max(0, nextScrollTop),
+    behavior: 'smooth',
+  })
+}
+
 type SentenceDetailPanelProps = {
   activeSelection: HighlightSelection | null
   activeChunkSelection: JapaneseChunkSelection | null
@@ -67,6 +94,7 @@ export function SentenceDetailPanel({
   vocabularyInteraction,
 }: SentenceDetailPanelProps) {
   const knowledgeDetailCardRef = useRef<HTMLDivElement | null>(null)
+  const chunkDetailCardRef = useRef<HTMLDivElement | null>(null)
   const [ankiSubmitState, setAnkiSubmitState] = useState<{
     message: string
     selectionKey: string
@@ -107,6 +135,14 @@ export function SentenceDetailPanel({
     ankiSubmitState.selectionKey === selectedHighlightKey ? ankiSubmitState.status : 'idle'
   const visibleAnkiMessage =
     ankiSubmitState.selectionKey === selectedHighlightKey ? ankiSubmitState.message : ''
+  const activeChunkKey =
+    activeChunk && activeChunkSelection?.sentenceId === sentence.id
+      ? `${sentence.id}:chunk:${activeChunkSelection.chunkIndex}:${activeChunk.chunk}`
+      : ''
+  const visibleChunkAnkiStatus =
+    ankiSubmitState.selectionKey === activeChunkKey ? ankiSubmitState.status : 'idle'
+  const visibleChunkAnkiMessage =
+    ankiSubmitState.selectionKey === activeChunkKey ? ankiSubmitState.message : ''
 
   const canRetrySentence =
     Boolean(onRetrySentence) &&
@@ -120,36 +156,29 @@ export function SentenceDetailPanel({
       return
     }
 
-    const detailCard = knowledgeDetailCardRef.current
-    const scrollContainer = detailCard.closest('.reading-inspector')
-
-    if (!(scrollContainer instanceof HTMLElement)) {
-      return
-    }
-
     const frameId = window.requestAnimationFrame(() => {
-      const detailRect = detailCard.getBoundingClientRect()
-      const containerRect = scrollContainer.getBoundingClientRect()
-      const scrollPadding = 16
-      const isAboveViewport = detailRect.top < containerRect.top + scrollPadding
-      const isBelowViewport = detailRect.bottom > containerRect.bottom - scrollPadding
-
-      if (!isAboveViewport && !isBelowViewport) {
-        return
+      if (knowledgeDetailCardRef.current) {
+        scrollElementIntoInspector(knowledgeDetailCardRef.current)
       }
-
-      const nextScrollTop = isAboveViewport
-        ? scrollContainer.scrollTop + detailRect.top - containerRect.top - scrollPadding
-        : scrollContainer.scrollTop + detailRect.bottom - containerRect.bottom + scrollPadding
-
-      scrollContainer.scrollTo({
-        top: Math.max(0, nextScrollTop),
-        behavior: 'smooth',
-      })
     })
 
     return () => window.cancelAnimationFrame(frameId)
   }, [selectedHighlight])
+
+  useEffect(() => {
+    if (!activeChunk || !chunkDetailCardRef.current) {
+      return
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      if (chunkDetailCardRef.current) {
+        scrollElementIntoInspector(chunkDetailCardRef.current)
+        chunkDetailCardRef.current.focus({ preventScroll: true })
+      }
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [activeChunk])
 
   if (!result) {
     return (
@@ -197,6 +226,40 @@ export function SentenceDetailPanel({
       setAnkiSubmitState({
         message: toUserFacingAnkiError(error),
         selectionKey: selectedHighlightKey,
+        status: 'error',
+      })
+    }
+  }
+
+  const handleAddChunkToAnki = async () => {
+    if (!activeChunk || !activeChunkKey) {
+      return
+    }
+
+    const chunkHighlight: AnalysisHighlight = {
+      id: activeChunkKey,
+      explanation: activeChunk.explanation,
+      kind: activeChunk.pos.includes('助詞') ? 'grammar' : 'vocabulary',
+      text: activeChunk.chunk,
+    }
+
+    setAnkiSubmitState({
+      message: '正在添加到 Anki...',
+      selectionKey: activeChunkKey,
+      status: 'loading',
+    })
+
+    try {
+      await onAddToAnki(sentence, result, chunkHighlight)
+      setAnkiSubmitState({
+        message: `已将「${activeChunk.chunk}」添加到 Anki。`,
+        selectionKey: activeChunkKey,
+        status: 'success',
+      })
+    } catch (error) {
+      setAnkiSubmitState({
+        message: toUserFacingAnkiError(error),
+        selectionKey: activeChunkKey,
         status: 'error',
       })
     }
@@ -350,10 +413,31 @@ export function SentenceDetailPanel({
           </div>
 
           {activeChunk ? (
-            <div className="chunk-analysis-focus">
-              <strong>{activeChunk.chunk}</strong>
-              <span>{[activeChunk.reading, activeChunk.pos].filter(Boolean).join(' / ')}</span>
+            <div
+              className="chunk-analysis-focus"
+              ref={chunkDetailCardRef}
+              tabIndex={-1}
+            >
+              <div className="chunk-analysis-focus-header">
+                <div>
+                  <strong>{activeChunk.chunk}</strong>
+                  <span>{[activeChunk.reading, activeChunk.pos].filter(Boolean).join(' / ')}</span>
+                </div>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={visibleChunkAnkiStatus === 'loading'}
+                  onClick={() => void handleAddChunkToAnki()}
+                >
+                  {visibleChunkAnkiStatus === 'loading' ? '添加到 Anki 中...' : '添加到 Anki'}
+                </button>
+              </div>
               <p>{activeChunk.explanation}</p>
+              {visibleChunkAnkiStatus !== 'idle' ? (
+                <p className={`notice ${visibleChunkAnkiStatus === 'success' ? 'success' : visibleChunkAnkiStatus === 'error' ? 'error' : ''}`}>
+                  {visibleChunkAnkiMessage}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </section>
