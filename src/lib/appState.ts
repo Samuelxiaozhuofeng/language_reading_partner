@@ -39,7 +39,7 @@ export const defaultConfig: ApiConfig = {
   baseUrl: 'https://api.openai.com/v1',
   apiKey: '',
   model: 'gpt-4.1-mini',
-  concurrency: 4,
+  concurrency: 5,
 }
 
 export const defaultVocabularyConfig: ApiConfig = {
@@ -132,7 +132,7 @@ export const defaultJapanesePromptConfig: PromptConfig = {
   ].join('\n'),
   previousSentenceCount: 1,
   nextSentenceCount: 1,
-  batchSize: 1,
+  batchSize: 3,
 }
 
 export const defaultVocabularyPromptConfig: VocabularyPromptConfig = {

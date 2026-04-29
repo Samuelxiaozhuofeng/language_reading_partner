@@ -268,10 +268,11 @@ function buildJapaneseBatchRequestBody(config: ApiConfig, batchJob: BatchAnalysi
 
   const prompt = [
     '你是一位日语教师，帮助中文母语者阅读日语文本。',
-    '请根据每个日语句子及其形态素分词结果，逐句输出解析。',
+    `本批次包含 ${batchJob.sentenceEntries.length} 个日语句子。请根据每个句子及其形态素分词结果，逐句处理所有句子。`,
+    '不要跳过、合并或重排任何句子。',
     '必须只输出一个 JSON 数组，不要输出 Markdown，不要输出额外说明。',
     '',
-    'JSON 数组中每一项都必须对应同序号句子，结构固定为：',
+    'JSON 数组中每一项都必须按顺序对应同编号句子，结构固定为：',
     '[',
     '  {',
     '    "grammar": "string",',
@@ -292,7 +293,7 @@ function buildJapaneseBatchRequestBody(config: ApiConfig, batchJob: BatchAnalysi
     '4. chunkAnalysis 的顺序和数量必须与对应输入语块完全一致。',
     '5. chunkAnalysis.reading 使用平假名，pos 使用日语词性名，explanation 用中文简要说明该词块在句中的含义和功能。',
     '6. highlights 返回 0-4 个最值得收藏的知识点，text 必须是日语原文。',
-    `7. 必须返回 ${batchJob.sentenceEntries.length} 个数组元素，顺序必须与句子编号完全一致。`,
+    `7. 必须返回 ${batchJob.sentenceEntries.length} 个数组元素，第 1 项对应句子 1，第 2 项对应句子 2，依此类推，顺序必须与句子编号完全一致。`,
     '',
     '文档元信息：',
     buildDocumentMetadata(batchJob.documentContext),
