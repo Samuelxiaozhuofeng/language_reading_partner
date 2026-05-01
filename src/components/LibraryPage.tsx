@@ -3,6 +3,7 @@ import { chapterStatusLabelMap, formatTime } from '../lib/appState'
 import { detectEpubLanguage } from '../lib/epub'
 import { getTokenizer } from '../lib/kuromoji'
 import type { BookChapterRecord, BookLanguage, BookRecord, CollectionRecord } from '../types'
+import ChapterNavigator from './library/ChapterNavigator'
 import CloudAuthGate from './library/CloudAuthGate'
 import CollectionsBar from './library/CollectionsBar'
 import LegacyMigrationPrompt from './library/LegacyMigrationPrompt'
@@ -412,38 +413,14 @@ function LibraryPage({
                 </div>
               </div>
 
-              <div className="chapter-list">
-                {chapters.map((chapter) => (
-                  <article
-                    className={`chapter-card ${selectedChapterId === chapter.id ? 'is-active' : ''}`}
-                    key={chapter.id}
-                  >
-                    <div className="chapter-card-copy">
-                      <div className="chapter-card-header">
-                        <span className="sentence-index">第 {chapter.order + 1} 章</span>
-                        <span className="status-pill">{chapterStatusLabelMap[chapter.analysisState]}</span>
-                      </div>
-                      <h3>{chapter.title}</h3>
-                      <div className="chapter-card-meta">
-                        <span>{chapter.sentences.length} 句可解析</span>
-                        {chapter.lastOpenedAt ? <span>最近打开 {formatTime(chapter.lastOpenedAt)}</span> : null}
-                      </div>
-                    </div>
-
-                    <div className="chapter-card-actions">
-                      <button className="secondary-button" type="button" onClick={() => onOpenChapterWorkspace(chapter.id)}>
-                        工作区
-                      </button>
-                      <button className="ghost-button" type="button" onClick={() => onOpenChapterReading(chapter.id)}>
-                        阅读
-                      </button>
-                      <button className="ghost-button danger-button" type="button" onClick={() => onDeleteChapter(chapter.id)}>
-                        删除
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
+              <ChapterNavigator
+                chapters={chapters}
+                key={selectedBook.id}
+                selectedChapterId={selectedChapterId}
+                onDeleteChapter={onDeleteChapter}
+                onOpenChapterReading={onOpenChapterReading}
+                onOpenChapterWorkspace={onOpenChapterWorkspace}
+              />
             </>
           )}
         </section>

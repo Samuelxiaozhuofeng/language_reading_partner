@@ -2203,10 +2203,136 @@ blockquote {
   gap: 12px;
 }
 
+.chapter-navigator {
+  display: grid;
+  gap: 12px;
+}
+
+.chapter-nav-toolbar {
+  position: sticky;
+  top: 12px;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(160px, 0.8fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid rgba(69, 72, 82, 0.12);
+  border-radius: 22px;
+  background: rgba(255, 252, 244, 0.94);
+  box-shadow: 0 14px 24px rgba(69, 72, 82, 0.1);
+  backdrop-filter: blur(14px);
+}
+
+.chapter-nav-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chapter-nav-field span {
+  color: var(--muted);
+  font-family: var(--display);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chapter-nav-field input,
+.chapter-nav-field select {
+  min-height: 44px;
+  border-radius: 16px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.chapter-nav-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.chapter-nav-actions .primary-button,
+.chapter-nav-actions .secondary-button {
+  min-height: 44px;
+  padding: 10px 16px;
+  white-space: nowrap;
+}
+
+.chapter-range-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chapter-range-tab {
+  border: 1px solid rgba(69, 72, 82, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.56);
+  color: var(--muted);
+  cursor: pointer;
+  padding: 8px 12px;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.chapter-range-tab:hover {
+  transform: translateY(-1px);
+}
+
+.chapter-range-tab.is-active {
+  border-color: rgba(14, 125, 120, 0.24);
+  background: rgba(14, 125, 120, 0.12);
+  color: var(--accent-strong);
+}
+
 .chapter-card {
   padding: 16px 18px;
   display: grid;
   gap: 12px;
+}
+
+.chapter-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 18px;
+}
+
+.chapter-row.is-recent:not(.is-active) {
+  border-color: rgba(192, 115, 32, 0.22);
+}
+
+.chapter-row .chapter-card-copy {
+  gap: 8px;
+}
+
+.chapter-row .chapter-card-copy h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1rem;
+}
+
+.chapter-row .chapter-card-header {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.chapter-row .chapter-card-actions {
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.chapter-row .chapter-card-actions .secondary-button,
+.chapter-row .chapter-card-actions .ghost-button {
+  padding: 9px 12px;
+  white-space: nowrap;
 }
 
 .chapter-card-actions {
@@ -2240,6 +2366,10 @@ blockquote {
   align-items: center;
   padding: 6px 10px;
   border-radius: 999px;
+}
+
+.chapter-empty-state {
+  margin: 0;
 }
 
 .draft-meta-grid {
@@ -2534,6 +2664,36 @@ blockquote {
   .book-card-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .chapter-nav-toolbar {
+    position: sticky;
+    top: 8px;
+    grid-template-columns: 1fr;
+    padding: 10px;
+  }
+
+  .chapter-nav-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .chapter-nav-actions .primary-button,
+  .chapter-nav-actions .secondary-button {
+    flex: 1 1 0;
+  }
+
+  .chapter-row {
+    grid-template-columns: 1fr;
+  }
+
+  .chapter-row .chapter-card-actions {
+    width: 100%;
+  }
+
+  .chapter-row .chapter-card-actions .secondary-button,
+  .chapter-row .chapter-card-actions .ghost-button {
+    width: 100%;
   }
 
   .book-collection-control {

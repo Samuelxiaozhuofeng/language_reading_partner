@@ -72,6 +72,12 @@ type InitialLibraryState = {
   savedResources: SavedKnowledgeResource[]
 }
 
+type PendingChapterSnapshot = {
+  book: BookRecord | null
+  chapter: BookChapterRecord
+  userId: string
+}
+
 export function useLibraryStore(userId: string | null) {
   const [allBooks, setAllBooks] = useState<BookRecord[]>([])
   const [collections, setCollections] = useState<CollectionRecord[]>([])
@@ -90,11 +96,7 @@ export function useLibraryStore(userId: string | null) {
   const [libraryError, setLibraryError] = useState('')
   const currentChapterRef = useRef<BookChapterRecord | null>(null)
   const chapterSnapshotSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingChapterSnapshotRef = useRef<{
-    book: BookRecord | null
-    chapter: BookChapterRecord
-    userId: string
-  } | null>(null)
+  const pendingChapterSnapshotRef = useRef<PendingChapterSnapshot | null>(null)
   const libraryCacheSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingLibraryCacheRef = useRef<{
     snapshot: InitialLibraryState
@@ -204,6 +206,22 @@ export function useLibraryStore(userId: string | null) {
       chapterSnapshotSyncTimerRef.current = setTimeout(flushPendingChapterSnapshot, 800)
     },
     [flushPendingChapterSnapshot, userId],
+  )
+
+  const discardPendingChapterSnapshot = useCallback(
+    (shouldDiscard: (pending: PendingChapterSnapshot) => boolean) => {
+      const pending = pendingChapterSnapshotRef.current
+      if (!pending || !shouldDiscard(pending)) {
+        return
+      }
+
+      pendingChapterSnapshotRef.current = null
+      if (chapterSnapshotSyncTimerRef.current) {
+        clearTimeout(chapterSnapshotSyncTimerRef.current)
+        chapterSnapshotSyncTimerRef.current = null
+      }
+    },
+    [],
   )
 
   const flushPendingLibraryCache = useCallback(() => {
@@ -497,6 +515,7 @@ export function useLibraryStore(userId: string | null) {
   const removeBook = useCallback(
     async (bookId: string) => {
       const cloudUserId = requireCloudUser(userId)
+      discardPendingChapterSnapshot((pending) => pending.chapter.bookId === bookId)
       const nextBooks = await removeBookFromLibrary(cloudUserId, bookId)
       setAllBooks(nextBooks)
       setSavedResources((current) => current.filter((resource) => resource.bookId !== bookId))
@@ -508,7 +527,13 @@ export function useLibraryStore(userId: string | null) {
       setLibraryNotice('书籍已从云端书架移除。')
       setLibraryError('')
     },
-    [activeCollectionId, hydrateFirstVisibleBook, selection.bookId, userId],
+    [
+      activeCollectionId,
+      discardPendingChapterSnapshot,
+      hydrateFirstVisibleBook,
+      selection.bookId,
+      userId,
+    ],
   )
 
   const removeChapter = useCallback(
@@ -522,6 +547,7 @@ export function useLibraryStore(userId: string | null) {
         return null
       }
 
+      discardPendingChapterSnapshot((pending) => pending.chapter.id === chapterId)
       const removedCurrentChapter = currentChapterRef.current?.id === chapterId
       const nextCurrentChapter = resolveNextCurrentChapterAfterRemoval(
         payload.nextChapters,
@@ -563,7 +589,14 @@ export function useLibraryStore(userId: string | null) {
         removedCurrentChapter,
       }
     },
-    [chapters, selectedBook, selection.bookId, selection.chapterId, userId],
+    [
+      chapters,
+      discardPendingChapterSnapshot,
+      selectedBook,
+      selection.bookId,
+      selection.chapterId,
+      userId,
+    ],
   )
 
   const upsertKnowledgeResource = useCallback(async (resource: SavedKnowledgeResource) => {
