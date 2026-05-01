@@ -1545,6 +1545,7 @@ blockquote {
   display: flex;
   width: min(680px, 100%);
   margin-left: auto;
+  pointer-events: none;
 }
 
 .reading-inspector {
@@ -1574,6 +1575,7 @@ blockquote {
   width: min(680px, calc(100vw - 32px));
   max-height: min(78vh, calc(100vh - 32px));
   box-shadow: 0 24px 54px rgba(35, 29, 24, 0.24);
+  pointer-events: auto;
 }
 
 .reading-inspector-header,
@@ -2728,6 +2730,10 @@ blockquote {
   .reading-paragraph {
     font-size: calc(var(--reading-body-font-size, 18px) * 0.92);
     line-height: 1.92;
+  }
+
+  .reading-shell.is-chapter-shell .reading-paragraph {
+    font-size: var(--reading-body-font-size, 18px);
   }
 
   .reading-book-toolbar,

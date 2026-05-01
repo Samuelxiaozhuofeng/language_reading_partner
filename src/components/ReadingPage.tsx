@@ -171,10 +171,13 @@ function ReadingPage({
     [resumeAnchor, sentences],
   )
   const resumeAnchorSentenceId = resolvedResumeAnchor?.sentence.id ?? null
+  const isMobileChapterReading =
+    isChapterMode && viewportSize.width <= READING_DESKTOP_BREAKPOINT
+  const effectiveReadingFontSize = isMobileChapterReading ? 18 : readingPreferences.fontSize
   const chapterPages = useMemo(
     () =>
       paginateChapterParagraphs(chapterParagraphs, {
-        fontSize: readingPreferences.fontSize,
+        fontSize: effectiveReadingFontSize,
         measureContainer: paginationMeasureContainer,
         pageLayout: chapterPageLayout,
         viewportHeight: viewportSize.height,
@@ -186,8 +189,8 @@ function ReadingPage({
     [
       chapterPageLayout,
       chapterParagraphs,
+      effectiveReadingFontSize,
       paginationMeasureContainer,
-      readingPreferences.fontSize,
       viewportSize.height,
       viewportSize.width,
     ],
@@ -213,15 +216,15 @@ function ReadingPage({
     () =>
       ({
         '--reading-content-width': isChapterMode ? '100%' : `${readingPreferences.contentWidth}px`,
-        '--reading-body-font-size': `${readingPreferences.fontSize}px`,
-        '--reading-panel-font-size': `${Math.max(16, readingPreferences.fontSize - 1)}px`,
+        '--reading-body-font-size': `${effectiveReadingFontSize}px`,
+        '--reading-panel-font-size': `${Math.max(16, effectiveReadingFontSize - 1)}px`,
         '--reading-inspector-width': isChapterMode ? '100%' : `${Math.round(
           Math.min(420, Math.max(320, readingPreferences.contentWidth * 0.42)),
         )}px`,
         '--reading-page-gap': `${CHAPTER_PAGE_GAP}px`,
-        '--reading-page-paragraph-gap': `${getChapterParagraphGap(readingPreferences.fontSize)}px`,
+        '--reading-page-paragraph-gap': `${getChapterParagraphGap(effectiveReadingFontSize)}px`,
       }) as CSSProperties,
-    [isChapterMode, readingPreferences.contentWidth, readingPreferences.fontSize],
+    [effectiveReadingFontSize, isChapterMode, readingPreferences.contentWidth],
   )
 
   useEffect(() => {
@@ -273,7 +276,7 @@ function ReadingPage({
 
     resizeObserver.observe(chapterBodyRef.current)
     return () => resizeObserver.disconnect()
-  }, [chapterPageCount, isChapterMode, readingPreferences.fontSize])
+  }, [chapterPageCount, effectiveReadingFontSize, isChapterMode])
 
   useEffect(() => {
     if (!isChapterMode) {
@@ -520,6 +523,7 @@ function ReadingPage({
                 readingTitle={readingTitle}
                 results={results}
                 resumeHighlightSentenceId={resumeHighlightSentenceId}
+                showReadingSettings={!isMobileChapterReading}
               />
             ) : (
               <DraftReadingView

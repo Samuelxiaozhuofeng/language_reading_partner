@@ -34,6 +34,7 @@ type ChapterReadingViewProps = {
   readingTitle: string
   results: Record<string, AnalysisResult>
   resumeHighlightSentenceId: string | null
+  showReadingSettings: boolean
 }
 
 export function ChapterReadingView({
@@ -57,6 +58,7 @@ export function ChapterReadingView({
   readingTitle,
   results,
   resumeHighlightSentenceId,
+  showReadingSettings,
 }: ChapterReadingViewProps) {
   const visiblePageProgressCount = Math.min(chapterPageCount, 12)
   const visiblePageProgressActiveIndex =
@@ -159,14 +161,16 @@ export function ChapterReadingView({
             </div>
 
             <div className="reading-book-toolbar-actions">
-              <ReadingDisplaySettings
-                bookLanguage={bookLanguage}
-                isOpen={isReadingSettingsOpen}
-                onClose={onCloseReadingSettings}
-                onReadingPreferencesChange={onReadingPreferencesChange}
-                onToggle={onToggleReadingSettings}
-                readingPreferences={readingPreferences}
-              />
+              {showReadingSettings ? (
+                <ReadingDisplaySettings
+                  bookLanguage={bookLanguage}
+                  isOpen={isReadingSettingsOpen}
+                  onClose={onCloseReadingSettings}
+                  onReadingPreferencesChange={onReadingPreferencesChange}
+                  onToggle={onToggleReadingSettings}
+                  readingPreferences={readingPreferences}
+                />
+              ) : null}
               <button
                 className="ghost-button"
                 disabled={currentChapterPage <= 0}
