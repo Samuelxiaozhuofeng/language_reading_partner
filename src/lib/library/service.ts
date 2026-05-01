@@ -47,10 +47,6 @@ import {
   type CloudLibrarySnapshot,
 } from './cloudCache'
 
-export type PersistChapterOptions = {
-  markOpened?: boolean
-}
-
 export type RemoveChapterResult = {
   nextBook: BookRecord | null
   nextChapters: BookChapterRecord[]
@@ -173,43 +169,6 @@ export async function moveBookToCollectionInLibrary(
   return {
     book,
     books: await getBooks(userId),
-  }
-}
-
-export async function persistChapterRecord(
-  userId: string,
-  chapter: BookChapterRecord,
-  options?: PersistChapterOptions,
-) {
-  const timestamp = new Date().toISOString()
-  const nextChapter = normalizeChapterRecord(chapter, {
-    lastOpenedAt: options?.markOpened ? timestamp : chapter.lastOpenedAt,
-  })
-
-  await saveChapter(userId, nextChapter)
-
-  const nextChapters = (await getChaptersByBook(userId, nextChapter.bookId)).map((item) =>
-    normalizeChapterRecord(item),
-  )
-  const currentBook = await getBook(userId, nextChapter.bookId)
-  const nextBook = currentBook
-    ? {
-        ...currentBook,
-        chapterCount: nextChapters.length,
-        lastReadChapterId: nextChapter.id,
-        lastOpenedAt: options?.markOpened ? timestamp : currentBook.lastOpenedAt,
-        analysisState: deriveBookAnalysisState(nextChapters),
-      }
-    : null
-
-  if (nextBook) {
-    await saveBook(userId, nextBook)
-  }
-
-  return {
-    book: nextBook,
-    chapter: nextChapter,
-    chapters: nextChapters,
   }
 }
 

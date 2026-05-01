@@ -27,8 +27,6 @@ import {
   loadInitialLibraryState,
   migrateLegacyLocalLibraryStorage,
   moveBookToCollectionInLibrary,
-  persistChapterRecord,
-  type PersistChapterOptions,
   removeBookFromLibrary,
   removeChapterFromLibrary,
   removeKnowledgeResourceFromLibrary,
@@ -45,6 +43,10 @@ import {
   resolveNextSelectedChapterIdAfterRemoval,
   updateBookInList,
 } from '../lib/library/selectors'
+
+type PersistChapterOptions = {
+  markOpened?: boolean
+}
 
 function filterBooksByCollection(books: BookRecord[], collectionId: string | null) {
   return collectionId ? books.filter((book) => book.collectionId === collectionId) : books
@@ -87,19 +89,15 @@ export function useLibraryStore(userId: string | null) {
     chapter: BookChapterRecord
     userId: string
   } | null>(null)
+  const libraryCacheSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingLibraryCacheRef = useRef<{
+    snapshot: InitialLibraryState
+    userId: string
+  } | null>(null)
 
   useEffect(() => {
     currentChapterRef.current = currentChapter
   }, [currentChapter])
-
-  useEffect(
-    () => () => {
-      if (chapterSnapshotSyncTimerRef.current) {
-        clearTimeout(chapterSnapshotSyncTimerRef.current)
-      }
-    },
-    [],
-  )
 
   const books = useMemo(
     () => filterBooksByCollection(allBooks, activeCollectionId),
@@ -165,6 +163,24 @@ export function useLibraryStore(userId: string | null) {
     }
   }, [applyHydratedBook, clearBookSelection])
 
+  const flushPendingChapterSnapshot = useCallback(() => {
+    const pending = pendingChapterSnapshotRef.current
+    pendingChapterSnapshotRef.current = null
+    if (chapterSnapshotSyncTimerRef.current) {
+      clearTimeout(chapterSnapshotSyncTimerRef.current)
+      chapterSnapshotSyncTimerRef.current = null
+    }
+
+    if (!pending) {
+      return
+    }
+
+    void syncChapterSnapshotToCloud(pending.userId, pending.book, pending.chapter).catch((error) => {
+      setLibraryNotice('')
+      setLibraryError(error instanceof Error ? error.message : '章节保存同步失败。')
+    })
+  }, [])
+
   const scheduleChapterSnapshotSync = useCallback(
     (book: BookRecord | null, chapter: BookChapterRecord) => {
       const cloudUserId = requireCloudUser(userId)
@@ -178,21 +194,50 @@ export function useLibraryStore(userId: string | null) {
         clearTimeout(chapterSnapshotSyncTimerRef.current)
       }
 
-      chapterSnapshotSyncTimerRef.current = setTimeout(() => {
-        const pending = pendingChapterSnapshotRef.current
-        pendingChapterSnapshotRef.current = null
-        chapterSnapshotSyncTimerRef.current = null
-        if (!pending) {
-          return
-        }
-
-        void syncChapterSnapshotToCloud(pending.userId, pending.book, pending.chapter).catch((error) => {
-          setLibraryNotice('')
-          setLibraryError(error instanceof Error ? error.message : '章节保存同步失败。')
-        })
-      }, 800)
+      chapterSnapshotSyncTimerRef.current = setTimeout(flushPendingChapterSnapshot, 800)
     },
-    [userId],
+    [flushPendingChapterSnapshot, userId],
+  )
+
+  const flushPendingLibraryCache = useCallback(() => {
+    const pending = pendingLibraryCacheRef.current
+    pendingLibraryCacheRef.current = null
+    if (libraryCacheSyncTimerRef.current) {
+      clearTimeout(libraryCacheSyncTimerRef.current)
+      libraryCacheSyncTimerRef.current = null
+    }
+
+    if (!pending) {
+      return
+    }
+
+    void saveInitialLibraryStateCache(pending.userId, pending.snapshot).catch((error) => {
+      setLibraryError(error instanceof Error ? error.message : '云端书架快照缓存失败。')
+    })
+  }, [])
+
+  const scheduleLibraryCacheSync = useCallback(
+    (cloudUserId: string, snapshot: InitialLibraryState) => {
+      pendingLibraryCacheRef.current = {
+        userId: cloudUserId,
+        snapshot,
+      }
+
+      if (libraryCacheSyncTimerRef.current) {
+        clearTimeout(libraryCacheSyncTimerRef.current)
+      }
+
+      libraryCacheSyncTimerRef.current = setTimeout(flushPendingLibraryCache, 800)
+    },
+    [flushPendingLibraryCache],
+  )
+
+  useEffect(
+    () => () => {
+      flushPendingChapterSnapshot()
+      flushPendingLibraryCache()
+    },
+    [flushPendingChapterSnapshot, flushPendingLibraryCache],
   )
 
   const hydrateFirstVisibleBook = useCallback(
@@ -285,13 +330,11 @@ export function useLibraryStore(userId: string | null) {
           }
         : null
 
-    void saveInitialLibraryStateCache(userId, {
+    scheduleLibraryCacheSync(userId, {
       books: allBooks,
       collections,
       hydratedBook,
       savedResources,
-    }).catch((error) => {
-      setLibraryError(error instanceof Error ? error.message : '云端书架快照缓存失败。')
     })
   }, [
     allBooks,
@@ -299,26 +342,11 @@ export function useLibraryStore(userId: string | null) {
     collections,
     hasLoadedLibrary,
     savedResources,
+    scheduleLibraryCacheSync,
     selectedBook,
     selection,
     userId,
   ])
-
-  const persistChapter = useCallback(
-    async (chapter: BookChapterRecord, options?: PersistChapterOptions) => {
-      const cloudUserId = requireCloudUser(userId)
-      const persisted = await persistChapterRecord(cloudUserId, chapter, options)
-      setCurrentChapter((current) => (current?.id === persisted.chapter.id ? persisted.chapter : current))
-      if (selection.bookId === persisted.chapter.bookId) {
-        setChapters(persisted.chapters)
-      }
-      const persistedBook = persisted.book
-      if (persistedBook) {
-        setAllBooks((currentBooks) => updateBookInList(currentBooks, persistedBook))
-      }
-    },
-    [selection.bookId, userId],
-  )
 
   const updateCurrentChapter = useCallback(
     async (
@@ -735,7 +763,6 @@ export function useLibraryStore(userId: string | null) {
     libraryError,
     libraryNotice,
     openChapter,
-    persistChapter,
     removeBook,
     removeChapter,
     selectedBook,
