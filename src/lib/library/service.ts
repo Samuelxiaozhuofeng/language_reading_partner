@@ -29,9 +29,11 @@ import {
   saveCollection,
   saveImportedBook,
   saveKnowledgeResource,
+  updateBookSnapshotSummary,
   updateBookReadingProgress,
   updateBookCollection,
   updateChapterLastOpenedAt,
+  updateChapterSnapshot,
 } from './remoteRepository'
 import {
   hasLegacyLocalLibraryData,
@@ -66,6 +68,12 @@ export type OpenedChapterState = {
   chapter: BookChapterRecord
   chapters: BookChapterRecord[]
   selection: LibrarySelection
+}
+
+export type UpdatedChapterState = {
+  book: BookRecord | null
+  chapter: BookChapterRecord
+  chapters: BookChapterRecord[]
 }
 
 export async function hydrateBookState(
@@ -238,6 +246,37 @@ export function createOpenedChapterState(
   }
 }
 
+export function createUpdatedChapterState(
+  book: BookRecord | null,
+  chapters: BookChapterRecord[],
+  chapter: BookChapterRecord,
+): UpdatedChapterState {
+  const nextChapter = normalizeChapterRecord(chapter)
+  const nextChapters = chapters.map((item) => (item.id === nextChapter.id ? nextChapter : item))
+  const nextBook = book && book.id === nextChapter.bookId
+    ? {
+        ...book,
+        analysisState: deriveBookAnalysisState(nextChapters),
+      }
+    : null
+
+  return {
+    book: nextBook,
+    chapter: nextChapter,
+    chapters: nextChapters,
+  }
+}
+
+export function createLocallyOpenedChapter(
+  chapter: BookChapterRecord,
+  timestamp = new Date().toISOString(),
+) {
+  return normalizeChapterRecord({
+    ...chapter,
+    lastOpenedAt: timestamp,
+  })
+}
+
 export function createRemovedChapterState(
   book: BookRecord,
   chapters: BookChapterRecord[],
@@ -289,6 +328,18 @@ export async function syncOpenedChapterToCloud(
     updateChapterLastOpenedAt(userId, state.chapter.id, openedAt),
     updateBookReadingProgress(userId, state.book.id, state.chapter.id, openedAt),
   ])
+}
+
+export async function syncChapterSnapshotToCloud(
+  userId: string,
+  book: BookRecord | null,
+  chapter: BookChapterRecord,
+) {
+  await updateChapterSnapshot(userId, chapter)
+
+  if (book) {
+    await updateBookSnapshotSummary(userId, book)
+  }
 }
 
 export async function importBookToLibrary(userId: string, file: File, language: BookLanguage) {

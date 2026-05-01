@@ -12,9 +12,11 @@ import type {
 import { sortSavedResources } from '../lib/knowledge'
 import {
   clearLibraryStorage,
+  createLocallyOpenedChapter,
   createCollectionInLibrary,
   createOpenedChapterState,
   createRemovedChapterState,
+  createUpdatedChapterState,
   deleteCollectionFromLibrary,
   hasLegacyLocalLibraryStorage,
   type HydratedBookState,
@@ -34,6 +36,7 @@ import {
   saveInitialLibraryStateCache,
   saveKnowledgeResourceToLibrary,
   saveManualDraftToLibrary,
+  syncChapterSnapshotToCloud,
   syncOpenedChapterToCloud,
 } from '../lib/library/service'
 import {
@@ -78,10 +81,25 @@ export function useLibraryStore(userId: string | null) {
   const [libraryNotice, setLibraryNotice] = useState('')
   const [libraryError, setLibraryError] = useState('')
   const currentChapterRef = useRef<BookChapterRecord | null>(null)
+  const chapterSnapshotSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingChapterSnapshotRef = useRef<{
+    book: BookRecord | null
+    chapter: BookChapterRecord
+    userId: string
+  } | null>(null)
 
   useEffect(() => {
     currentChapterRef.current = currentChapter
   }, [currentChapter])
+
+  useEffect(
+    () => () => {
+      if (chapterSnapshotSyncTimerRef.current) {
+        clearTimeout(chapterSnapshotSyncTimerRef.current)
+      }
+    },
+    [],
+  )
 
   const books = useMemo(
     () => filterBooksByCollection(allBooks, activeCollectionId),
@@ -146,6 +164,36 @@ export function useLibraryStore(userId: string | null) {
       clearBookSelection()
     }
   }, [applyHydratedBook, clearBookSelection])
+
+  const scheduleChapterSnapshotSync = useCallback(
+    (book: BookRecord | null, chapter: BookChapterRecord) => {
+      const cloudUserId = requireCloudUser(userId)
+      pendingChapterSnapshotRef.current = {
+        book,
+        chapter,
+        userId: cloudUserId,
+      }
+
+      if (chapterSnapshotSyncTimerRef.current) {
+        clearTimeout(chapterSnapshotSyncTimerRef.current)
+      }
+
+      chapterSnapshotSyncTimerRef.current = setTimeout(() => {
+        const pending = pendingChapterSnapshotRef.current
+        pendingChapterSnapshotRef.current = null
+        chapterSnapshotSyncTimerRef.current = null
+        if (!pending) {
+          return
+        }
+
+        void syncChapterSnapshotToCloud(pending.userId, pending.book, pending.chapter).catch((error) => {
+          setLibraryNotice('')
+          setLibraryError(error instanceof Error ? error.message : '章节保存同步失败。')
+        })
+      }, 800)
+    },
+    [userId],
+  )
 
   const hydrateFirstVisibleBook = useCallback(
     async (bookList: BookRecord[], collectionId: string | null) => {
@@ -282,12 +330,23 @@ export function useLibraryStore(userId: string | null) {
         return null
       }
 
-      const nextChapter = updater(chapter)
-      currentChapterRef.current = nextChapter
-      await persistChapter(nextChapter, options)
-      return nextChapter
+      const updatedChapter = updater(chapter)
+      const nextChapter = options?.markOpened
+        ? createLocallyOpenedChapter(updatedChapter)
+        : updatedChapter
+      const nextState = createUpdatedChapterState(selectedBook, chapters, nextChapter)
+
+      currentChapterRef.current = nextState.chapter
+      setCurrentChapter(nextState.chapter)
+      setChapters(nextState.chapters)
+      if (nextState.book) {
+        const nextBook = nextState.book
+        setAllBooks((currentBooks) => updateBookInList(currentBooks, nextBook))
+      }
+      scheduleChapterSnapshotSync(nextState.book, nextState.chapter)
+      return nextState.chapter
     },
-    [persistChapter],
+    [chapters, scheduleChapterSnapshotSync, selectedBook],
   )
 
   const selectBook = useCallback(

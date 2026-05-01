@@ -19,8 +19,10 @@ const BOOK_FILES_BUCKET = 'book-files'
 
 type BookRow = Database['public']['Tables']['books']['Row']
 type BookInsert = Database['public']['Tables']['books']['Insert']
+type BookUpdate = Database['public']['Tables']['books']['Update']
 type ChapterRow = Database['public']['Tables']['chapters']['Row']
 type ChapterInsert = Database['public']['Tables']['chapters']['Insert']
+type ChapterUpdate = Database['public']['Tables']['chapters']['Update']
 type CollectionRow = Database['public']['Tables']['collections']['Row']
 type CollectionInsert = Database['public']['Tables']['collections']['Insert']
 type ResourceRow = Database['public']['Tables']['resources']['Row']
@@ -128,6 +130,25 @@ function toChapterInsert(userId: string, chapter: BookChapterRecord): ChapterIns
   return {
     id: chapter.id,
     user_id: userId,
+    book_id: chapter.bookId,
+    title: chapter.title,
+    order_index: chapter.order,
+    epub_href: chapter.epubHref ?? null,
+    original_text: chapter.originalText,
+    source_text: chapter.sourceText,
+    paragraph_blocks: toJson(chapter.paragraphBlocks),
+    sentences: toJson(chapter.sentences),
+    results: toJson(chapter.results),
+    analysis_state: chapter.analysisState,
+    active_range: toJson(chapter.activeRange),
+    last_read_end: chapter.lastReadEnd,
+    last_opened_at: chapter.lastOpenedAt ?? null,
+    resume_anchor: toJson(chapter.resumeAnchor ?? null),
+  }
+}
+
+function toChapterUpdate(chapter: BookChapterRecord): ChapterUpdate {
+  return {
     book_id: chapter.bookId,
     title: chapter.title,
     order_index: chapter.order,
@@ -444,6 +465,48 @@ export async function saveChapter(userId: string, chapter: BookChapterRecord) {
   }
 
   return toChapter(data)
+}
+
+export async function updateChapterSnapshot(userId: string, chapter: BookChapterRecord) {
+  const { data, error } = await getClient()
+    .from('chapters')
+    .update(toChapterUpdate(chapter))
+    .eq('user_id', userId)
+    .eq('id', chapter.id)
+    .select('id')
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`章节保存失败：${error.message}`)
+  }
+
+  if (!data) {
+    throw new Error('章节保存失败：没有匹配到可更新的章节。')
+  }
+}
+
+export async function updateBookSnapshotSummary(userId: string, book: BookRecord) {
+  const values: BookUpdate = {
+    chapter_count: book.chapterCount,
+    last_read_chapter_id: book.lastReadChapterId ?? null,
+    last_opened_at: book.lastOpenedAt ?? null,
+    analysis_state: book.analysisState,
+  }
+  const { data, error } = await getClient()
+    .from('books')
+    .update(values)
+    .eq('user_id', userId)
+    .eq('id', book.id)
+    .select('id')
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`书籍摘要保存失败：${error.message}`)
+  }
+
+  if (!data) {
+    throw new Error('书籍摘要保存失败：没有匹配到可更新的书籍。')
+  }
 }
 
 export async function updateBookReadingProgress(
