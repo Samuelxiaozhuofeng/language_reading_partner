@@ -8,7 +8,6 @@ export function useSupabaseAuth() {
   const [isAuthLoading, setIsAuthLoading] = useState(isSupabaseConfigured)
   const [authError, setAuthError] = useState('')
   const [authNotice, setAuthNotice] = useState('')
-  const [pendingEmail, setPendingEmail] = useState('')
 
   useEffect(() => {
     if (!supabase) {
@@ -49,55 +48,24 @@ export function useSupabaseAuth() {
     }
   }, [])
 
-  const sendLoginCode = useCallback(async (email: string) => {
+  const signInWithPassword = useCallback(async (email: string, password: string) => {
     const trimmedEmail = email.trim()
+    const trimmedPassword = password.trim()
     if (!supabase) {
       setAuthError('缺少 Supabase 配置，暂时无法登录。')
       return
     }
 
-    if (!trimmedEmail) {
-      setAuthError('请输入邮箱地址。')
+    if (!trimmedEmail || !trimmedPassword) {
+      setAuthError('请输入邮箱和密码。')
       return
     }
 
     setAuthError('')
     setAuthNotice('')
-    const { error } = await supabase.auth.signInWithOtp({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: trimmedEmail,
-      options: {
-        shouldCreateUser: true,
-      },
-    })
-
-    if (error) {
-      setAuthError(error.message)
-      return
-    }
-
-    setPendingEmail(trimmedEmail)
-    setAuthNotice('验证码已发送，请检查邮箱。')
-  }, [])
-
-  const verifyLoginCode = useCallback(async (email: string, token: string) => {
-    const trimmedEmail = email.trim()
-    const trimmedToken = token.trim()
-    if (!supabase) {
-      setAuthError('缺少 Supabase 配置，暂时无法登录。')
-      return
-    }
-
-    if (!trimmedEmail || !trimmedToken) {
-      setAuthError('请输入邮箱和验证码。')
-      return
-    }
-
-    setAuthError('')
-    setAuthNotice('')
-    const { data, error } = await supabase.auth.verifyOtp({
-      email: trimmedEmail,
-      token: trimmedToken,
-      type: 'email',
+      password: trimmedPassword,
     })
 
     if (error) {
@@ -107,8 +75,46 @@ export function useSupabaseAuth() {
 
     setSession(data.session)
     setUser(data.user)
-    setPendingEmail('')
     setAuthNotice('已登录，正在载入云端书架。')
+  }, [])
+
+  const signUpWithPassword = useCallback(async (email: string, password: string) => {
+    const trimmedEmail = email.trim()
+    const trimmedPassword = password.trim()
+    if (!supabase) {
+      setAuthError('缺少 Supabase 配置，暂时无法注册。')
+      return
+    }
+
+    if (!trimmedEmail || !trimmedPassword) {
+      setAuthError('请输入邮箱和密码。')
+      return
+    }
+
+    if (trimmedPassword.length < 6) {
+      setAuthError('密码至少需要 6 个字符。')
+      return
+    }
+
+    setAuthError('')
+    setAuthNotice('')
+    const { data, error } = await supabase.auth.signUp({
+      email: trimmedEmail,
+      password: trimmedPassword,
+    })
+
+    if (error) {
+      setAuthError(error.message)
+      return
+    }
+
+    setSession(data.session)
+    setUser(data.user)
+    setAuthNotice(
+      data.session
+        ? '注册成功，正在载入云端书架。'
+        : '注册成功，请先按 Supabase 邮件完成邮箱确认，然后回到这里登录。',
+    )
   }, [])
 
   const signOut = useCallback(async () => {
@@ -132,11 +138,10 @@ export function useSupabaseAuth() {
     authNotice,
     isAuthConfigured: isSupabaseConfigured,
     isAuthLoading,
-    pendingEmail,
-    sendLoginCode,
     session,
+    signInWithPassword,
     signOut,
+    signUpWithPassword,
     user,
-    verifyLoginCode,
   }
 }

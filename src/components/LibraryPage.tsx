@@ -38,10 +38,9 @@ type LibraryPageProps = {
   onOpenResources: () => void
   onOpenManualWorkspace: () => void
   onOpenSettings: () => void
-  onSendLoginCode: (email: string) => void | Promise<void>
+  onSignIn: (email: string, password: string) => void | Promise<void>
   onSignOut: () => void | Promise<void>
-  onVerifyLoginCode: (email: string, token: string) => void | Promise<void>
-  pendingLoginEmail: string
+  onSignUp: (email: string, password: string) => void | Promise<void>
   recentChapterTitle?: string
   onSelectBook: (bookId: string) => void
   onSetActiveCollection: (collectionId: string | null) => void | Promise<void>
@@ -81,10 +80,9 @@ function LibraryPage({
   onOpenResources,
   onOpenManualWorkspace,
   onOpenSettings,
-  onSendLoginCode,
+  onSignIn,
   onSignOut,
-  onVerifyLoginCode,
-  pendingLoginEmail,
+  onSignUp,
   recentChapterTitle,
   onSelectBook,
   onSetActiveCollection,
@@ -263,9 +261,8 @@ function LibraryPage({
           authNotice={authNotice}
           isAuthConfigured={isAuthConfigured}
           isAuthLoading={isAuthLoading}
-          onSendLoginCode={onSendLoginCode}
-          onVerifyLoginCode={onVerifyLoginCode}
-          pendingEmail={pendingLoginEmail}
+          onSignIn={onSignIn}
+          onSignUp={onSignUp}
         />
       ) : (
         <>

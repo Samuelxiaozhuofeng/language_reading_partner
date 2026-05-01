@@ -399,10 +399,9 @@ function App() {
           onOpenResources={openResources}
           onOpenManualWorkspace={handleOpenManualWorkspace}
           onOpenSettings={openSettings}
-          onSendLoginCode={auth.sendLoginCode}
+          onSignIn={auth.signInWithPassword}
           onSignOut={auth.signOut}
-          onVerifyLoginCode={auth.verifyLoginCode}
-          pendingLoginEmail={auth.pendingEmail}
+          onSignUp={auth.signUpWithPassword}
           recentChapterTitle={recentChapter?.title}
           onSelectBook={(bookId) => void library.selectBook(bookId)}
           onSetActiveCollection={(collectionId) => void library.setActiveCollection(collectionId)}
