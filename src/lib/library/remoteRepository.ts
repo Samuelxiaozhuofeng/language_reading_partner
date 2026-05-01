@@ -446,6 +446,54 @@ export async function saveChapter(userId: string, chapter: BookChapterRecord) {
   return toChapter(data)
 }
 
+export async function updateBookReadingProgress(
+  userId: string,
+  bookId: string,
+  chapterId: string,
+  lastOpenedAt: string,
+) {
+  const { data, error } = await getClient()
+    .from('books')
+    .update({
+      last_read_chapter_id: chapterId,
+      last_opened_at: lastOpenedAt,
+    })
+    .eq('user_id', userId)
+    .eq('id', bookId)
+    .select('id')
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`书籍阅读进度更新失败：${error.message}`)
+  }
+
+  if (!data) {
+    throw new Error('书籍阅读进度更新失败：没有匹配到可更新的书籍。')
+  }
+}
+
+export async function updateChapterLastOpenedAt(
+  userId: string,
+  chapterId: string,
+  lastOpenedAt: string,
+) {
+  const { data, error } = await getClient()
+    .from('chapters')
+    .update({ last_opened_at: lastOpenedAt })
+    .eq('user_id', userId)
+    .eq('id', chapterId)
+    .select('id')
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`章节打开时间更新失败：${error.message}`)
+  }
+
+  if (!data) {
+    throw new Error('章节打开时间更新失败：没有匹配到可更新的章节。')
+  }
+}
+
 export async function deleteChapterCascade(userId: string, chapterId: string) {
   const chapter = await getChapter(userId, chapterId)
   if (!chapter) {

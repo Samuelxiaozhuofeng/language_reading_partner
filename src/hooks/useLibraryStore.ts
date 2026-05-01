@@ -13,6 +13,8 @@ import { sortSavedResources } from '../lib/knowledge'
 import {
   clearLibraryStorage,
   createCollectionInLibrary,
+  createOpenedChapterState,
+  createRemovedChapterState,
   deleteCollectionFromLibrary,
   hasLegacyLocalLibraryStorage,
   type HydratedBookState,
@@ -23,7 +25,6 @@ import {
   loadInitialLibraryState,
   migrateLegacyLocalLibraryStorage,
   moveBookToCollectionInLibrary,
-  openChapterRecord,
   persistChapterRecord,
   type PersistChapterOptions,
   removeBookFromLibrary,
@@ -33,6 +34,7 @@ import {
   saveInitialLibraryStateCache,
   saveKnowledgeResourceToLibrary,
   saveManualDraftToLibrary,
+  syncOpenedChapterToCloud,
 } from '../lib/library/service'
 import {
   getAdjacentChapterIds,
@@ -301,26 +303,31 @@ export function useLibraryStore(userId: string | null) {
   const openChapter = useCallback(
     async (chapterId: string) => {
       const cloudUserId = requireCloudUser(userId)
-      const payload = await openChapterRecord(cloudUserId, chapterId)
-      if (!payload) {
-        setLibraryError('章节不存在，可能已经被删除。')
+      const openedState = selectedBook
+        ? createOpenedChapterState(selectedBook, chapters, chapterId)
+        : null
+
+      if (!openedState) {
+        setLibraryError('章节尚未载入，请先选择对应书籍。')
         return null
       }
 
-      applyHydratedBook(payload.hydratedBook)
-      currentChapterRef.current = payload.persisted.chapter
-      setCurrentChapter(payload.persisted.chapter)
-      const persistedBook = payload.persisted.book
-      if (persistedBook) {
-        setAllBooks((current) => updateBookInList(current, persistedBook))
-      }
-      setChapters(payload.persisted.chapters)
-      setSelection({ bookId: payload.chapter.bookId, chapterId })
-      setLibraryNotice(`已打开章节《${payload.chapter.title}》。`)
+      currentChapterRef.current = openedState.chapter
+      setCurrentChapter(openedState.chapter)
+      setAllBooks((current) => updateBookInList(current, openedState.book))
+      setChapters(openedState.chapters)
+      setSelection(openedState.selection)
+      setLibraryNotice(`已打开章节《${openedState.chapter.title}》。`)
       setLibraryError('')
-      return payload.persisted.chapter
+
+      void syncOpenedChapterToCloud(cloudUserId, openedState).catch((error) => {
+        setLibraryNotice('')
+        setLibraryError(error instanceof Error ? error.message : '章节阅读进度同步失败。')
+      })
+
+      return openedState.chapter
     },
-    [applyHydratedBook, userId],
+    [chapters, selectedBook, userId],
   )
 
   const importBook = useCallback(async (file: File, language: BookLanguage) => {
@@ -410,7 +417,9 @@ export function useLibraryStore(userId: string | null) {
   const removeChapter = useCallback(
     async (chapterId: string): Promise<{ nextCurrentChapterId: string | null; removedCurrentChapter: boolean } | null> => {
       const cloudUserId = requireCloudUser(userId)
-      const payload = await removeChapterFromLibrary(cloudUserId, chapterId)
+      const payload = selectedBook
+        ? createRemovedChapterState(selectedBook, chapters, chapterId)
+        : null
       if (!payload) {
         setLibraryError('章节不存在，可能已经被删除。')
         return null
@@ -444,6 +453,11 @@ export function useLibraryStore(userId: string | null) {
         })
       }
 
+      void removeChapterFromLibrary(cloudUserId, chapterId).catch((error) => {
+        setLibraryNotice('')
+        setLibraryError(error instanceof Error ? error.message : '章节删除同步失败。')
+      })
+
       setLibraryNotice(`已删除章节《${payload.removedChapter.title}》。`)
       setLibraryError('')
 
@@ -452,7 +466,7 @@ export function useLibraryStore(userId: string | null) {
         removedCurrentChapter,
       }
     },
-    [selection.bookId, selection.chapterId, userId],
+    [chapters, selectedBook, selection.bookId, selection.chapterId, userId],
   )
 
   const upsertKnowledgeResource = useCallback(async (resource: SavedKnowledgeResource) => {

@@ -29,7 +29,9 @@ import {
   saveCollection,
   saveImportedBook,
   saveKnowledgeResource,
+  updateBookReadingProgress,
   updateBookCollection,
+  updateChapterLastOpenedAt,
 } from './remoteRepository'
 import {
   hasLegacyLocalLibraryData,
@@ -55,6 +57,13 @@ export type RemoveChapterResult = {
 
 export type HydratedBookState = {
   book: BookRecord
+  chapters: BookChapterRecord[]
+  selection: LibrarySelection
+}
+
+export type OpenedChapterState = {
+  book: BookRecord
+  chapter: BookChapterRecord
   chapters: BookChapterRecord[]
   selection: LibrarySelection
 }
@@ -196,21 +205,90 @@ export async function persistChapterRecord(
   }
 }
 
-export async function openChapterRecord(userId: string, chapterId: string) {
-  const chapterRecord = await getChapter(userId, chapterId)
-  if (!chapterRecord) {
+export function createOpenedChapterState(
+  book: BookRecord,
+  chapters: BookChapterRecord[],
+  chapterId: string,
+  timestamp = new Date().toISOString(),
+): OpenedChapterState | null {
+  const chapter = chapters.find((item) => item.id === chapterId)
+  if (!chapter) {
     return null
   }
 
-  const chapter = normalizeChapterRecord(chapterRecord)
-  const hydratedBook = await hydrateBookState(userId, chapter.bookId, chapterId)
-  const persisted = await persistChapterRecord(userId, chapter, { markOpened: true })
+  const nextChapter = normalizeChapterRecord({
+    ...chapter,
+    lastOpenedAt: timestamp,
+  })
+  const nextChapters = chapters.map((item) => (item.id === chapterId ? nextChapter : item))
+  const nextBook = {
+    ...book,
+    lastReadChapterId: chapterId,
+    lastOpenedAt: timestamp,
+  }
 
   return {
-    chapter,
-    hydratedBook,
-    persisted,
+    book: nextBook,
+    chapter: nextChapter,
+    chapters: nextChapters,
+    selection: {
+      bookId: book.id,
+      chapterId,
+    },
   }
+}
+
+export function createRemovedChapterState(
+  book: BookRecord,
+  chapters: BookChapterRecord[],
+  chapterId: string,
+): RemoveChapterResult | null {
+  const removedChapter = chapters.find((chapter) => chapter.id === chapterId)
+  if (!removedChapter) {
+    return null
+  }
+
+  const nextChapters = chapters
+    .filter((chapter) => chapter.id !== chapterId)
+    .map((chapter, index) =>
+      normalizeChapterRecord(
+        chapter.order === index
+          ? chapter
+          : {
+              ...chapter,
+              order: index,
+            },
+      ),
+    )
+  const fallbackChapter =
+    nextChapters[removedChapter.order] ?? nextChapters[removedChapter.order - 1] ?? null
+
+  return {
+    nextBook: {
+      ...book,
+      chapterCount: nextChapters.length,
+      lastReadChapterId:
+        book.lastReadChapterId === chapterId ? fallbackChapter?.id : book.lastReadChapterId,
+      analysisState: deriveBookAnalysisState(nextChapters),
+    },
+    nextChapters,
+    removedChapter: normalizeChapterRecord(removedChapter),
+  }
+}
+
+export async function syncOpenedChapterToCloud(
+  userId: string,
+  state: OpenedChapterState,
+) {
+  const openedAt = state.chapter.lastOpenedAt
+  if (!openedAt) {
+    throw new Error('章节打开时间缺失，无法同步阅读进度。')
+  }
+
+  await Promise.all([
+    updateChapterLastOpenedAt(userId, state.chapter.id, openedAt),
+    updateBookReadingProgress(userId, state.book.id, state.chapter.id, openedAt),
+  ])
 }
 
 export async function importBookToLibrary(userId: string, file: File, language: BookLanguage) {
