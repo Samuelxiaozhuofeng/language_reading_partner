@@ -7,6 +7,7 @@ import type {
   ChapterParagraphBlock,
   CollectionRecord,
   KnowledgeKind,
+  PendingAnkiNote,
   ReadingResumeAnchor,
   SavedKnowledgeResource,
   SentenceItem,
@@ -25,6 +26,8 @@ type ChapterInsert = Database['public']['Tables']['chapters']['Insert']
 type ChapterUpdate = Database['public']['Tables']['chapters']['Update']
 type CollectionRow = Database['public']['Tables']['collections']['Row']
 type CollectionInsert = Database['public']['Tables']['collections']['Insert']
+type PendingAnkiNoteRow = Database['public']['Tables']['pending_anki_notes']['Row']
+type PendingAnkiNoteInsert = Database['public']['Tables']['pending_anki_notes']['Insert']
 type ResourceRow = Database['public']['Tables']['resources']['Row']
 type ResourceInsert = Database['public']['Tables']['resources']['Insert']
 
@@ -202,6 +205,49 @@ function toResourceInsert(userId: string, resource: SavedKnowledgeResource): Res
     book_title: resource.bookTitle ?? null,
     chapter_id: resource.chapterId ?? null,
     chapter_title: resource.chapterTitle ?? null,
+  }
+}
+
+function toPendingAnkiNote(row: PendingAnkiNoteRow): PendingAnkiNote {
+  return {
+    id: row.id,
+    dedupeKey: row.dedupe_key,
+    language: row.language as PendingAnkiNote['language'],
+    payload: row.payload as PendingAnkiNote['payload'],
+    text: row.text,
+    kind: row.kind as KnowledgeKind,
+    explanation: row.explanation,
+    sentenceId: row.sentence_id,
+    sentenceText: row.sentence_text,
+    createdAt: row.created_at,
+    importedAt: row.imported_at ?? undefined,
+    lastError: row.last_error ?? undefined,
+    bookId: row.book_id ?? undefined,
+    bookTitle: row.book_title ?? undefined,
+    chapterId: row.chapter_id ?? undefined,
+    chapterTitle: row.chapter_title ?? undefined,
+  }
+}
+
+function toPendingAnkiNoteInsert(userId: string, note: PendingAnkiNote): PendingAnkiNoteInsert {
+  return {
+    id: note.id,
+    user_id: userId,
+    dedupe_key: note.dedupeKey,
+    language: note.language,
+    payload: toJson(note.payload),
+    text: note.text,
+    kind: note.kind,
+    explanation: note.explanation,
+    sentence_id: note.sentenceId,
+    sentence_text: note.sentenceText,
+    created_at: note.createdAt,
+    imported_at: note.importedAt ?? null,
+    last_error: note.lastError ?? null,
+    book_id: note.bookId ?? null,
+    book_title: note.bookTitle ?? null,
+    chapter_id: note.chapterId ?? null,
+    chapter_title: note.chapterTitle ?? null,
   }
 }
 
@@ -606,6 +652,21 @@ export async function getSavedResources(userId: string) {
   return (data ?? []).map(toResource)
 }
 
+export async function getPendingAnkiNotes(userId: string) {
+  const { data, error } = await getClient()
+    .from('pending_anki_notes')
+    .select('*')
+    .eq('user_id', userId)
+    .is('imported_at', null)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(`Anki 待导入列表载入失败：${error.message}`)
+  }
+
+  return (data ?? []).map(toPendingAnkiNote)
+}
+
 export async function getSavedResourceBySignature(userId: string, signature: string) {
   const { data, error } = await getClient()
     .from('resources')
@@ -633,6 +694,63 @@ export async function saveKnowledgeResource(userId: string, resource: SavedKnowl
   }
 
   return toResource(data)
+}
+
+export async function savePendingAnkiNote(userId: string, note: PendingAnkiNote) {
+  const { data, error } = await getClient()
+    .from('pending_anki_notes')
+    .upsert(toPendingAnkiNoteInsert(userId, {
+      ...note,
+      importedAt: undefined,
+      lastError: undefined,
+    }), { onConflict: 'user_id,dedupe_key' })
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Anki 待导入条目保存失败：${error.message}`)
+  }
+
+  return toPendingAnkiNote(data)
+}
+
+export async function markPendingAnkiNotesImported(userId: string, noteIds: string[]) {
+  if (noteIds.length === 0) {
+    return
+  }
+
+  const { error } = await getClient()
+    .from('pending_anki_notes')
+    .update({
+      imported_at: new Date().toISOString(),
+      last_error: null,
+    })
+    .eq('user_id', userId)
+    .in('id', noteIds)
+
+  if (error) {
+    throw new Error(`Anki 待导入条目状态更新失败：${error.message}`)
+  }
+}
+
+export async function savePendingAnkiNoteErrors(
+  userId: string,
+  noteIds: string[],
+  message: string,
+) {
+  if (noteIds.length === 0) {
+    return
+  }
+
+  const { error } = await getClient()
+    .from('pending_anki_notes')
+    .update({ last_error: message })
+    .eq('user_id', userId)
+    .in('id', noteIds)
+
+  if (error) {
+    throw new Error(`Anki 待导入错误状态保存失败：${error.message}`)
+  }
 }
 
 export async function deleteKnowledgeResource(userId: string, resourceId: string) {
@@ -700,6 +818,11 @@ export async function clearLibraryDb(userId: string) {
   const resources = await client.from('resources').delete().eq('user_id', userId)
   if (resources.error) {
     throw new Error(`学习资源清空失败：${resources.error.message}`)
+  }
+
+  const pendingAnkiNotes = await client.from('pending_anki_notes').delete().eq('user_id', userId)
+  if (pendingAnkiNotes.error) {
+    throw new Error(`Anki 待导入列表清空失败：${pendingAnkiNotes.error.message}`)
   }
 
   const booksDeletion = await client.from('books').delete().eq('user_id', userId)

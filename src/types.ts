@@ -64,6 +64,11 @@ export type AnkiConfig = {
   fieldMapping: AnkiFieldMapping
 }
 
+export type AddToAnkiResult = {
+  mode: 'direct' | 'queued'
+  message: string
+}
+
 export type SentenceItem = {
   id: string
   text: string
@@ -230,6 +235,25 @@ export type SavedKnowledgeResource = {
   sentenceId: string
   sentenceText: string
   savedAt: string
+  bookId?: string
+  bookTitle?: string
+  chapterId?: string
+  chapterTitle?: string
+}
+
+export type PendingAnkiNote = {
+  id: string
+  dedupeKey: string
+  language: BookLanguage
+  payload: Record<AnkiFieldSource, string>
+  text: string
+  kind: KnowledgeKind
+  explanation: string
+  sentenceId: string
+  sentenceText: string
+  createdAt: string
+  importedAt?: string
+  lastError?: string
   bookId?: string
   bookTitle?: string
   chapterId?: string

@@ -6,7 +6,8 @@ import {
   renderResourcesAsMarkdown,
   type ResourceExportOptions,
 } from '../lib/resourceExport'
-import type { KnowledgeKind, SavedKnowledgeResource } from '../types'
+import type { KnowledgeKind, PendingAnkiNote, SavedKnowledgeResource } from '../types'
+import PendingAnkiImportPanel from './resources/PendingAnkiImportPanel'
 
 export type ResourcesPageProps = {
   activeKind: KnowledgeKind | 'all'
@@ -15,7 +16,9 @@ export type ResourcesPageProps = {
   onBackToReading?: () => void
   onDeleteResource: (resourceId: string) => void
   onDeleteResources: (resourceIds: string[]) => void | Promise<void>
+  onImportPendingAnkiNotes: () => Promise<string>
   onKindChange: (kind: KnowledgeKind | 'all') => void
+  pendingAnkiNotes: PendingAnkiNote[]
   resources: SavedKnowledgeResource[]
   subtitle?: string
   title?: string
@@ -28,7 +31,9 @@ function ResourcesPage({
   onBackToReading,
   onDeleteResource,
   onDeleteResources,
+  onImportPendingAnkiNotes,
   onKindChange,
+  pendingAnkiNotes,
   resources,
   subtitle = '把你在阅读中遇到的语法点、词汇搭配和表达整理成一个可回看、可筛选的学习清单。',
   title = '学习资源',
@@ -148,6 +153,8 @@ function ResourcesPage({
           <span className="status-pill">{totalKinds ? `${totalKinds} 个类别` : '暂无分类'}</span>
         </div>
       </header>
+
+      <PendingAnkiImportPanel notes={pendingAnkiNotes} onImport={onImportPendingAnkiNotes} />
 
       <section className="panel resources-export-panel">
         <div className="panel-header library-section-header">

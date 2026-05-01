@@ -1,10 +1,17 @@
 import { useCallback } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import { addNoteToAnki, buildAnkiNotePayload } from '../lib/anki'
+import {
+  addNotesToAnki,
+  addNoteToAnki,
+  buildAnkiNotePayload,
+  shouldQueueAnkiOnThisDevice,
+} from '../lib/anki'
+import { createPendingAnkiNote } from '../lib/anki/pendingQueue'
 import { DEFAULT_CHAPTER_RANGE_SIZE, doesRangeContainSentenceIndex, getSentenceRangeAroundIndex } from '../lib/chapterRange'
 import { buildKnowledgeSignature } from '../lib/knowledge'
 import { buildReadingResumeAnchor, resolveReadingResumeAnchor } from '../lib/readingAnchor'
 import type {
+  AddToAnkiResult,
   AnalysisHighlight,
   AnalysisResult,
   AnkiConfig,
@@ -12,6 +19,7 @@ import type {
   BookLanguage,
   BookChapterRecord,
   BookRecord,
+  PendingAnkiNote,
   SentenceItem,
   WorkspaceSource,
 } from '../types'
@@ -41,6 +49,10 @@ type LibraryActionState = {
     nextCurrentChapterId: string | null
     removedCurrentChapter: boolean
   } | null>
+  enqueuePendingAnkiNote: (note: PendingAnkiNote) => Promise<PendingAnkiNote>
+  markPendingAnkiNotesFailed: (noteIds: string[], message: string) => Promise<void>
+  markPendingAnkiNotesImported: (noteIds: string[]) => Promise<void>
+  pendingAnkiNotes: PendingAnkiNote[]
   removeKnowledgeResourceBySignature: (signature: string) => Promise<void>
   saveManualDraftAsBook: (input: {
     articleTitle: string
@@ -289,20 +301,103 @@ export function useAppActions({
     sentence: SentenceItem,
     result: AnalysisResult,
     highlight: AnalysisHighlight,
-  ) => {
+  ): Promise<AddToAnkiResult> => {
     const noteHighlight = {
       ...highlight,
       id: `${sentence.id}:${highlight.kind}:${highlight.text}`,
     }
     const targetAnkiConfig =
       currentLanguage === 'ja' ? persistent.jaAnkiConfig : persistent.ankiConfig
+    const payload = buildAnkiNotePayload(sentence, result, noteHighlight, currentLanguage)
+
+    if (shouldQueueAnkiOnThisDevice()) {
+      await library.enqueuePendingAnkiNote(createPendingAnkiNote({
+        book: library.selectedBook,
+        chapter: activeChapter,
+        highlight: noteHighlight,
+        language: currentLanguage,
+        payload,
+        result,
+        sentence,
+      }))
+
+      return {
+        mode: 'queued',
+        message: `已将「${highlight.text}」保存到桌面端 Anki 待导入列表。`,
+      }
+    }
 
     await addNoteToAnki(
       targetAnkiConfig,
-      buildAnkiNotePayload(sentence, result, noteHighlight, currentLanguage),
+      payload,
       currentLanguage,
     )
-  }, [currentLanguage, persistent.ankiConfig, persistent.jaAnkiConfig])
+
+    return {
+      mode: 'direct',
+      message: `已将「${highlight.text}」添加到 Anki。`,
+    }
+  }, [
+    activeChapter,
+    currentLanguage,
+    library,
+    persistent.ankiConfig,
+    persistent.jaAnkiConfig,
+  ])
+
+  const handleImportPendingAnkiNotes = useCallback(async () => {
+    const pendingNotes = library.pendingAnkiNotes
+    if (pendingNotes.length === 0) {
+      return '当前没有待导入 Anki 的条目。'
+    }
+
+    const successfulNoteIds: string[] = []
+    const failedNoteIds: string[] = []
+
+    for (const language of ['es', 'ja'] as const) {
+      const languageNotes = pendingNotes.filter((note) => note.language === language)
+      if (languageNotes.length === 0) {
+        continue
+      }
+
+      const config = language === 'ja' ? persistent.jaAnkiConfig : persistent.ankiConfig
+
+      try {
+        const results = await addNotesToAnki(
+          config,
+          languageNotes.map((note) => note.payload),
+          language,
+        )
+
+        languageNotes.forEach((note, index) => {
+          const noteId = results[index]
+          if (noteId) {
+            successfulNoteIds.push(note.id)
+          } else {
+            failedNoteIds.push(note.id)
+          }
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Anki 批量导入失败。'
+        const noteIds = languageNotes.map((note) => note.id)
+        failedNoteIds.push(...noteIds)
+        await library.markPendingAnkiNotesFailed(noteIds, message)
+      }
+    }
+
+    if (successfulNoteIds.length > 0) {
+      await library.markPendingAnkiNotesImported(successfulNoteIds)
+    }
+
+    const unresolvedFailedNoteIds = Array.from(new Set(failedNoteIds))
+    if (unresolvedFailedNoteIds.length > 0) {
+      const message = `已导入 ${successfulNoteIds.length} 条，${unresolvedFailedNoteIds.length} 条失败，请检查 Anki 配置后重试。`
+      await library.markPendingAnkiNotesFailed(unresolvedFailedNoteIds, message)
+      throw new Error(message)
+    }
+
+    return `已将 ${successfulNoteIds.length} 条移动端保存的词汇添加到 Anki。`
+  }, [library, persistent.ankiConfig, persistent.jaAnkiConfig])
 
   const handleSetResumeAnchor = useCallback(async (sentence: SentenceItem, sentenceIndex: number) => {
     if (effectiveWorkspaceSource !== 'chapter') {
@@ -323,6 +418,7 @@ export function useAppActions({
 
   return {
     handleAddHighlightToAnki,
+    handleImportPendingAnkiNotes,
     handleClearLocalData,
     handleDeleteBook,
     handleDeleteChapter,

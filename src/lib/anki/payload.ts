@@ -246,3 +246,34 @@ export async function addNoteToAnki(
     throw new Error(toUserFacingAnkiError(error))
   }
 }
+
+export async function addNotesToAnki(
+  config: AnkiConfig,
+  payloads: readonly AnkiNotePayload[],
+  language: SraNoteTypeLanguage = 'es',
+) {
+  const issue = getAnkiFieldMappingIssues(config, language)[0]
+  if (issue) {
+    throw new Error(issue)
+  }
+
+  if (payloads.length === 0) {
+    return []
+  }
+
+  try {
+    return await invokeAnkiAction<Array<number | null>>(config.endpoint, 'addNotes', {
+      notes: payloads.map((payload) => ({
+        deckName: config.deck,
+        modelName: config.noteType,
+        fields: buildFields(config, payload, language),
+        options: {
+          allowDuplicate: true,
+        },
+        tags: ['sra-mobile-queue'],
+      })),
+    })
+  } catch (error) {
+    throw new Error(toUserFacingAnkiError(error))
+  }
+}

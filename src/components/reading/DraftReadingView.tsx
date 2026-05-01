@@ -4,6 +4,7 @@ import { JapaneseChunkView } from './JapaneseChunkView'
 import { getSentenceDisplayText, type HighlightSelection } from './readingShared'
 import type { JapaneseChunkSelection } from '../../lib/japaneseUtils'
 import type {
+  AddToAnkiResult,
   AnalysisHighlight,
   AnalysisResult,
   BookLanguage,
@@ -24,7 +25,7 @@ type DraftReadingViewProps = {
     sentence: SentenceItem,
     result: AnalysisResult,
     highlight: AnalysisHighlight,
-  ) => Promise<void>
+  ) => Promise<AddToAnkiResult>
   onBackToWorkspace: () => void
   onCloseReadingSettings: () => void
   onExplainVocabulary: (context: string, word: string) => Promise<VocabularyExplanation>

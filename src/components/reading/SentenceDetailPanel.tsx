@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { toUserFacingAnkiError } from '../../lib/anki'
 import { buildKnowledgeSignature, knowledgeKindLabelMap } from '../../lib/knowledge'
 import type {
+  AddToAnkiResult,
   AnalysisHighlight,
   AnalysisResult,
   SentenceItem,
@@ -54,7 +55,7 @@ type SentenceDetailPanelProps = {
     sentence: SentenceItem,
     result: AnalysisResult,
     highlight: AnalysisHighlight,
-  ) => Promise<void>
+  ) => Promise<AddToAnkiResult>
   onExplainVocabulary: (context: string, word: string) => Promise<VocabularyExplanation>
   onOpenResources: () => void
   onRemoveHighlight: (signature: string) => void
@@ -216,9 +217,9 @@ export function SentenceDetailPanel({
     })
 
     try {
-      await onAddToAnki(sentence, result, selectedHighlight)
+      const addResult = await onAddToAnki(sentence, result, selectedHighlight)
       setAnkiSubmitState({
-        message: `已将「${selectedHighlight.text}」添加到 Anki。`,
+        message: addResult.message,
         selectionKey: selectedHighlightKey,
         status: 'success',
       })
@@ -250,9 +251,9 @@ export function SentenceDetailPanel({
     })
 
     try {
-      await onAddToAnki(sentence, result, chunkHighlight)
+      const addResult = await onAddToAnki(sentence, result, chunkHighlight)
       setAnkiSubmitState({
-        message: `已将「${activeChunk.chunk}」添加到 Anki。`,
+        message: addResult.message,
         selectionKey: activeChunkKey,
         status: 'success',
       })

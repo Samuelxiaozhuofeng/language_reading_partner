@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { toUserFacingAnkiError } from '../../lib/anki'
 import type {
+  AddToAnkiResult,
   AnalysisHighlight,
   AnalysisResult,
   SentenceItem,
@@ -23,7 +24,7 @@ type UseVocabularyExplanationArgs = {
     sentence: SentenceItem,
     result: AnalysisResult,
     highlight: AnalysisHighlight,
-  ) => Promise<void>
+  ) => Promise<AddToAnkiResult>
   onExplainVocabulary: (context: string, word: string) => Promise<VocabularyExplanation>
   result?: AnalysisResult
   sentence: SentenceItem
@@ -138,12 +139,12 @@ export function useVocabularyExplanation({
     )
 
     try {
-      await onAddToAnki(sentence, result, vocabularyHighlight)
+      const addResult = await onAddToAnki(sentence, result, vocabularyHighlight)
       setState((current) =>
         current
           ? {
               ...current,
-              ankiMessage: `已将「${state.word}」添加到 Anki。`,
+              ankiMessage: addResult.message,
               ankiStatus: 'success',
             }
           : current,

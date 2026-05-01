@@ -61,22 +61,48 @@ create table if not exists public.resources (
   unique (user_id, signature)
 );
 
+create table if not exists public.pending_anki_notes (
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  dedupe_key text not null,
+  language text not null check (language in ('es', 'ja')),
+  payload jsonb not null,
+  text text not null,
+  kind text not null check (kind in ('grammar', 'phrase', 'vocabulary')),
+  explanation text not null,
+  sentence_id text not null,
+  sentence_text text not null,
+  created_at timestamptz not null,
+  imported_at timestamptz,
+  last_error text,
+  book_id uuid references public.books(id) on delete set null,
+  book_title text,
+  chapter_id uuid references public.chapters(id) on delete set null,
+  chapter_title text,
+  unique (user_id, dedupe_key)
+);
+
 create index if not exists books_user_recent_idx on public.books (user_id, coalesce(last_opened_at, imported_at) desc);
 create index if not exists books_user_collection_idx on public.books (user_id, collection_id);
 create index if not exists chapters_user_book_order_idx on public.chapters (user_id, book_id, order_index);
 create index if not exists resources_user_saved_idx on public.resources (user_id, saved_at desc);
 create index if not exists resources_user_kind_idx on public.resources (user_id, kind);
 create index if not exists resources_user_book_idx on public.resources (user_id, book_id);
+create index if not exists pending_anki_notes_user_pending_idx
+on public.pending_anki_notes (user_id, created_at desc)
+where imported_at is null;
 
 alter table public.collections enable row level security;
 alter table public.books enable row level security;
 alter table public.chapters enable row level security;
 alter table public.resources enable row level security;
+alter table public.pending_anki_notes enable row level security;
 
 drop policy if exists "Users can manage own collections" on public.collections;
 drop policy if exists "Users can manage own books" on public.books;
 drop policy if exists "Users can manage own chapters" on public.chapters;
 drop policy if exists "Users can manage own resources" on public.resources;
+drop policy if exists "Users can manage own pending anki notes" on public.pending_anki_notes;
 
 create policy "Users can manage own collections"
 on public.collections
@@ -101,6 +127,13 @@ with check ((select auth.uid()) = user_id);
 
 create policy "Users can manage own resources"
 on public.resources
+for all
+to authenticated
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
+
+create policy "Users can manage own pending anki notes"
+on public.pending_anki_notes
 for all
 to authenticated
 using ((select auth.uid()) = user_id)

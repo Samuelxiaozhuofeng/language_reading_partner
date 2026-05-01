@@ -33,6 +33,7 @@ export {
 } from './client'
 export { toUserFacingAnkiError } from './errors'
 export {
+  addNotesToAnki,
   addNoteToAnki,
   buildAnkiNotePayload,
   buildFields,
@@ -42,6 +43,7 @@ export {
   highlightKnowledgeInSentence,
 } from './payload'
 export type { AnkiNotePayload } from './payload'
+export { shouldQueueAnkiOnThisDevice } from './environment'
 export {
   createOrRepairSraAnkiNoteType,
   fetchAnkiModelTemplates,

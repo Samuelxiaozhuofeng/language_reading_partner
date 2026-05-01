@@ -4,6 +4,7 @@ import type {
   BookRecord,
   CollectionRecord,
   LibrarySelection,
+  PendingAnkiNote,
   SavedKnowledgeResource,
 } from '../../types'
 import { deriveBookAnalysisState, normalizeChapterRecord } from '../chapterText'
@@ -22,13 +23,17 @@ import {
   getChapter,
   getChaptersByBook,
   getCollections,
+  getPendingAnkiNotes,
   getSavedResourceBySignature,
   getSavedResources,
+  markPendingAnkiNotesImported,
   saveBook,
   saveChapter,
   saveCollection,
   saveImportedBook,
   saveKnowledgeResource,
+  savePendingAnkiNote,
+  savePendingAnkiNoteErrors,
   updateBookSnapshotSummary,
   updateBookReadingProgress,
   updateBookCollection,
@@ -97,10 +102,11 @@ export async function hydrateBookState(
 }
 
 export async function loadInitialLibraryState(userId: string) {
-  const [books, collections, savedResources] = await Promise.all([
+  const [books, collections, savedResources, pendingAnkiNotes] = await Promise.all([
     getBooks(userId),
     getCollections(userId),
     getSavedResources(userId),
+    getPendingAnkiNotes(userId),
   ])
   const hydratedBook = books[0]
     ? await hydrateBookState(userId, books[0].id, books[0].lastReadChapterId)
@@ -110,6 +116,7 @@ export async function loadInitialLibraryState(userId: string) {
     books,
     collections,
     hydratedBook,
+    pendingAnkiNotes,
     savedResources: sortSavedResources(savedResources),
   }
 }
@@ -423,6 +430,30 @@ export async function saveKnowledgeResourceToLibrary(
     : resource
 
   return saveKnowledgeResource(userId, nextResource)
+}
+
+export async function savePendingAnkiNoteToLibrary(
+  userId: string,
+  note: PendingAnkiNote,
+) {
+  return savePendingAnkiNote(userId, note)
+}
+
+export async function markPendingAnkiNotesImportedInLibrary(
+  userId: string,
+  noteIds: string[],
+) {
+  await markPendingAnkiNotesImported(userId, noteIds)
+  return getPendingAnkiNotes(userId)
+}
+
+export async function markPendingAnkiNotesFailedInLibrary(
+  userId: string,
+  noteIds: string[],
+  message: string,
+) {
+  await savePendingAnkiNoteErrors(userId, noteIds, message)
+  return getPendingAnkiNotes(userId)
 }
 
 export async function removeKnowledgeResourceFromLibrary(userId: string, resourceId: string) {

@@ -185,6 +185,7 @@ function App() {
     handleDeleteBook,
     handleDeleteChapter,
     handleImportFile,
+    handleImportPendingAnkiNotes,
     handleManualArticleTitleChange,
     handleOpenChapterReading,
     handleOpenChapterWorkspace,
@@ -479,7 +480,9 @@ function App() {
           onBackToReading={canBackToReading ? () => setActivePage('reading') : undefined}
           onDeleteResource={(resourceId) => void library.removeKnowledgeResourceById(resourceId)}
           onDeleteResources={(resourceIds) => void library.removeKnowledgeResourcesByIds(resourceIds)}
+          onImportPendingAnkiNotes={handleImportPendingAnkiNotes}
           onKindChange={setResourceFilter}
+          pendingAnkiNotes={library.pendingAnkiNotes}
           resources={library.savedResources}
         />
       )}

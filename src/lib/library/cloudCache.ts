@@ -4,6 +4,7 @@ import type {
   BookRecord,
   CollectionRecord,
   LibrarySelection,
+  PendingAnkiNote,
   SavedKnowledgeResource,
 } from '../../types'
 
@@ -18,6 +19,7 @@ export type CloudLibrarySnapshot = {
     chapters: BookChapterRecord[]
     selection: LibrarySelection
   } | null
+  pendingAnkiNotes: PendingAnkiNote[]
   savedResources: SavedKnowledgeResource[]
 }
 

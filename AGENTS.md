@@ -102,6 +102,52 @@
 - `npm run preview`：本地预览生产构建
 - `npm run lint`：运行 ESLint
 
+## Supabase Cloud Storage
+当前书架主数据源已经切换为 Supabase 云端存储。后续修改书架、章节、学习资源、登录或迁移逻辑时，必须遵守这一分层：
+
+- `src/lib/supabase/client.ts`
+  只负责创建 Supabase browser client 和读取 `VITE_SUPABASE_URL`、`VITE_SUPABASE_PUBLISHABLE_KEY`。
+- `src/lib/supabase/auth.ts`
+  放认证输入校验、错误文案和 auth 相关纯工具。
+- `src/hooks/useSupabaseAuth.ts`、`src/hooks/useSupabaseSession.ts`
+  负责邮箱密码登录、注册、退出、确认邮件重发和 session 恢复的 React 状态编排。
+- `src/lib/library/remoteRepository.ts`
+  是 Supabase Postgres / Storage 的唯一仓库访问层，负责 row/domain 映射、CRUD、Storage 上传下载删除和 Supabase 错误转译。
+- `src/lib/library/service.ts`
+  负责云端书架业务编排，例如导入、删除、章节打开、章节快照同步、旧数据迁移。
+- `src/hooks/useLibraryStore.ts`
+  负责页面级状态编排、乐观更新、防抖同步和错误提示，不直接写 Supabase 查询。
+
+Supabase schema 与安全规则：
+
+- 表、字段、索引、RLS policy、Storage bucket/policy 的来源文件是 `supabase/schema.sql`。
+- 当前业务表包括 `collections`、`books`、`chapters`、`resources`，都必须启用 RLS。
+- 暴露给前端的表 policy 必须限制到当前登录用户，保持 `to authenticated` 和 `(select auth.uid()) = user_id` 这一类隔离模型。
+- 前端只允许使用 publishable key。禁止把 Supabase secret key、service role key 或任何后端特权 key 放进 Vite 环境变量、源码、localStorage 或浏览器端 bundle。
+- `books.language` 的数据库 check 约束当前只允许 `es`、`ja`。新增语言时必须同步更新 `BookLanguage`、分句/prompt 路由、`supabase/schema.sql` 和 `src/lib/supabase/database.ts`。
+
+Supabase Storage 规则：
+
+- EPUB 原文件只放在私有 bucket `book-files`。
+- 文件路径必须以用户 ID 作为第一段，当前规则为 `${userId}/${bookId}/original.epub`。
+- 上传使用 upsert 时，Storage policy 必须同时允许目标用户路径下的 select、insert、update；删除文件需要 delete policy。
+- 不要把 EPUB 文件转为 public URL；下载必须通过已登录用户的 Supabase client 和 RLS/Storage policy。
+
+本地存储与迁移关系：
+
+- `src/lib/libraryDb.ts` 是历史 IndexedDB 书库实现，当前只应作为旧数据迁移来源，不应继续作为新书架功能的权威存储。
+- `src/lib/library/localMigration.ts` 负责读取旧 IndexedDB 数据并迁移到 Supabase。
+- `src/lib/library/cloudCache.ts` 是云端书架快照缓存，只用于加速首屏恢复；它不是离线写入队列，也不是冲突解决机制。
+- 历史 IndexedDB / localStorage key 中的 `spanish-reading-assistant` 是兼容旧数据的持久化标识，不能因为产品已多语言化而随意迁移、重命名或清空。
+
+Supabase 修改验证要求：
+
+- 改动 Supabase 相关 TypeScript 代码后，至少运行 `npm run lint` 和 `npm run build`。
+- 改动 `supabase/schema.sql`、RLS policy 或 Storage policy 后，除前端 lint/build 外，还必须记录 Supabase SQL/advisors 或手动验证结果。
+- 验证 schema/policy 时，应覆盖 authenticated 用户只能访问自己的 `collections`、`books`、`chapters`、`resources`，以及只能访问 `book-files` 中自己用户 ID 前缀下的 EPUB。
+- 如果当前环境没有 Supabase CLI、远程凭证或无法运行真实云端验证，最终回复必须明确说明未验证项，不能声称 schema/policy 已在云端成功。
+- `src/lib/supabase/database.ts` 是 generated-style 类型文件。修改 schema 后必须同步更新该文件；如果没有自动生成流程，需在变更说明中注明类型是人工同步。
+
 ## Change Workflow
 做任何代码修改时，遵循下面的流程：
 

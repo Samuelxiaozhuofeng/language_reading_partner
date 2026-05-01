@@ -4,6 +4,7 @@ import {
   type InspectorMode,
 } from './readingShared'
 import type {
+  AddToAnkiResult,
   AnalysisHighlight,
   AnalysisResult,
   SentenceItem,
@@ -24,7 +25,7 @@ type SentenceInspectorProps = {
     sentence: SentenceItem,
     result: AnalysisResult,
     highlight: AnalysisHighlight,
-  ) => Promise<void>
+  ) => Promise<AddToAnkiResult>
   onCloseSentence: () => void
   onExplainVocabulary: (context: string, word: string) => Promise<VocabularyExplanation>
   onOpenResources: () => void

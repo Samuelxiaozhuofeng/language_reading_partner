@@ -22,6 +22,7 @@ import {
   type InspectorMode,
 } from './reading/readingShared'
 import type {
+  AddToAnkiResult,
   AnalysisHighlight,
   AnalysisResult,
   BookLanguage,
@@ -47,7 +48,7 @@ type ReadingPageProps = {
     sentence: SentenceItem,
     result: AnalysisResult,
     highlight: AnalysisHighlight,
-  ) => Promise<void>
+  ) => Promise<AddToAnkiResult>
   onBackToWorkspace: () => void
   onExplainVocabulary: (context: string, word: string) => Promise<VocabularyExplanation>
   onOpenResources: () => void

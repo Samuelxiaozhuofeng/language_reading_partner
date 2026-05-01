@@ -6,6 +6,7 @@ import type {
   BookRecord,
   CollectionRecord,
   LibrarySelection,
+  PendingAnkiNote,
   SavedKnowledgeResource,
   SentenceItem,
 } from '../types'
@@ -25,6 +26,8 @@ import {
   loadBookFile,
   loadCachedInitialLibraryState,
   loadInitialLibraryState,
+  markPendingAnkiNotesFailedInLibrary,
+  markPendingAnkiNotesImportedInLibrary,
   migrateLegacyLocalLibraryStorage,
   moveBookToCollectionInLibrary,
   removeBookFromLibrary,
@@ -33,6 +36,7 @@ import {
   removeKnowledgeResourcesFromLibrary,
   saveInitialLibraryStateCache,
   saveKnowledgeResourceToLibrary,
+  savePendingAnkiNoteToLibrary,
   saveManualDraftToLibrary,
   syncChapterSnapshotToCloud,
   syncOpenedChapterToCloud,
@@ -64,6 +68,7 @@ type InitialLibraryState = {
   books: BookRecord[]
   collections: CollectionRecord[]
   hydratedBook: HydratedBookState | null
+  pendingAnkiNotes: PendingAnkiNote[]
   savedResources: SavedKnowledgeResource[]
 }
 
@@ -72,6 +77,7 @@ export function useLibraryStore(userId: string | null) {
   const [collections, setCollections] = useState<CollectionRecord[]>([])
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null)
   const [chapters, setChapters] = useState<BookChapterRecord[]>([])
+  const [pendingAnkiNotes, setPendingAnkiNotes] = useState<PendingAnkiNote[]>([])
   const [savedResources, setSavedResources] = useState<SavedKnowledgeResource[]>([])
   const [selection, setSelection] = useState<LibrarySelection>({ bookId: null, chapterId: null })
   const [currentChapter, setCurrentChapter] = useState<BookChapterRecord | null>(null)
@@ -155,6 +161,7 @@ export function useLibraryStore(userId: string | null) {
   const applyInitialLibraryState = useCallback((initialState: InitialLibraryState) => {
     setAllBooks(initialState.books)
     setCollections(initialState.collections)
+    setPendingAnkiNotes(initialState.pendingAnkiNotes ?? [])
     setSavedResources(initialState.savedResources)
     if (initialState.hydratedBook) {
       applyHydratedBook(initialState.hydratedBook)
@@ -262,6 +269,7 @@ export function useLibraryStore(userId: string | null) {
         setAllBooks([])
         setCollections([])
         setActiveCollectionId(null)
+        setPendingAnkiNotes([])
         setSavedResources([])
         clearBookSelection()
         setHasLoadedLibrary(false)
@@ -334,6 +342,7 @@ export function useLibraryStore(userId: string | null) {
       books: allBooks,
       collections,
       hydratedBook,
+      pendingAnkiNotes,
       savedResources,
     })
   }, [
@@ -341,6 +350,7 @@ export function useLibraryStore(userId: string | null) {
     chapters,
     collections,
     hasLoadedLibrary,
+    pendingAnkiNotes,
     savedResources,
     scheduleLibraryCacheSync,
     selectedBook,
@@ -571,6 +581,46 @@ export function useLibraryStore(userId: string | null) {
     return nextResource
   }, [userId])
 
+  const enqueuePendingAnkiNote = useCallback(async (note: PendingAnkiNote) => {
+    const cloudUserId = requireCloudUser(userId)
+    const nextNote = await savePendingAnkiNoteToLibrary(cloudUserId, note)
+    setPendingAnkiNotes((current) => [
+      nextNote,
+      ...current.filter((item) => item.id !== nextNote.id && item.dedupeKey !== nextNote.dedupeKey),
+    ])
+    setLibraryNotice(`已将「${nextNote.text}」加入桌面端 Anki 待导入列表。`)
+    setLibraryError('')
+    return nextNote
+  }, [userId])
+
+  const markPendingAnkiNotesImported = useCallback(async (noteIds: string[]) => {
+    if (noteIds.length === 0) {
+      return
+    }
+
+    const cloudUserId = requireCloudUser(userId)
+    const nextPendingNotes = await markPendingAnkiNotesImportedInLibrary(cloudUserId, noteIds)
+    setPendingAnkiNotes(nextPendingNotes)
+    setLibraryNotice(`已成功导入 ${noteIds.length} 条待同步 Anki 条目。`)
+    setLibraryError('')
+  }, [userId])
+
+  const markPendingAnkiNotesFailed = useCallback(async (noteIds: string[], message: string) => {
+    if (noteIds.length === 0) {
+      return
+    }
+
+    const cloudUserId = requireCloudUser(userId)
+    const nextPendingNotes = await markPendingAnkiNotesFailedInLibrary(
+      cloudUserId,
+      noteIds,
+      message,
+    )
+    setPendingAnkiNotes(nextPendingNotes)
+    setLibraryNotice('')
+    setLibraryError(message)
+  }, [userId])
+
   const removeKnowledgeResourceById = useCallback(async (resourceId: string) => {
     const target = savedResources.find((resource) => resource.id === resourceId)
     if (!target) {
@@ -709,6 +759,7 @@ export function useLibraryStore(userId: string | null) {
     setChapters([])
     currentChapterRef.current = null
     setCurrentChapter(null)
+    setPendingAnkiNotes([])
     setSavedResources([])
     setSelection({ bookId: null, chapterId: null })
     setLibraryNotice('书架数据已清空。')
@@ -730,6 +781,7 @@ export function useLibraryStore(userId: string | null) {
       const initialState = await migrateLegacyLocalLibraryStorage(cloudUserId)
       setAllBooks(initialState.books)
       setCollections(initialState.collections)
+      setPendingAnkiNotes(initialState.pendingAnkiNotes)
       setSavedResources(initialState.savedResources)
       applyHydratedBook(initialState.hydratedBook)
       setHasLegacyLocalLibrary(false)
@@ -753,6 +805,7 @@ export function useLibraryStore(userId: string | null) {
     currentChapter,
     deleteCollection,
     getBookFile,
+    pendingAnkiNotes,
     savedResources,
     importBook,
     hasLegacyLocalLibrary,
@@ -769,6 +822,9 @@ export function useLibraryStore(userId: string | null) {
     selection,
     moveBookToCollection,
     migrateLegacyLocalLibrary,
+    enqueuePendingAnkiNote,
+    markPendingAnkiNotesFailed,
+    markPendingAnkiNotesImported,
     removeKnowledgeResourceById,
     removeKnowledgeResourcesByIds,
     removeKnowledgeResourceBySignature,

@@ -95,6 +95,48 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['collections']['Insert']>
         Relationships: []
       }
+      pending_anki_notes: {
+        Row: {
+          id: string
+          user_id: string
+          dedupe_key: string
+          language: string
+          payload: Json
+          text: string
+          kind: string
+          explanation: string
+          sentence_id: string
+          sentence_text: string
+          created_at: string
+          imported_at: string | null
+          last_error: string | null
+          book_id: string | null
+          book_title: string | null
+          chapter_id: string | null
+          chapter_title: string | null
+        }
+        Insert: {
+          id: string
+          user_id: string
+          dedupe_key: string
+          language: string
+          payload: Json
+          text: string
+          kind: string
+          explanation: string
+          sentence_id: string
+          sentence_text: string
+          created_at: string
+          imported_at?: string | null
+          last_error?: string | null
+          book_id?: string | null
+          book_title?: string | null
+          chapter_id?: string | null
+          chapter_title?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['pending_anki_notes']['Insert']>
+        Relationships: []
+      }
       resources: {
         Row: {
           id: string
