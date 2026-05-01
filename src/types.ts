@@ -162,6 +162,7 @@ export type BookRecord = {
   sourceType?: 'epub' | 'manual'
   coverUrl?: string
   collectionId?: string
+  epubFilePath?: string
   importedAt: string
   chapterCount: number
   lastReadChapterId?: string

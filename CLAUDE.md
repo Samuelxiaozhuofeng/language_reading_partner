@@ -35,7 +35,7 @@ Users import EPUB books or paste text, choose a reading language, sentences are 
 
 ### State Management
 
-- `useLibraryStore` — IndexedDB-backed library state (books, chapters, resources)
+- `useLibraryStore` — Supabase-backed cloud library state (books, chapters, resources) with legacy IndexedDB import
 - `usePersistentConfig` — localStorage-backed user settings (API config, prompts, Anki)
 - `useWorkspaceBinding` — workspace state (sentences, analysis results, source text)
 - `useAnalysisRunner` — orchestrates concurrent AI analysis with a worker-pool queue
@@ -44,7 +44,8 @@ Users import EPUB books or paste text, choose a reading language, sentences are 
 
 - `src/lib/` — core business logic
   - `openai.ts` — OpenAI client, concurrent analysis orchestration (`runConcurrentAnalysis`)
-  - `libraryDb.ts` — IndexedDB schema & CRUD
+  - `libraryDb.ts` — legacy IndexedDB reader used only for one-time local library migration
+  - `supabase/` — Supabase client and generated-style database types
   - `appState.ts` — config defaults, localStorage persistence
   - `segment.ts` — language-routed sentence segmentation (`es` default path, `ja` Japanese path)
   - `epub.ts` — EPUB parsing and chapter extraction
@@ -58,12 +59,13 @@ Users import EPUB books or paste text, choose a reading language, sentences are 
 
 ### Analysis Pipeline
 
-Sentences are queued → dispatched to a configurable worker pool (default concurrency 4, max 99) → each call hits the configured OpenAI-compatible endpoint with a JSON-schema-enforced system prompt → results parsed (with fallback for non-JSON) → stored in IndexedDB. AbortSignal cancellation and 60s per-request timeout are supported.
+Sentences are queued → dispatched to a configurable worker pool (default concurrency 4, max 99) → each call hits the configured OpenAI-compatible endpoint with a JSON-schema-enforced system prompt → results parsed (with fallback for non-JSON) → stored with the active cloud chapter record. AbortSignal cancellation and 60s per-request timeout are supported.
 
 ### Persistence
 
 - **localStorage**: API config, prompt templates, Anki config, reading preferences, draft auto-save, session history (max 6)
-- **IndexedDB** (via `idb`): books, chapters with full sentence/analysis data, saved knowledge resources
+- **Supabase Postgres + Storage**: authenticated cloud library data, including books, chapters with full sentence/analysis data, saved knowledge resources, and private EPUB files
+- **IndexedDB** (via `idb`): legacy local library data, read only for first-login migration
 
 ### Prompt Engineering
 

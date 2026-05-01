@@ -14,11 +14,13 @@ import {
   clearLibraryStorage,
   createCollectionInLibrary,
   deleteCollectionFromLibrary,
+  hasLegacyLocalLibraryStorage,
   type HydratedBookState,
   hydrateBookState,
   importBookToLibrary,
   loadBookFile,
   loadInitialLibraryState,
+  migrateLegacyLocalLibraryStorage,
   moveBookToCollectionInLibrary,
   openChapterRecord,
   persistChapterRecord,
@@ -41,7 +43,15 @@ function filterBooksByCollection(books: BookRecord[], collectionId: string | nul
   return collectionId ? books.filter((book) => book.collectionId === collectionId) : books
 }
 
-export function useLibraryStore() {
+function requireCloudUser(userId: string | null) {
+  if (!userId) {
+    throw new Error('请先登录后再使用云端书架。')
+  }
+
+  return userId
+}
+
+export function useLibraryStore(userId: string | null) {
   const [allBooks, setAllBooks] = useState<BookRecord[]>([])
   const [collections, setCollections] = useState<CollectionRecord[]>([])
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null)
@@ -51,6 +61,8 @@ export function useLibraryStore() {
   const [currentChapter, setCurrentChapter] = useState<BookChapterRecord | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isImporting, setIsImporting] = useState(false)
+  const [hasLegacyLocalLibrary, setHasLegacyLocalLibrary] = useState(false)
+  const [isMigratingLegacyLibrary, setIsMigratingLegacyLibrary] = useState(false)
   const [libraryNotice, setLibraryNotice] = useState('')
   const [libraryError, setLibraryError] = useState('')
   const currentChapterRef = useRef<BookChapterRecord | null>(null)
@@ -100,9 +112,10 @@ export function useLibraryStore() {
   }, [])
 
   const hydrateBook = useCallback(async (bookId: string, preferredChapterId?: string | null) => {
-    const hydratedBook = await hydrateBookState(bookId, preferredChapterId)
+    const cloudUserId = requireCloudUser(userId)
+    const hydratedBook = await hydrateBookState(cloudUserId, bookId, preferredChapterId)
     applyHydratedBook(hydratedBook)
-  }, [applyHydratedBook])
+  }, [applyHydratedBook, userId])
 
   const clearBookSelection = useCallback(() => {
     currentChapterRef.current = null
@@ -129,8 +142,25 @@ export function useLibraryStore() {
     let isCancelled = false
 
     async function bootstrap() {
+      if (!userId) {
+        setAllBooks([])
+        setCollections([])
+        setActiveCollectionId(null)
+        setSavedResources([])
+        clearBookSelection()
+        setHasLegacyLocalLibrary(false)
+        setLibraryError('')
+        setIsLoading(false)
+        return
+      }
+
       try {
-        const initialState = await loadInitialLibraryState()
+        setIsLoading(true)
+        setActiveCollectionId(null)
+        const [initialState, nextHasLegacyLocalLibrary] = await Promise.all([
+          loadInitialLibraryState(userId),
+          hasLegacyLocalLibraryStorage(),
+        ])
         if (isCancelled) {
           return
         }
@@ -138,7 +168,12 @@ export function useLibraryStore() {
         setAllBooks(initialState.books)
         setCollections(initialState.collections)
         setSavedResources(initialState.savedResources)
-        applyHydratedBook(initialState.hydratedBook)
+        setHasLegacyLocalLibrary(nextHasLegacyLocalLibrary)
+        if (initialState.hydratedBook) {
+          applyHydratedBook(initialState.hydratedBook)
+        } else {
+          clearBookSelection()
+        }
       } catch (error) {
         if (!isCancelled) {
           setLibraryError(error instanceof Error ? error.message : '书架初始化失败。')
@@ -155,11 +190,12 @@ export function useLibraryStore() {
     return () => {
       isCancelled = true
     }
-  }, [applyHydratedBook])
+  }, [applyHydratedBook, clearBookSelection, userId])
 
   const persistChapter = useCallback(
     async (chapter: BookChapterRecord, options?: PersistChapterOptions) => {
-      const persisted = await persistChapterRecord(chapter, options)
+      const cloudUserId = requireCloudUser(userId)
+      const persisted = await persistChapterRecord(cloudUserId, chapter, options)
       setCurrentChapter((current) => (current?.id === persisted.chapter.id ? persisted.chapter : current))
       if (selection.bookId === persisted.chapter.bookId) {
         setChapters(persisted.chapters)
@@ -169,7 +205,7 @@ export function useLibraryStore() {
         setAllBooks((currentBooks) => updateBookInList(currentBooks, persistedBook))
       }
     },
-    [selection.bookId],
+    [selection.bookId, userId],
   )
 
   const updateCurrentChapter = useCallback(
@@ -202,7 +238,8 @@ export function useLibraryStore() {
 
   const openChapter = useCallback(
     async (chapterId: string) => {
-      const payload = await openChapterRecord(chapterId)
+      const cloudUserId = requireCloudUser(userId)
+      const payload = await openChapterRecord(cloudUserId, chapterId)
       if (!payload) {
         setLibraryError('章节不存在，可能已经被删除。')
         return null
@@ -221,15 +258,16 @@ export function useLibraryStore() {
       setLibraryError('')
       return payload.persisted.chapter
     },
-    [applyHydratedBook],
+    [applyHydratedBook, userId],
   )
 
   const importBook = useCallback(async (file: File, language: BookLanguage) => {
+    const cloudUserId = requireCloudUser(userId)
     setIsImporting(true)
     setLibraryError('')
 
     try {
-      const payload = await importBookToLibrary(file, language)
+      const payload = await importBookToLibrary(cloudUserId, file, language)
       setActiveCollectionId(null)
       setAllBooks((current) => updateBookInList(current, payload.book))
       setChapters(payload.chapters)
@@ -246,7 +284,7 @@ export function useLibraryStore() {
     } finally {
       setIsImporting(false)
     }
-  }, [])
+  }, [userId])
 
   const saveManualDraftAsBook = useCallback(async ({
     articleTitle,
@@ -269,7 +307,8 @@ export function useLibraryStore() {
       return null
     }
 
-    const payload = await saveManualDraftToLibrary({
+    const cloudUserId = requireCloudUser(userId)
+    const payload = await saveManualDraftToLibrary(cloudUserId, {
       articleTitle: articleTitle.trim(),
       language,
       results,
@@ -287,11 +326,12 @@ export function useLibraryStore() {
     setLibraryError('')
 
     return payload
-  }, [])
+  }, [userId])
 
   const removeBook = useCallback(
     async (bookId: string) => {
-      const nextBooks = await removeBookFromLibrary(bookId)
+      const cloudUserId = requireCloudUser(userId)
+      const nextBooks = await removeBookFromLibrary(cloudUserId, bookId)
       setAllBooks(nextBooks)
       setSavedResources((current) => current.filter((resource) => resource.bookId !== bookId))
 
@@ -299,15 +339,16 @@ export function useLibraryStore() {
         await hydrateFirstVisibleBook(nextBooks, activeCollectionId)
       }
 
-      setLibraryNotice('书籍已从本地书架移除。')
+      setLibraryNotice('书籍已从云端书架移除。')
       setLibraryError('')
     },
-    [activeCollectionId, hydrateFirstVisibleBook, selection.bookId],
+    [activeCollectionId, hydrateFirstVisibleBook, selection.bookId, userId],
   )
 
   const removeChapter = useCallback(
     async (chapterId: string): Promise<{ nextCurrentChapterId: string | null; removedCurrentChapter: boolean } | null> => {
-      const payload = await removeChapterFromLibrary(chapterId)
+      const cloudUserId = requireCloudUser(userId)
+      const payload = await removeChapterFromLibrary(cloudUserId, chapterId)
       if (!payload) {
         setLibraryError('章节不存在，可能已经被删除。')
         return null
@@ -349,11 +390,12 @@ export function useLibraryStore() {
         removedCurrentChapter,
       }
     },
-    [selection.bookId, selection.chapterId],
+    [selection.bookId, selection.chapterId, userId],
   )
 
   const upsertKnowledgeResource = useCallback(async (resource: SavedKnowledgeResource) => {
-    const nextResource = await saveKnowledgeResourceToLibrary(resource)
+    const cloudUserId = requireCloudUser(userId)
+    const nextResource = await saveKnowledgeResourceToLibrary(cloudUserId, resource)
     setSavedResources((current) =>
       sortSavedResources(
         current.filter(
@@ -364,7 +406,7 @@ export function useLibraryStore() {
     setLibraryNotice(`已收藏「${nextResource.text}」到学习资源。`)
     setLibraryError('')
     return nextResource
-  }, [])
+  }, [userId])
 
   const removeKnowledgeResourceById = useCallback(async (resourceId: string) => {
     const target = savedResources.find((resource) => resource.id === resourceId)
@@ -372,11 +414,12 @@ export function useLibraryStore() {
       return
     }
 
-    await removeKnowledgeResourceFromLibrary(resourceId)
+    const cloudUserId = requireCloudUser(userId)
+    await removeKnowledgeResourceFromLibrary(cloudUserId, resourceId)
     setSavedResources((current) => current.filter((resource) => resource.id !== resourceId))
     setLibraryNotice(`已从学习资源移除「${target.text}」。`)
     setLibraryError('')
-  }, [savedResources])
+  }, [savedResources, userId])
 
   const removeKnowledgeResourceBySignature = useCallback(async (signature: string) => {
     const target = savedResources.find((resource) => resource.signature === signature)
@@ -397,11 +440,12 @@ export function useLibraryStore() {
       return
     }
 
-    await removeKnowledgeResourcesFromLibrary(targets.map((resource) => resource.id))
+    const cloudUserId = requireCloudUser(userId)
+    await removeKnowledgeResourcesFromLibrary(cloudUserId, targets.map((resource) => resource.id))
     setSavedResources((current) => current.filter((resource) => !resourceIds.includes(resource.id)))
     setLibraryNotice(`已从学习资源移除 ${targets.length} 条知识点。`)
     setLibraryError('')
-  }, [savedResources])
+  }, [savedResources, userId])
 
   const setActiveCollection = useCallback(
     async (collectionId: string | null) => {
@@ -420,7 +464,8 @@ export function useLibraryStore() {
   const createCollection = useCallback(
     async (name: string) => {
       try {
-        const payload = await createCollectionInLibrary(name)
+        const cloudUserId = requireCloudUser(userId)
+        const payload = await createCollectionInLibrary(cloudUserId, name)
         setCollections(payload.collections)
         setActiveCollectionId(payload.collection.id)
         await hydrateFirstVisibleBook(allBooks, payload.collection.id)
@@ -431,14 +476,15 @@ export function useLibraryStore() {
         setLibraryError(error instanceof Error ? error.message : '集合创建失败。')
       }
     },
-    [allBooks, hydrateFirstVisibleBook],
+    [allBooks, hydrateFirstVisibleBook, userId],
   )
 
   const deleteCollection = useCallback(
     async (collectionId: string) => {
       try {
         const target = collections.find((collection) => collection.id === collectionId)
-        const payload = await deleteCollectionFromLibrary(collectionId)
+        const cloudUserId = requireCloudUser(userId)
+        const payload = await deleteCollectionFromLibrary(cloudUserId, collectionId)
         const nextActiveCollectionId =
           activeCollectionId === collectionId ? null : activeCollectionId
         const nextVisibleBooks = filterBooksByCollection(payload.books, nextActiveCollectionId)
@@ -458,13 +504,14 @@ export function useLibraryStore() {
         setLibraryError(error instanceof Error ? error.message : '集合删除失败。')
       }
     },
-    [activeCollectionId, collections, hydrateFirstVisibleBook, selection.bookId],
+    [activeCollectionId, collections, hydrateFirstVisibleBook, selection.bookId, userId],
   )
 
   const moveBookToCollection = useCallback(
     async (bookId: string, collectionId: string | null) => {
       try {
-        const payload = await moveBookToCollectionInLibrary(bookId, collectionId)
+        const cloudUserId = requireCloudUser(userId)
+        const payload = await moveBookToCollectionInLibrary(cloudUserId, bookId, collectionId)
         const nextVisibleBooks = filterBooksByCollection(payload.books, activeCollectionId)
         const targetCollection = collectionId
           ? collections.find((collection) => collection.id === collectionId)
@@ -487,11 +534,12 @@ export function useLibraryStore() {
         setLibraryError(error instanceof Error ? error.message : '移动书籍失败。')
       }
     },
-    [activeCollectionId, collections, hydrateFirstVisibleBook, selection.bookId],
+    [activeCollectionId, collections, hydrateFirstVisibleBook, selection.bookId, userId],
   )
 
   const clearLibrary = useCallback(async () => {
-    await clearLibraryStorage()
+    const cloudUserId = requireCloudUser(userId)
+    await clearLibraryStorage(cloudUserId)
     setAllBooks([])
     setCollections([])
     setActiveCollectionId(null)
@@ -502,11 +550,34 @@ export function useLibraryStore() {
     setSelection({ bookId: null, chapterId: null })
     setLibraryNotice('书架数据已清空。')
     setLibraryError('')
-  }, [])
+  }, [userId])
 
   const getBookFile = useCallback(async (bookId: string) => {
-    return loadBookFile(bookId)
-  }, [])
+    const cloudUserId = requireCloudUser(userId)
+    return loadBookFile(cloudUserId, bookId)
+  }, [userId])
+
+  const migrateLegacyLocalLibrary = useCallback(async () => {
+    const cloudUserId = requireCloudUser(userId)
+    setIsMigratingLegacyLibrary(true)
+    setLibraryError('')
+    setLibraryNotice('')
+
+    try {
+      const initialState = await migrateLegacyLocalLibraryStorage(cloudUserId)
+      setAllBooks(initialState.books)
+      setCollections(initialState.collections)
+      setSavedResources(initialState.savedResources)
+      applyHydratedBook(initialState.hydratedBook)
+      setHasLegacyLocalLibrary(false)
+      setLibraryNotice('旧本地书库已导入云端。')
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : '旧本地书库导入失败。')
+      throw error
+    } finally {
+      setIsMigratingLegacyLibrary(false)
+    }
+  }, [applyHydratedBook, userId])
 
   return {
     adjacentChapterIds,
@@ -521,9 +592,11 @@ export function useLibraryStore() {
     getBookFile,
     savedResources,
     importBook,
+    hasLegacyLocalLibrary,
     saveManualDraftAsBook,
     isImporting,
     isLoading,
+    isMigratingLegacyLibrary,
     libraryError,
     libraryNotice,
     openChapter,
@@ -533,6 +606,7 @@ export function useLibraryStore() {
     selectedBook,
     selection,
     moveBookToCollection,
+    migrateLegacyLocalLibrary,
     removeKnowledgeResourceById,
     removeKnowledgeResourcesByIds,
     removeKnowledgeResourceBySignature,

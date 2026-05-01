@@ -33,3 +33,4 @@ public/dict/
 *.sw?
 untitled.md
 123.md
+.env*.local

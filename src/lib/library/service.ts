@@ -30,7 +30,11 @@ import {
   saveImportedBook,
   saveKnowledgeResource,
   updateBookCollection,
-} from '../libraryDb'
+} from './remoteRepository'
+import {
+  hasLegacyLocalLibraryData,
+  loadLegacyLocalLibrarySnapshot,
+} from './localMigration'
 import { createManualDraftBookPayload, type CreateManualDraftBookPayloadInput } from './manualDraft'
 
 export type PersistChapterOptions = {
@@ -50,10 +54,14 @@ export type HydratedBookState = {
 }
 
 export async function hydrateBookState(
+  userId: string,
   bookId: string,
   preferredChapterId?: string | null,
 ): Promise<HydratedBookState | null> {
-  const [nextBook, nextChaptersRaw] = await Promise.all([getBook(bookId), getChaptersByBook(bookId)])
+  const [nextBook, nextChaptersRaw] = await Promise.all([
+    getBook(userId, bookId),
+    getChaptersByBook(userId, bookId),
+  ])
   if (!nextBook) {
     return null
   }
@@ -69,14 +77,14 @@ export async function hydrateBookState(
   }
 }
 
-export async function loadInitialLibraryState() {
+export async function loadInitialLibraryState(userId: string) {
   const [books, collections, savedResources] = await Promise.all([
-    getBooks(),
-    getCollections(),
-    getSavedResources(),
+    getBooks(userId),
+    getCollections(userId),
+    getSavedResources(userId),
   ])
   const hydratedBook = books[0]
-    ? await hydrateBookState(books[0].id, books[0].lastReadChapterId)
+    ? await hydrateBookState(userId, books[0].id, books[0].lastReadChapterId)
     : null
 
   return {
@@ -87,7 +95,7 @@ export async function loadInitialLibraryState() {
   }
 }
 
-export async function createCollectionInLibrary(name: string) {
+export async function createCollectionInLibrary(userId: string, name: string) {
   const collectionName = name.trim()
 
   if (!collectionName) {
@@ -100,28 +108,29 @@ export async function createCollectionInLibrary(name: string) {
     createdAt: Date.now(),
   }
 
-  await saveCollection(collection)
+  await saveCollection(userId, collection)
 
   return {
     collection,
-    collections: await getCollections(),
+    collections: await getCollections(userId),
   }
 }
 
-export async function deleteCollectionFromLibrary(collectionId: string) {
-  await deleteCollection(collectionId)
+export async function deleteCollectionFromLibrary(userId: string, collectionId: string) {
+  await deleteCollection(userId, collectionId)
 
   return {
-    books: await getBooks(),
-    collections: await getCollections(),
+    books: await getBooks(userId),
+    collections: await getCollections(userId),
   }
 }
 
 export async function moveBookToCollectionInLibrary(
+  userId: string,
   bookId: string,
   collectionId: string | null,
 ) {
-  const book = await updateBookCollection(bookId, collectionId)
+  const book = await updateBookCollection(userId, bookId, collectionId)
 
   if (!book) {
     throw new Error('书籍不存在，可能已经被删除。')
@@ -129,11 +138,12 @@ export async function moveBookToCollectionInLibrary(
 
   return {
     book,
-    books: await getBooks(),
+    books: await getBooks(userId),
   }
 }
 
 export async function persistChapterRecord(
+  userId: string,
   chapter: BookChapterRecord,
   options?: PersistChapterOptions,
 ) {
@@ -142,12 +152,12 @@ export async function persistChapterRecord(
     lastOpenedAt: options?.markOpened ? timestamp : chapter.lastOpenedAt,
   })
 
-  await saveChapter(nextChapter)
+  await saveChapter(userId, nextChapter)
 
-  const nextChapters = (await getChaptersByBook(nextChapter.bookId)).map((item) =>
+  const nextChapters = (await getChaptersByBook(userId, nextChapter.bookId)).map((item) =>
     normalizeChapterRecord(item),
   )
-  const currentBook = await getBook(nextChapter.bookId)
+  const currentBook = await getBook(userId, nextChapter.bookId)
   const nextBook = currentBook
     ? {
         ...currentBook,
@@ -159,7 +169,7 @@ export async function persistChapterRecord(
     : null
 
   if (nextBook) {
-    await saveBook(nextBook)
+    await saveBook(userId, nextBook)
   }
 
   return {
@@ -169,15 +179,15 @@ export async function persistChapterRecord(
   }
 }
 
-export async function openChapterRecord(chapterId: string) {
-  const chapterRecord = await getChapter(chapterId)
+export async function openChapterRecord(userId: string, chapterId: string) {
+  const chapterRecord = await getChapter(userId, chapterId)
   if (!chapterRecord) {
     return null
   }
 
   const chapter = normalizeChapterRecord(chapterRecord)
-  const hydratedBook = await hydrateBookState(chapter.bookId, chapterId)
-  const persisted = await persistChapterRecord(chapter, { markOpened: true })
+  const hydratedBook = await hydrateBookState(userId, chapter.bookId, chapterId)
+  const persisted = await persistChapterRecord(userId, chapter, { markOpened: true })
 
   return {
     chapter,
@@ -186,55 +196,62 @@ export async function openChapterRecord(chapterId: string) {
   }
 }
 
-export async function importBookToLibrary(file: File, language: BookLanguage) {
+export async function importBookToLibrary(userId: string, file: File, language: BookLanguage) {
   const payload = await importEpubBook(file, language)
   const chapters = payload.chapters.map((chapter) => normalizeChapterRecord(chapter))
-  await saveImportedBook(payload.book, chapters, payload.fileData)
+  const book = await saveImportedBook(userId, payload.book, chapters, payload.fileData)
 
   return {
-    book: payload.book,
+    book,
     chapters,
     currentChapter: chapters[0] ?? null,
     selection: {
-      bookId: payload.book.id,
+      bookId: book.id,
       chapterId: chapters[0]?.id ?? null,
     } satisfies LibrarySelection,
   }
 }
 
-export async function saveManualDraftToLibrary(input: CreateManualDraftBookPayloadInput) {
+export async function saveManualDraftToLibrary(
+  userId: string,
+  input: CreateManualDraftBookPayloadInput,
+) {
   const payload = createManualDraftBookPayload(input)
-  await saveImportedBook(payload.book, payload.chapters)
+  const book = await saveImportedBook(userId, payload.book, payload.chapters)
 
   return {
     ...payload,
+    book,
     currentChapter: payload.chapters[0] ?? null,
     selection: {
-      bookId: payload.book.id,
+      bookId: book.id,
       chapterId: payload.chapters[0]?.id ?? null,
     } satisfies LibrarySelection,
   }
 }
 
-export async function loadBookFile(bookId: string) {
-  return getBookFile(bookId)
+export async function loadBookFile(userId: string, bookId: string) {
+  return getBookFile(userId, bookId)
 }
 
-export async function removeBookFromLibrary(bookId: string) {
-  await deleteBookCascade(bookId)
-  return getBooks()
+export async function removeBookFromLibrary(userId: string, bookId: string) {
+  await deleteBookCascade(userId, bookId)
+  return getBooks(userId)
 }
 
-export async function removeChapterFromLibrary(chapterId: string): Promise<RemoveChapterResult | null> {
-  const chapterRecord = await getChapter(chapterId)
+export async function removeChapterFromLibrary(
+  userId: string,
+  chapterId: string,
+): Promise<RemoveChapterResult | null> {
+  const chapterRecord = await getChapter(userId, chapterId)
   if (!chapterRecord) {
     return null
   }
 
   const removedChapter = normalizeChapterRecord(chapterRecord)
-  await deleteChapterCascade(chapterId)
+  await deleteChapterCascade(userId, chapterId)
 
-  const siblingChapters = (await getChaptersByBook(removedChapter.bookId)).map((chapter) =>
+  const siblingChapters = (await getChaptersByBook(userId, removedChapter.bookId)).map((chapter) =>
     normalizeChapterRecord(chapter),
   )
   const nextChapters = siblingChapters
@@ -255,12 +272,12 @@ export async function removeChapterFromLibrary(chapterId: string): Promise<Remov
         (currentChapter) =>
           currentChapter.id === chapter.id && currentChapter.order !== chapter.order,
       )
-        ? saveChapter(chapter)
+        ? saveChapter(userId, chapter)
         : Promise.resolve(),
     ),
   )
 
-  const currentBook = await getBook(removedChapter.bookId)
+  const currentBook = await getBook(userId, removedChapter.bookId)
   const fallbackChapter =
     nextChapters[removedChapter.order] ?? nextChapters[removedChapter.order - 1] ?? null
   const nextBook = currentBook
@@ -276,7 +293,7 @@ export async function removeChapterFromLibrary(chapterId: string): Promise<Remov
     : null
 
   if (nextBook) {
-    await saveBook(nextBook)
+    await saveBook(userId, nextBook)
   }
 
   return {
@@ -286,8 +303,11 @@ export async function removeChapterFromLibrary(chapterId: string): Promise<Remov
   }
 }
 
-export async function saveKnowledgeResourceToLibrary(resource: SavedKnowledgeResource) {
-  const existing = await getSavedResourceBySignature(resource.signature)
+export async function saveKnowledgeResourceToLibrary(
+  userId: string,
+  resource: SavedKnowledgeResource,
+) {
+  const existing = await getSavedResourceBySignature(userId, resource.signature)
   const nextResource = existing
     ? {
         ...existing,
@@ -296,18 +316,39 @@ export async function saveKnowledgeResourceToLibrary(resource: SavedKnowledgeRes
       }
     : resource
 
-  await saveKnowledgeResource(nextResource)
-  return nextResource
+  return saveKnowledgeResource(userId, nextResource)
 }
 
-export async function removeKnowledgeResourceFromLibrary(resourceId: string) {
-  await deleteKnowledgeResource(resourceId)
+export async function removeKnowledgeResourceFromLibrary(userId: string, resourceId: string) {
+  await deleteKnowledgeResource(userId, resourceId)
 }
 
-export async function removeKnowledgeResourcesFromLibrary(resourceIds: string[]) {
-  await deleteKnowledgeResources(resourceIds)
+export async function removeKnowledgeResourcesFromLibrary(userId: string, resourceIds: string[]) {
+  await deleteKnowledgeResources(userId, resourceIds)
 }
 
-export async function clearLibraryStorage() {
-  await clearLibraryDb()
+export async function clearLibraryStorage(userId: string) {
+  await clearLibraryDb(userId)
+}
+
+export async function hasLegacyLocalLibraryStorage() {
+  return hasLegacyLocalLibraryData()
+}
+
+export async function migrateLegacyLocalLibraryStorage(userId: string) {
+  const snapshot = await loadLegacyLocalLibrarySnapshot()
+
+  for (const collection of snapshot.collections) {
+    await saveCollection(userId, collection)
+  }
+
+  for (const payload of snapshot.books) {
+    await saveImportedBook(userId, payload.book, payload.chapters, payload.fileData)
+  }
+
+  for (const resource of snapshot.savedResources) {
+    await saveKnowledgeResource(userId, resource)
+  }
+
+  return loadInitialLibraryState(userId)
 }

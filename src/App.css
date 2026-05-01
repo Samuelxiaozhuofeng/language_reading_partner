@@ -20,6 +20,38 @@
   align-items: start;
 }
 
+.auth-gate {
+  display: grid;
+  place-items: start center;
+}
+
+.auth-panel {
+  width: min(560px, 100%);
+}
+
+.auth-form {
+  display: grid;
+  gap: 16px;
+}
+
+.legacy-migration-panel {
+  margin-bottom: 24px;
+  padding: 20px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.legacy-migration-panel h2,
+.legacy-migration-panel p {
+  margin: 0;
+}
+
+.legacy-migration-panel .panel-tip {
+  margin-top: 8px;
+}
+
 .hero-copy,
 .hero-metrics,
 .panel,
@@ -2430,6 +2462,7 @@ blockquote {
   }
 
   .panel-header,
+  .legacy-migration-panel,
   .reading-page-header,
   .hero-topline,
   .library-header-top,

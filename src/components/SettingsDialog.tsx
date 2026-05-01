@@ -127,11 +127,11 @@ function SettingsDialog({
           <div className="settings-header-copy">
             <p className="section-kicker">Settings</p>
             <h2>设置</h2>
-            <p className="panel-tip settings-header-tip">配置会自动保存在当前浏览器。</p>
+            <p className="panel-tip settings-header-tip">配置保存在当前浏览器；书架登录后保存在云端。</p>
           </div>
           <div className="panel-actions settings-header-actions">
             <button className="ghost-button danger-button" type="button" onClick={onClearLocalData}>
-              清空本地数据
+              清空配置与书架
             </button>
             <button className="ghost-button" type="button" onClick={onClose}>
               关闭
