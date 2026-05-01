@@ -406,6 +406,7 @@ function App() {
           onSignUp={auth.signUpWithPassword}
           pendingConfirmationEmail={auth.pendingConfirmationEmail}
           recentChapterTitle={recentChapter?.title}
+          resendCooldownSeconds={auth.resendCooldownSeconds}
           onSelectBook={(bookId) => void library.selectBook(bookId)}
           onSetActiveCollection={(collectionId) => void library.setActiveCollection(collectionId)}
           selectedBook={library.selectedBook}

@@ -1,56 +1,35 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { Session, User } from '@supabase/supabase-js'
-import { getSessionUser, normalizeAuthEmail, validatePasswordAuthInput } from '../lib/supabase/auth'
+import { useCallback, useState } from 'react'
+import {
+  getAuthErrorMessage,
+  normalizeAuthEmail,
+  RESEND_CONFIRMATION_COOLDOWN_SECONDS,
+  validatePasswordAuthInput,
+} from '../lib/supabase/auth'
 import { isSupabaseConfigured, supabase } from '../lib/supabase/client'
+import { useCountdown } from './useCountdown'
+import { useSupabaseSession } from './useSupabaseSession'
 
 export function useSupabaseAuth() {
-  const [user, setUser] = useState<User | null>(null)
-  const [isAuthLoading, setIsAuthLoading] = useState(isSupabaseConfigured)
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false)
   const [authError, setAuthError] = useState('')
   const [authNotice, setAuthNotice] = useState('')
   const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState<string | null>(null)
-
-  const applySession = useCallback((nextSession: Session | null) => {
-    setUser(getSessionUser(nextSession))
+  const {
+    reset: resetResendCooldown,
+    seconds: resendCooldownSeconds,
+    start: startCountdown,
+  } = useCountdown()
+  const handleSignedIn = useCallback(() => {
+    setPendingConfirmationEmail(null)
   }, [])
+  const { applySession, isAuthLoading, user } = useSupabaseSession({
+    onAuthError: setAuthError,
+    onSignedIn: handleSignedIn,
+  })
 
-  useEffect(() => {
-    if (!supabase) {
-      return
-    }
-    const client = supabase
-    let isCancelled = false
-
-    async function restoreSession() {
-      const { data, error } = await client.auth.getSession()
-      if (isCancelled) {
-        return
-      }
-
-      if (error) {
-        setAuthError(error.message)
-      }
-
-      applySession(data.session)
-      setIsAuthLoading(false)
-    }
-
-    void restoreSession()
-
-    const { data } = client.auth.onAuthStateChange((_event, nextSession) => {
-      applySession(nextSession)
-      if (nextSession?.user) {
-        setAuthError('')
-        setPendingConfirmationEmail(null)
-      }
-    })
-
-    return () => {
-      isCancelled = true
-      data.subscription.unsubscribe()
-    }
-  }, [applySession])
+  const startResendCooldown = useCallback(() => {
+    startCountdown(RESEND_CONFIRMATION_COOLDOWN_SECONDS)
+  }, [startCountdown])
 
   const signInWithPassword = useCallback(async (email: string, password: string) => {
     if (!supabase) {
@@ -75,7 +54,7 @@ export function useSupabaseAuth() {
 
       if (error) {
         applySession(null)
-        setAuthError(error.message)
+        setAuthError(getAuthErrorMessage(error))
         return
       }
 
@@ -117,7 +96,7 @@ export function useSupabaseAuth() {
 
       if (error) {
         applySession(null)
-        setAuthError(error.message)
+        setAuthError(getAuthErrorMessage(error))
         return
       }
 
@@ -129,11 +108,12 @@ export function useSupabaseAuth() {
       }
 
       setPendingConfirmationEmail(validation.email)
+      startResendCooldown()
       setAuthNotice('注册申请已提交。请先打开邮箱确认链接，然后回到这里登录。')
     } finally {
       setIsAuthSubmitting(false)
     }
-  }, [applySession])
+  }, [applySession, startResendCooldown])
 
   const resendSignUpConfirmation = useCallback(async (email: string) => {
     const trimmedEmail = normalizeAuthEmail(email)
@@ -147,6 +127,11 @@ export function useSupabaseAuth() {
       return
     }
 
+    if (resendCooldownSeconds > 0) {
+      setAuthError(`请等待 ${resendCooldownSeconds} 秒后再重新发送确认邮件。`)
+      return
+    }
+
     setAuthError('')
     setAuthNotice('')
     setIsAuthSubmitting(true)
@@ -157,16 +142,18 @@ export function useSupabaseAuth() {
       })
 
       if (error) {
-        setAuthError(error.message)
+        startResendCooldown()
+        setAuthError(getAuthErrorMessage(error))
         return
       }
 
       setPendingConfirmationEmail(trimmedEmail)
+      startResendCooldown()
       setAuthNotice('确认邮件已重新发送，请检查邮箱后再登录。')
     } finally {
       setIsAuthSubmitting(false)
     }
-  }, [])
+  }, [resendCooldownSeconds, startResendCooldown])
 
   const signOut = useCallback(async () => {
     if (!supabase) {
@@ -181,8 +168,9 @@ export function useSupabaseAuth() {
 
     applySession(null)
     setPendingConfirmationEmail(null)
+    resetResendCooldown()
     setAuthNotice('已退出登录。')
-  }, [applySession])
+  }, [applySession, resetResendCooldown])
 
   return {
     authError,
@@ -191,6 +179,7 @@ export function useSupabaseAuth() {
     isAuthLoading,
     isAuthSubmitting,
     pendingConfirmationEmail,
+    resendCooldownSeconds,
     resendSignUpConfirmation,
     signInWithPassword,
     signOut,

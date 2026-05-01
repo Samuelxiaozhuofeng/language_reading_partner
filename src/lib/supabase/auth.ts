@@ -1,6 +1,7 @@
 import type { Session, User } from '@supabase/supabase-js'
 
 export const MIN_PASSWORD_LENGTH = 6
+export const RESEND_CONFIRMATION_COOLDOWN_SECONDS = 60
 
 export function normalizeAuthEmail(email: string) {
   return email.trim()
@@ -26,4 +27,14 @@ export function validatePasswordAuthInput(
   }
 
   return { email: trimmedEmail, error: '' }
+}
+
+export function getAuthErrorMessage(error: { message: string; status?: number }) {
+  const message = error.message.toLowerCase()
+
+  if (error.status === 429 || message.includes('rate limit')) {
+    return '确认邮件发送过于频繁。请稍后再试；如果持续收不到邮件，需要在 Supabase 配置自定义 SMTP。'
+  }
+
+  return error.message
 }

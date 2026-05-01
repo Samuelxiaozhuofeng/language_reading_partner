@@ -45,6 +45,7 @@ type LibraryPageProps = {
   onSignUp: (email: string, password: string) => void | Promise<void>
   pendingConfirmationEmail?: string | null
   recentChapterTitle?: string
+  resendCooldownSeconds: number
   onSelectBook: (bookId: string) => void
   onSetActiveCollection: (collectionId: string | null) => void | Promise<void>
   selectedBook: BookRecord | null
@@ -90,6 +91,7 @@ function LibraryPage({
   onSignUp,
   pendingConfirmationEmail,
   recentChapterTitle,
+  resendCooldownSeconds,
   onSelectBook,
   onSetActiveCollection,
   selectedBook,
@@ -272,6 +274,7 @@ function LibraryPage({
           onSignIn={onSignIn}
           onSignUp={onSignUp}
           pendingConfirmationEmail={pendingConfirmationEmail}
+          resendCooldownSeconds={resendCooldownSeconds}
         />
       ) : (
         <>

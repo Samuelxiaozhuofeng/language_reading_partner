@@ -13,6 +13,7 @@ type CloudAuthGateProps = {
   onResendConfirmation: (email: string) => void | Promise<void>
   onSignUp: (email: string, password: string) => void | Promise<void>
   pendingConfirmationEmail?: string | null
+  resendCooldownSeconds: number
 }
 
 function CloudAuthGate({
@@ -25,6 +26,7 @@ function CloudAuthGate({
   onSignIn,
   onSignUp,
   pendingConfirmationEmail,
+  resendCooldownSeconds,
 }: CloudAuthGateProps) {
   const [authMode, setAuthMode] = useState<AuthMode>('sign-in')
   const [email, setEmail] = useState('')
@@ -34,6 +36,7 @@ function CloudAuthGate({
   const passwordMismatch = isSignUp && confirmedPassword.length > 0 && password !== confirmedPassword
   const isSubmitDisabled = isAuthSubmitting || (isSignUp && password !== confirmedPassword)
   const confirmationEmail = pendingConfirmationEmail ?? email
+  const isResendDisabled = isAuthSubmitting || resendCooldownSeconds > 0
 
   return (
     <main className="auth-gate">
@@ -137,11 +140,13 @@ function CloudAuthGate({
                 <p className="panel-meta">没有收到邮件时，可以重新发送到 {pendingConfirmationEmail}。</p>
                 <button
                   className="ghost-button"
-                  disabled={isAuthSubmitting}
+                  disabled={isResendDisabled}
                   type="button"
                   onClick={() => void onResendConfirmation(confirmationEmail)}
                 >
-                  重新发送确认邮件
+                  {resendCooldownSeconds > 0
+                    ? `${resendCooldownSeconds} 秒后可重新发送`
+                    : '重新发送确认邮件'}
                 </button>
               </div>
             ) : null}
