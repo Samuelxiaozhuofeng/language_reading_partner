@@ -19,6 +19,7 @@ import {
   hydrateBookState,
   importBookToLibrary,
   loadBookFile,
+  loadCachedInitialLibraryState,
   loadInitialLibraryState,
   migrateLegacyLocalLibraryStorage,
   moveBookToCollectionInLibrary,
@@ -29,6 +30,7 @@ import {
   removeChapterFromLibrary,
   removeKnowledgeResourceFromLibrary,
   removeKnowledgeResourcesFromLibrary,
+  saveInitialLibraryStateCache,
   saveKnowledgeResourceToLibrary,
   saveManualDraftToLibrary,
 } from '../lib/library/service'
@@ -51,6 +53,13 @@ function requireCloudUser(userId: string | null) {
   return userId
 }
 
+type InitialLibraryState = {
+  books: BookRecord[]
+  collections: CollectionRecord[]
+  hydratedBook: HydratedBookState | null
+  savedResources: SavedKnowledgeResource[]
+}
+
 export function useLibraryStore(userId: string | null) {
   const [allBooks, setAllBooks] = useState<BookRecord[]>([])
   const [collections, setCollections] = useState<CollectionRecord[]>([])
@@ -60,6 +69,7 @@ export function useLibraryStore(userId: string | null) {
   const [selection, setSelection] = useState<LibrarySelection>({ bookId: null, chapterId: null })
   const [currentChapter, setCurrentChapter] = useState<BookChapterRecord | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [hasLoadedLibrary, setHasLoadedLibrary] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [hasLegacyLocalLibrary, setHasLegacyLocalLibrary] = useState(false)
   const [isMigratingLegacyLibrary, setIsMigratingLegacyLibrary] = useState(false)
@@ -124,6 +134,17 @@ export function useLibraryStore(userId: string | null) {
     setSelection({ bookId: null, chapterId: null })
   }, [])
 
+  const applyInitialLibraryState = useCallback((initialState: InitialLibraryState) => {
+    setAllBooks(initialState.books)
+    setCollections(initialState.collections)
+    setSavedResources(initialState.savedResources)
+    if (initialState.hydratedBook) {
+      applyHydratedBook(initialState.hydratedBook)
+    } else {
+      clearBookSelection()
+    }
+  }, [applyHydratedBook, clearBookSelection])
+
   const hydrateFirstVisibleBook = useCallback(
     async (bookList: BookRecord[], collectionId: string | null) => {
       const nextBook = filterBooksByCollection(bookList, collectionId)[0]
@@ -148,6 +169,7 @@ export function useLibraryStore(userId: string | null) {
         setActiveCollectionId(null)
         setSavedResources([])
         clearBookSelection()
+        setHasLoadedLibrary(false)
         setHasLegacyLocalLibrary(false)
         setLibraryError('')
         setIsLoading(false)
@@ -156,24 +178,31 @@ export function useLibraryStore(userId: string | null) {
 
       try {
         setIsLoading(true)
+        setHasLoadedLibrary(false)
         setActiveCollectionId(null)
-        const [initialState, nextHasLegacyLocalLibrary] = await Promise.all([
-          loadInitialLibraryState(userId),
+        const [cachedState, nextHasLegacyLocalLibrary] = await Promise.all([
+          loadCachedInitialLibraryState(userId),
           hasLegacyLocalLibraryStorage(),
         ])
         if (isCancelled) {
           return
         }
 
-        setAllBooks(initialState.books)
-        setCollections(initialState.collections)
-        setSavedResources(initialState.savedResources)
         setHasLegacyLocalLibrary(nextHasLegacyLocalLibrary)
-        if (initialState.hydratedBook) {
-          applyHydratedBook(initialState.hydratedBook)
-        } else {
-          clearBookSelection()
+        if (cachedState) {
+          applyInitialLibraryState(cachedState)
+          setHasLoadedLibrary(true)
+          setIsLoading(false)
         }
+
+        const initialState = await loadInitialLibraryState(userId)
+        if (isCancelled) {
+          return
+        }
+
+        applyInitialLibraryState(initialState)
+        setHasLoadedLibrary(true)
+        setLibraryError('')
       } catch (error) {
         if (!isCancelled) {
           setLibraryError(error instanceof Error ? error.message : '书架初始化失败。')
@@ -190,7 +219,40 @@ export function useLibraryStore(userId: string | null) {
     return () => {
       isCancelled = true
     }
-  }, [applyHydratedBook, clearBookSelection, userId])
+  }, [applyInitialLibraryState, clearBookSelection, userId])
+
+  useEffect(() => {
+    if (!userId || !hasLoadedLibrary) {
+      return
+    }
+
+    const hydratedBook =
+      selectedBook && selection.bookId
+        ? {
+            book: selectedBook,
+            chapters,
+            selection,
+          }
+        : null
+
+    void saveInitialLibraryStateCache(userId, {
+      books: allBooks,
+      collections,
+      hydratedBook,
+      savedResources,
+    }).catch((error) => {
+      setLibraryError(error instanceof Error ? error.message : '云端书架快照缓存失败。')
+    })
+  }, [
+    allBooks,
+    chapters,
+    collections,
+    hasLoadedLibrary,
+    savedResources,
+    selectedBook,
+    selection,
+    userId,
+  ])
 
   const persistChapter = useCallback(
     async (chapter: BookChapterRecord, options?: PersistChapterOptions) => {

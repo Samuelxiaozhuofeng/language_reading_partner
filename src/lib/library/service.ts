@@ -36,6 +36,12 @@ import {
   loadLegacyLocalLibrarySnapshot,
 } from './localMigration'
 import { createManualDraftBookPayload, type CreateManualDraftBookPayloadInput } from './manualDraft'
+import {
+  clearCloudLibrarySnapshot,
+  loadCloudLibrarySnapshot,
+  saveCloudLibrarySnapshot,
+  type CloudLibrarySnapshot,
+} from './cloudCache'
 
 export type PersistChapterOptions = {
   markOpened?: boolean
@@ -93,6 +99,17 @@ export async function loadInitialLibraryState(userId: string) {
     hydratedBook,
     savedResources: sortSavedResources(savedResources),
   }
+}
+
+export async function loadCachedInitialLibraryState(userId: string) {
+  return loadCloudLibrarySnapshot(userId)
+}
+
+export async function saveInitialLibraryStateCache(
+  userId: string,
+  snapshot: CloudLibrarySnapshot,
+) {
+  await saveCloudLibrarySnapshot(userId, snapshot)
 }
 
 export async function createCollectionInLibrary(userId: string, name: string) {
@@ -249,12 +266,13 @@ export async function removeChapterFromLibrary(
   }
 
   const removedChapter = normalizeChapterRecord(chapterRecord)
-  await deleteChapterCascade(userId, chapterId)
-
-  const siblingChapters = (await getChaptersByBook(userId, removedChapter.bookId)).map((chapter) =>
+  const currentSiblings = (await getChaptersByBook(userId, removedChapter.bookId)).map((chapter) =>
     normalizeChapterRecord(chapter),
   )
-  const nextChapters = siblingChapters
+  await deleteChapterCascade(userId, chapterId)
+
+  const nextChapters = currentSiblings
+    .filter((chapter) => chapter.id !== chapterId)
     .map((chapter, index) =>
       normalizeChapterRecord(
         chapter.order === index
@@ -268,7 +286,7 @@ export async function removeChapterFromLibrary(
 
   await Promise.all(
     nextChapters.map((chapter) =>
-      siblingChapters.some(
+      currentSiblings.some(
         (currentChapter) =>
           currentChapter.id === chapter.id && currentChapter.order !== chapter.order,
       )
@@ -329,6 +347,7 @@ export async function removeKnowledgeResourcesFromLibrary(userId: string, resour
 
 export async function clearLibraryStorage(userId: string) {
   await clearLibraryDb(userId)
+  await clearCloudLibrarySnapshot(userId)
 }
 
 export async function hasLegacyLocalLibraryStorage() {

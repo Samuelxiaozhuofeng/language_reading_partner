@@ -467,9 +467,15 @@ export async function deleteChapterCascade(userId: string, chapterId: string) {
     .delete()
     .eq('user_id', userId)
     .eq('id', chapterId)
+    .select('id')
+    .maybeSingle()
 
   if (deleted.error) {
     throw new Error(`章节删除失败：${deleted.error.message}`)
+  }
+
+  if (!deleted.data) {
+    throw new Error('章节删除失败：没有匹配到可删除的章节。')
   }
 
   return chapter
