@@ -20,6 +20,7 @@ type LibraryPageProps = {
   isImporting: boolean
   isAuthConfigured: boolean
   isAuthLoading: boolean
+  isAuthSubmitting: boolean
   isLoading: boolean
   isMigratingLegacyLibrary: boolean
   libraryError: string
@@ -38,9 +39,11 @@ type LibraryPageProps = {
   onOpenResources: () => void
   onOpenManualWorkspace: () => void
   onOpenSettings: () => void
+  onResendConfirmation: (email: string) => void | Promise<void>
   onSignIn: (email: string, password: string) => void | Promise<void>
   onSignOut: () => void | Promise<void>
   onSignUp: (email: string, password: string) => void | Promise<void>
+  pendingConfirmationEmail?: string | null
   recentChapterTitle?: string
   onSelectBook: (bookId: string) => void
   onSetActiveCollection: (collectionId: string | null) => void | Promise<void>
@@ -62,6 +65,7 @@ function LibraryPage({
   isImporting,
   isAuthConfigured,
   isAuthLoading,
+  isAuthSubmitting,
   isLoading,
   isMigratingLegacyLibrary,
   libraryError,
@@ -80,9 +84,11 @@ function LibraryPage({
   onOpenResources,
   onOpenManualWorkspace,
   onOpenSettings,
+  onResendConfirmation,
   onSignIn,
   onSignOut,
   onSignUp,
+  pendingConfirmationEmail,
   recentChapterTitle,
   onSelectBook,
   onSetActiveCollection,
@@ -261,8 +267,11 @@ function LibraryPage({
           authNotice={authNotice}
           isAuthConfigured={isAuthConfigured}
           isAuthLoading={isAuthLoading}
+          isAuthSubmitting={isAuthSubmitting}
+          onResendConfirmation={onResendConfirmation}
           onSignIn={onSignIn}
           onSignUp={onSignUp}
+          pendingConfirmationEmail={pendingConfirmationEmail}
         />
       ) : (
         <>

@@ -378,6 +378,7 @@ function App() {
           hasLegacyLocalLibrary={library.hasLegacyLocalLibrary}
           isAuthConfigured={auth.isAuthConfigured}
           isAuthLoading={auth.isAuthLoading}
+          isAuthSubmitting={auth.isAuthSubmitting}
           isImporting={library.isImporting}
           isLoading={library.isLoading}
           isMigratingLegacyLibrary={library.isMigratingLegacyLibrary}
@@ -399,9 +400,11 @@ function App() {
           onOpenResources={openResources}
           onOpenManualWorkspace={handleOpenManualWorkspace}
           onOpenSettings={openSettings}
+          onResendConfirmation={auth.resendSignUpConfirmation}
           onSignIn={auth.signInWithPassword}
           onSignOut={auth.signOut}
           onSignUp={auth.signUpWithPassword}
+          pendingConfirmationEmail={auth.pendingConfirmationEmail}
           recentChapterTitle={recentChapter?.title}
           onSelectBook={(bookId) => void library.selectBook(bookId)}
           onSetActiveCollection={(collectionId) => void library.setActiveCollection(collectionId)}

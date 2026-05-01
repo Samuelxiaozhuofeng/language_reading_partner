@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
+import { getSessionUser, normalizeAuthEmail, validatePasswordAuthInput } from '../lib/supabase/auth'
 import { isSupabaseConfigured, supabase } from '../lib/supabase/client'
 
 export function useSupabaseAuth() {
-  const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [isAuthLoading, setIsAuthLoading] = useState(isSupabaseConfigured)
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false)
   const [authError, setAuthError] = useState('')
   const [authNotice, setAuthNotice] = useState('')
+  const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState<string | null>(null)
+
+  const applySession = useCallback((nextSession: Session | null) => {
+    setUser(getSessionUser(nextSession))
+  }, [])
 
   useEffect(() => {
     if (!supabase) {
       return
     }
     const client = supabase
-
     let isCancelled = false
 
     async function restoreSession() {
@@ -27,18 +32,17 @@ export function useSupabaseAuth() {
         setAuthError(error.message)
       }
 
-      setSession(data.session)
-      setUser(data.session?.user ?? null)
+      applySession(data.session)
       setIsAuthLoading(false)
     }
 
     void restoreSession()
 
     const { data } = client.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession)
-      setUser(nextSession?.user ?? null)
+      applySession(nextSession)
       if (nextSession?.user) {
         setAuthError('')
+        setPendingConfirmationEmail(null)
       }
     })
 
@@ -46,75 +50,122 @@ export function useSupabaseAuth() {
       isCancelled = true
       data.subscription.unsubscribe()
     }
-  }, [])
+  }, [applySession])
 
   const signInWithPassword = useCallback(async (email: string, password: string) => {
-    const trimmedEmail = email.trim()
-    const trimmedPassword = password.trim()
     if (!supabase) {
       setAuthError('缺少 Supabase 配置，暂时无法登录。')
       return
     }
 
-    if (!trimmedEmail || !trimmedPassword) {
-      setAuthError('请输入邮箱和密码。')
+    const validation = validatePasswordAuthInput(email, password)
+    if (validation.error) {
+      setAuthError(validation.error)
       return
     }
 
     setAuthError('')
     setAuthNotice('')
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: trimmedEmail,
-      password: trimmedPassword,
-    })
+    setIsAuthSubmitting(true)
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: validation.email,
+        password,
+      })
 
-    if (error) {
-      setAuthError(error.message)
-      return
+      if (error) {
+        applySession(null)
+        setAuthError(error.message)
+        return
+      }
+
+      if (!data.session) {
+        applySession(null)
+        setPendingConfirmationEmail(validation.email)
+        setAuthNotice('还没有有效登录会话。请先完成邮箱确认，然后再登录。')
+        return
+      }
+
+      applySession(data.session)
+      setPendingConfirmationEmail(null)
+      setAuthNotice('已登录，正在载入云端书架。')
+    } finally {
+      setIsAuthSubmitting(false)
     }
-
-    setSession(data.session)
-    setUser(data.user)
-    setAuthNotice('已登录，正在载入云端书架。')
-  }, [])
+  }, [applySession])
 
   const signUpWithPassword = useCallback(async (email: string, password: string) => {
-    const trimmedEmail = email.trim()
-    const trimmedPassword = password.trim()
     if (!supabase) {
       setAuthError('缺少 Supabase 配置，暂时无法注册。')
       return
     }
 
-    if (!trimmedEmail || !trimmedPassword) {
-      setAuthError('请输入邮箱和密码。')
-      return
-    }
-
-    if (trimmedPassword.length < 6) {
-      setAuthError('密码至少需要 6 个字符。')
+    const validation = validatePasswordAuthInput(email, password, { requireMinimumLength: true })
+    if (validation.error) {
+      setAuthError(validation.error)
       return
     }
 
     setAuthError('')
     setAuthNotice('')
-    const { data, error } = await supabase.auth.signUp({
-      email: trimmedEmail,
-      password: trimmedPassword,
-    })
+    setIsAuthSubmitting(true)
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: validation.email,
+        password,
+      })
 
-    if (error) {
-      setAuthError(error.message)
+      if (error) {
+        applySession(null)
+        setAuthError(error.message)
+        return
+      }
+
+      applySession(data.session)
+      if (data.session) {
+        setPendingConfirmationEmail(null)
+        setAuthNotice('注册成功，正在载入云端书架。')
+        return
+      }
+
+      setPendingConfirmationEmail(validation.email)
+      setAuthNotice('注册申请已提交。请先打开邮箱确认链接，然后回到这里登录。')
+    } finally {
+      setIsAuthSubmitting(false)
+    }
+  }, [applySession])
+
+  const resendSignUpConfirmation = useCallback(async (email: string) => {
+    const trimmedEmail = normalizeAuthEmail(email)
+    if (!supabase) {
+      setAuthError('缺少 Supabase 配置，暂时无法重新发送确认邮件。')
       return
     }
 
-    setSession(data.session)
-    setUser(data.user)
-    setAuthNotice(
-      data.session
-        ? '注册成功，正在载入云端书架。'
-        : '注册成功，请先按 Supabase 邮件完成邮箱确认，然后回到这里登录。',
-    )
+    if (!trimmedEmail) {
+      setAuthError('请输入邮箱后再重新发送确认邮件。')
+      return
+    }
+
+    setAuthError('')
+    setAuthNotice('')
+    setIsAuthSubmitting(true)
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: trimmedEmail,
+      })
+
+      if (error) {
+        setAuthError(error.message)
+        return
+      }
+
+      setPendingConfirmationEmail(trimmedEmail)
+      setAuthNotice('确认邮件已重新发送，请检查邮箱后再登录。')
+    } finally {
+      setIsAuthSubmitting(false)
+    }
   }, [])
 
   const signOut = useCallback(async () => {
@@ -128,17 +179,19 @@ export function useSupabaseAuth() {
       return
     }
 
-    setSession(null)
-    setUser(null)
+    applySession(null)
+    setPendingConfirmationEmail(null)
     setAuthNotice('已退出登录。')
-  }, [])
+  }, [applySession])
 
   return {
     authError,
     authNotice,
     isAuthConfigured: isSupabaseConfigured,
     isAuthLoading,
-    session,
+    isAuthSubmitting,
+    pendingConfirmationEmail,
+    resendSignUpConfirmation,
     signInWithPassword,
     signOut,
     signUpWithPassword,

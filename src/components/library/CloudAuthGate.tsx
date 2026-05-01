@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MIN_PASSWORD_LENGTH } from '../../lib/supabase/auth'
 
 type AuthMode = 'sign-in' | 'sign-up'
 
@@ -7,8 +8,11 @@ type CloudAuthGateProps = {
   authNotice: string
   isAuthConfigured: boolean
   isAuthLoading: boolean
+  isAuthSubmitting: boolean
   onSignIn: (email: string, password: string) => void | Promise<void>
+  onResendConfirmation: (email: string) => void | Promise<void>
   onSignUp: (email: string, password: string) => void | Promise<void>
+  pendingConfirmationEmail?: string | null
 }
 
 function CloudAuthGate({
@@ -16,8 +20,11 @@ function CloudAuthGate({
   authNotice,
   isAuthConfigured,
   isAuthLoading,
+  isAuthSubmitting,
+  onResendConfirmation,
   onSignIn,
   onSignUp,
+  pendingConfirmationEmail,
 }: CloudAuthGateProps) {
   const [authMode, setAuthMode] = useState<AuthMode>('sign-in')
   const [email, setEmail] = useState('')
@@ -25,6 +32,8 @@ function CloudAuthGate({
   const [confirmedPassword, setConfirmedPassword] = useState('')
   const isSignUp = authMode === 'sign-up'
   const passwordMismatch = isSignUp && confirmedPassword.length > 0 && password !== confirmedPassword
+  const isSubmitDisabled = isAuthSubmitting || (isSignUp && password !== confirmedPassword)
+  const confirmationEmail = pendingConfirmationEmail ?? email
 
   return (
     <main className="auth-gate">
@@ -87,6 +96,7 @@ function CloudAuthGate({
                 inputMode="email"
                 onChange={(event) => setEmail(event.currentTarget.value)}
                 placeholder="you@example.com"
+                required
                 type="email"
                 value={email}
               />
@@ -96,9 +106,10 @@ function CloudAuthGate({
               <span>密码</span>
               <input
                 autoComplete={isSignUp ? 'new-password' : 'current-password'}
-                minLength={6}
+                minLength={MIN_PASSWORD_LENGTH}
                 onChange={(event) => setPassword(event.currentTarget.value)}
-                placeholder="至少 6 个字符"
+                placeholder={`至少 ${MIN_PASSWORD_LENGTH} 个字符`}
+                required
                 type="password"
                 value={password}
               />
@@ -109,9 +120,10 @@ function CloudAuthGate({
                 <span>确认密码</span>
                 <input
                   autoComplete="new-password"
-                  minLength={6}
+                  minLength={MIN_PASSWORD_LENGTH}
                   onChange={(event) => setConfirmedPassword(event.currentTarget.value)}
                   placeholder="再次输入密码"
+                  required
                   type="password"
                   value={confirmedPassword}
                 />
@@ -120,14 +132,32 @@ function CloudAuthGate({
 
             {passwordMismatch ? <p className="notice error">两次输入的密码不一致。</p> : null}
             {authNotice ? <p className="notice success">{authNotice}</p> : null}
+            {pendingConfirmationEmail ? (
+              <div className="auth-confirmation-actions">
+                <p className="panel-meta">没有收到邮件时，可以重新发送到 {pendingConfirmationEmail}。</p>
+                <button
+                  className="ghost-button"
+                  disabled={isAuthSubmitting}
+                  type="button"
+                  onClick={() => void onResendConfirmation(confirmationEmail)}
+                >
+                  重新发送确认邮件
+                </button>
+              </div>
+            ) : null}
             {authError ? <p className="notice error">{authError}</p> : null}
 
             <div className="panel-actions">
-              <button className="primary-button" disabled={passwordMismatch} type="submit">
-                {isSignUp ? '注册账号' : '登录'}
+              <button
+                className="primary-button"
+                disabled={isSubmitDisabled}
+                type="submit"
+              >
+                {isAuthSubmitting ? '处理中...' : isSignUp ? '注册账号' : '登录'}
               </button>
               <button
                 className="ghost-button"
+                disabled={isAuthSubmitting}
                 type="button"
                 onClick={() => setAuthMode(isSignUp ? 'sign-in' : 'sign-up')}
               >

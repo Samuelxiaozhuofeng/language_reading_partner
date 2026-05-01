@@ -34,6 +34,21 @@
   gap: 16px;
 }
 
+.auth-confirmation-actions {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(14, 125, 120, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.auth-confirmation-actions .panel-meta {
+  margin: 0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .legacy-migration-panel {
   margin-bottom: 24px;
   padding: 20px 22px;
