@@ -51,6 +51,7 @@ import {
   saveCloudLibrarySnapshot,
   type CloudLibrarySnapshot,
 } from './cloudCache'
+import { getChaptersRequiringOrderSync } from './chapterOrderSync'
 
 export type RemoveChapterResult = {
   nextBook: BookRecord | null
@@ -379,16 +380,10 @@ export async function removeChapterFromLibrary(
       ),
   )
 
-  await Promise.all(
-    nextChapters.map((chapter) =>
-      currentSiblings.some(
-        (currentChapter) =>
-          currentChapter.id === chapter.id && currentChapter.order !== chapter.order,
-      )
-        ? saveChapter(userId, chapter)
-        : Promise.resolve(),
-    ),
-  )
+  const chaptersRequiringOrderSync = getChaptersRequiringOrderSync(currentSiblings, nextChapters)
+  for (const chapter of chaptersRequiringOrderSync) {
+    await saveChapter(userId, chapter)
+  }
 
   const currentBook = await getBook(userId, removedChapter.bookId)
   const fallbackChapter =
