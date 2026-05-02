@@ -101,6 +101,17 @@
 - `npm run build`：先执行 TypeScript 构建检查，再生成生产包
 - `npm run preview`：本地预览生产构建
 - `npm run lint`：运行 ESLint
+- `npm run android:sync`：先构建 Web `dist/`，再同步到 Capacitor Android 工程
+- `npm run android:debug`：同步后构建 Android debug APK
+
+## Capacitor Android Packaging
+当前项目已接入 Capacitor Android，原生工程在 `android/`，配置在 `capacitor.config.ts`，`webDir` 固定为 `dist`。
+
+- Web 端仍以 Vite 为主；不要为了 Android 改动 `src/main.tsx`、`index.html` 或 Web 构建入口。
+- Android 每次打包前先运行 `npm run android:sync`，确保最新 `dist/` 已复制到 `android/app/src/main/assets/public`。
+- 发给用户覆盖安装的新版本，必须递增 `android/app/build.gradle` 里的 `versionCode`。
+- release APK 必须使用同一个签名密钥；当前本机密钥位于 `~/.android/multireader-release.jks`，不要提交到仓库。
+- 构建产物在 `android/app/build/outputs/apk/`；`android/app/build/` 属于生成物，不要手改。
 
 ## Supabase Cloud Storage
 当前书架主数据源已经切换为 Supabase 云端存储。后续修改书架、章节、学习资源、登录或迁移逻辑时，必须遵守这一分层：
