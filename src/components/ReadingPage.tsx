@@ -600,6 +600,7 @@ function ReadingPage({
               activeChunkSelection={effectiveActiveChunkSelection}
               activeSentence={activeSentence}
               activeSentenceIndex={activeSentenceIndex}
+              compact={isMobileChapterReading}
               mode="sheet"
               onAddToAnki={onAddToAnki}
               onCloseSentence={handleCloseSentence}

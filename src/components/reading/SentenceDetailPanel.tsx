@@ -51,6 +51,7 @@ type SentenceDetailPanelProps = {
   activeSelection: HighlightSelection | null
   activeChunkSelection: JapaneseChunkSelection | null
   bookLanguage: BookLanguage
+  compact?: boolean
   onAddToAnki: (
     sentence: SentenceItem,
     result: AnalysisResult,
@@ -75,10 +76,46 @@ type SentenceDetailPanelProps = {
   vocabularyInteraction?: VocabularyExplanationInteraction
 }
 
+type SectionPanelProps = {
+  id: string
+  title: string
+  children: React.ReactNode
+  collapsed: boolean
+  compact: boolean
+  onToggle: (id: string) => void
+}
+
+function SectionPanel({ id, title, children, collapsed, compact, onToggle }: SectionPanelProps) {
+  if (!compact) {
+    return (
+      <section>
+        <h3>{title}</h3>
+        {children}
+      </section>
+    )
+  }
+
+  return (
+    <section className={`accordion-section ${collapsed ? 'is-collapsed' : ''}`}>
+      <button
+        aria-expanded={!collapsed}
+        className="accordion-header"
+        type="button"
+        onClick={() => onToggle(id)}
+      >
+        <h3>{title}</h3>
+        <span className="accordion-arrow" aria-hidden="true" />
+      </button>
+      <div className="accordion-body">{children}</div>
+    </section>
+  )
+}
+
 export function SentenceDetailPanel({
   activeSelection,
   activeChunkSelection,
   bookLanguage,
+  compact = false,
   onAddToAnki,
   onExplainVocabulary,
   onOpenResources,
@@ -111,6 +148,29 @@ export function SentenceDetailPanel({
     result,
     sentence,
   })
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() =>
+    compact ? new Set(['chunkAnalysis']) : new Set(),
+  )
+  const toggleSection = (sectionId: string) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(sectionId)) {
+        next.delete(sectionId)
+      } else {
+        next.add(sectionId)
+      }
+      return next
+    })
+  }
+  const autoExpandSection = (sectionId: string) => {
+    if (!compact) return
+    setCollapsedSections((prev) => {
+      if (!prev.has(sectionId)) return prev
+      const next = new Set(prev)
+      next.delete(sectionId)
+      return next
+    })
+  }
   const activeVocabularyInteraction =
     vocabularyInteraction ?? internalVocabularyInteraction
   const highlights = result?.highlights ?? []
@@ -151,6 +211,16 @@ export function SentenceDetailPanel({
     sentence.status !== 'running' &&
     Boolean((sentence.editedText || sentence.text).trim())
   const retryButtonLabel = sentence.status === 'error' ? '重试本句' : '单独解析本句'
+
+  const handleSelectHighlight = (sentenceId: string, highlightId: string) => {
+    autoExpandSection('grammar')
+    onSelectHighlight(sentenceId, highlightId)
+  }
+
+  const handleSelectChunk = (sentenceId: string, chunkIndex: number) => {
+    autoExpandSection('chunkAnalysis')
+    onSelectChunk(sentenceId, chunkIndex)
+  }
 
   useEffect(() => {
     if (!selectedHighlight || !knowledgeDetailCardRef.current) {
@@ -280,7 +350,7 @@ export function SentenceDetailPanel({
                 showFurigana={showFurigana}
                 text={activeVocabularyInteraction.sentenceText}
                 tokens={sentence.tokens}
-                onChunkClick={(chunkIndex) => onSelectChunk(sentence.id, chunkIndex)}
+                onChunkClick={(chunkIndex) => handleSelectChunk(sentence.id, chunkIndex)}
               />
             ) : (
               <ClickableSentenceWords
@@ -293,8 +363,13 @@ export function SentenceDetailPanel({
           </p>
         </section>
       ) : null}
-      <section>
-        <h3>语法</h3>
+      <SectionPanel
+        id="grammar"
+        title="语法"
+        collapsed={collapsedSections.has('grammar')}
+        compact={compact}
+        onToggle={toggleSection}
+      >
         <div className="analysis-paragraph">
           {result.grammar
             ? renderGrammarText(
@@ -303,7 +378,7 @@ export function SentenceDetailPanel({
                 activeSelection,
                 sentence.id,
                 savedHighlightSignatures,
-                (highlightId) => onSelectHighlight(sentence.id, highlightId),
+                (highlightId) => handleSelectHighlight(sentence.id, highlightId),
               )
             : '模型未稳定返回语法说明。'}
         </div>
@@ -323,7 +398,7 @@ export function SentenceDetailPanel({
                     className={`knowledge-chip ${isActive ? 'is-active' : ''} ${isSaved ? 'is-saved' : ''}`}
                     key={highlight.id}
                     type="button"
-                    onClick={() => onSelectHighlight(sentence.id, highlight.id)}
+                    onClick={() => handleSelectHighlight(sentence.id, highlight.id)}
                   >
                     <span>{highlight.text}</span>
                     <span>{knowledgeKindLabelMap[highlight.kind]}</span>
@@ -387,11 +462,16 @@ export function SentenceDetailPanel({
               </div>
             ) : null}
           </>
-        ) : null}
-      </section>
+            ) : null}
+      </SectionPanel>
       {bookLanguage === 'ja' && result.chunkAnalysis?.length ? (
-        <section>
-          <h3>词块解析</h3>
+        <SectionPanel
+          id="chunkAnalysis"
+          title="词块解析"
+          collapsed={collapsedSections.has('chunkAnalysis')}
+          compact={compact}
+          onToggle={toggleSection}
+        >
           <div className="chunk-analysis-list">
             {result.chunkAnalysis.map((chunk, index) => {
               const isActive =
@@ -406,7 +486,7 @@ export function SentenceDetailPanel({
                   className={`chunk-analysis-item ${isActive ? 'is-active-chunk' : ''}`}
                   key={`${chunk.chunk}:${index}`}
                   type="button"
-                  onClick={() => onSelectChunk(sentence.id, index)}
+                  onClick={() => handleSelectChunk(sentence.id, index)}
                 >
                   <span className="chunk-main">{chunk.chunk}</span>
                   {chunk.reading ? <span className="chunk-reading">{chunk.reading}</span> : null}
@@ -462,12 +542,17 @@ export function SentenceDetailPanel({
               ) : null}
             </div>
           ) : null}
-        </section>
+        </SectionPanel>
       ) : null}
-      <section>
-        <h3>内容</h3>
+      <SectionPanel
+        id="meaning"
+        title="内容"
+        collapsed={collapsedSections.has('meaning')}
+        compact={compact}
+        onToggle={toggleSection}
+      >
         <p>{result.meaning || '模型未稳定返回内容解读。'}</p>
-      </section>
+      </SectionPanel>
 
       {bookLanguage === 'es' ? (
         <VocabularyExplanationPanel

@@ -20,6 +20,7 @@ type SentenceInspectorProps = {
   activeChunkSelection: JapaneseChunkSelection | null
   activeSentence: SentenceItem | null
   activeSentenceIndex: number | null
+  compact?: boolean
   mode: InspectorMode
   onAddToAnki: (
     sentence: SentenceItem,
@@ -76,6 +77,7 @@ function ActiveSentenceInspector({
   activeSentence,
   bookLanguage,
   activeSentenceIndex,
+  compact = false,
   mode,
   onAddToAnki,
   onCloseSentence,
@@ -111,7 +113,8 @@ function ActiveSentenceInspector({
       className={inspectorClassName}
       role={mode === 'sheet' ? 'dialog' : 'region'}
     >
-      <div className="reading-inspector-header">
+      {compact ? <div className="sheet-pull-handle" /> : null}
+      <div className={`reading-inspector-header ${compact ? 'is-compact' : ''}`}>
         <div>
           <p className="section-kicker">Sentence Note</p>
           <h3>句子解释</h3>
@@ -167,6 +170,7 @@ function ActiveSentenceInspector({
         activeSelection={activeSelection}
         activeChunkSelection={activeChunkSelection}
         bookLanguage={bookLanguage}
+        compact={compact}
         onAddToAnki={onAddToAnki}
         onExplainVocabulary={onExplainVocabulary}
         onOpenResources={onOpenResources}

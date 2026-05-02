@@ -2798,4 +2798,61 @@ blockquote {
   .knowledge-detail-actions {
     align-items: flex-start;
   }
+
+  .sheet-pull-handle {
+    width: 40px;
+    height: 5px;
+    margin: 6px auto 10px;
+    border-radius: 4px;
+    background: rgba(69, 72, 82, 0.2);
+  }
+
+  .reading-inspector-header.is-compact {
+    padding-bottom: 8px;
+  }
+
+  .reading-inspector-header.is-compact .reading-inspector-actions {
+    gap: 8px;
+  }
+
+  .accordion-section {
+    border-top: 1px dashed rgba(69, 72, 82, 0.12);
+  }
+
+  .accordion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    border: none;
+    padding: 12px 0 8px;
+    background: none;
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .accordion-header h3 {
+    margin: 0;
+  }
+
+  .accordion-arrow {
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid var(--muted);
+    border-bottom: 2px solid var(--muted);
+    transform: rotate(45deg);
+    transition: transform 200ms ease;
+  }
+
+  .accordion-section.is-collapsed .accordion-arrow {
+    transform: rotate(-45deg);
+  }
+
+  .accordion-section.is-collapsed .accordion-body {
+    display: none;
+  }
+
+  .accordion-body {
+    padding-bottom: 12px;
+  }
 }
