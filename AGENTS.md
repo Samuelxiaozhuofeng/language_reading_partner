@@ -107,6 +107,10 @@
 ## Capacitor Android Packaging
 当前项目已接入 Capacitor Android，原生工程在 `android/`，配置在 `capacitor.config.ts`，`webDir` 固定为 `dist`。
 
+- 当前机器的 Homebrew JDK 21 不是系统默认 Java。运行 Android 构建前先设置：
+  `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`
+  `export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`
+  `export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/36.0.0:$PATH"`
 - Web 端仍以 Vite 为主；不要为了 Android 改动 `src/main.tsx`、`index.html` 或 Web 构建入口。
 - Android 每次打包前先运行 `npm run android:sync`，确保最新 `dist/` 已复制到 `android/app/src/main/assets/public`。
 - 发给用户覆盖安装的新版本，必须递增 `android/app/build.gradle` 里的 `versionCode`。
