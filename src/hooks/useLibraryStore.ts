@@ -95,6 +95,7 @@ export function useLibraryStore(userId: string | null) {
   const [libraryNotice, setLibraryNotice] = useState('')
   const [libraryError, setLibraryError] = useState('')
   const currentChapterRef = useRef<BookChapterRecord | null>(null)
+  const localActionVersionRef = useRef(0)
   const chapterSnapshotSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingChapterSnapshotRef = useRef<PendingChapterSnapshot | null>(null)
   const libraryCacheSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -106,6 +107,11 @@ export function useLibraryStore(userId: string | null) {
   useEffect(() => {
     currentChapterRef.current = currentChapter
   }, [currentChapter])
+
+  const markLocalAction = useCallback(() => {
+    localActionVersionRef.current += 1
+    return localActionVersionRef.current
+  }, [])
 
   const books = useMemo(
     () => filterBooksByCollection(allBooks, activeCollectionId),
@@ -147,10 +153,20 @@ export function useLibraryStore(userId: string | null) {
     setSelection(hydratedBook.selection)
   }, [])
 
-  const hydrateBook = useCallback(async (bookId: string, preferredChapterId?: string | null) => {
+  const hydrateBook = useCallback(async (
+    bookId: string,
+    preferredChapterId?: string | null,
+    shouldApply?: () => boolean,
+  ) => {
     const cloudUserId = requireCloudUser(userId)
     const hydratedBook = await hydrateBookState(cloudUserId, bookId, preferredChapterId)
+
+    if (shouldApply && !shouldApply()) {
+      return hydratedBook
+    }
+
     applyHydratedBook(hydratedBook)
+    return hydratedBook
   }, [applyHydratedBook, userId])
 
   const clearBookSelection = useCallback(() => {
@@ -283,6 +299,8 @@ export function useLibraryStore(userId: string | null) {
     let isCancelled = false
 
     async function bootstrap() {
+      const bootstrapVersion = localActionVersionRef.current
+
       if (!userId) {
         setAllBooks([])
         setCollections([])
@@ -311,6 +329,10 @@ export function useLibraryStore(userId: string | null) {
 
         setHasLegacyLocalLibrary(nextHasLegacyLocalLibrary)
         if (cachedState) {
+          if (localActionVersionRef.current !== bootstrapVersion) {
+            return
+          }
+
           applyInitialLibraryState(cachedState)
           setHasLoadedLibrary(true)
           setIsLoading(false)
@@ -318,6 +340,10 @@ export function useLibraryStore(userId: string | null) {
 
         const initialState = await loadInitialLibraryState(userId)
         if (isCancelled) {
+          return
+        }
+
+        if (localActionVersionRef.current !== bootstrapVersion) {
           return
         }
 
@@ -407,16 +433,27 @@ export function useLibraryStore(userId: string | null) {
 
   const selectBook = useCallback(
     async (bookId: string) => {
+      const actionVersion = markLocalAction()
       setLibraryError('')
       currentChapterRef.current = null
-      await hydrateBook(bookId)
+      await hydrateBook(
+        bookId,
+        null,
+        () => localActionVersionRef.current === actionVersion,
+      )
+
+      if (localActionVersionRef.current !== actionVersion) {
+        return
+      }
+
       setCurrentChapter(null)
     },
-    [hydrateBook],
+    [hydrateBook, markLocalAction],
   )
 
   const openChapter = useCallback(
     async (chapterId: string) => {
+      markLocalAction()
       const cloudUserId = requireCloudUser(userId)
       const openedState = selectedBook
         ? createOpenedChapterState(selectedBook, chapters, chapterId)
@@ -442,10 +479,11 @@ export function useLibraryStore(userId: string | null) {
 
       return openedState.chapter
     },
-    [chapters, selectedBook, userId],
+    [chapters, markLocalAction, selectedBook, userId],
   )
 
   const importBook = useCallback(async (file: File, language: BookLanguage) => {
+    markLocalAction()
     const cloudUserId = requireCloudUser(userId)
     setIsImporting(true)
     setLibraryError('')
@@ -468,7 +506,7 @@ export function useLibraryStore(userId: string | null) {
     } finally {
       setIsImporting(false)
     }
-  }, [userId])
+  }, [markLocalAction, userId])
 
   const saveManualDraftAsBook = useCallback(async ({
     articleTitle,
@@ -483,6 +521,7 @@ export function useLibraryStore(userId: string | null) {
     sentences: SentenceItem[]
     sourceText: string
   }) => {
+    markLocalAction()
     const trimmedSourceText = sourceText.trim()
 
     if (!trimmedSourceText) {
@@ -510,10 +549,11 @@ export function useLibraryStore(userId: string | null) {
     setLibraryError('')
 
     return payload
-  }, [userId])
+  }, [markLocalAction, userId])
 
   const removeBook = useCallback(
     async (bookId: string) => {
+      markLocalAction()
       const cloudUserId = requireCloudUser(userId)
       discardPendingChapterSnapshot((pending) => pending.chapter.bookId === bookId)
       const nextBooks = await removeBookFromLibrary(cloudUserId, bookId)
@@ -531,6 +571,7 @@ export function useLibraryStore(userId: string | null) {
       activeCollectionId,
       discardPendingChapterSnapshot,
       hydrateFirstVisibleBook,
+      markLocalAction,
       selection.bookId,
       userId,
     ],
@@ -538,6 +579,7 @@ export function useLibraryStore(userId: string | null) {
 
   const removeChapter = useCallback(
     async (chapterId: string): Promise<{ nextCurrentChapterId: string | null; removedCurrentChapter: boolean } | null> => {
+      markLocalAction()
       const cloudUserId = requireCloudUser(userId)
       const payload = selectedBook
         ? createRemovedChapterState(selectedBook, chapters, chapterId)
@@ -592,6 +634,7 @@ export function useLibraryStore(userId: string | null) {
     [
       chapters,
       discardPendingChapterSnapshot,
+      markLocalAction,
       selectedBook,
       selection.bookId,
       selection.chapterId,
@@ -695,6 +738,7 @@ export function useLibraryStore(userId: string | null) {
 
   const setActiveCollection = useCallback(
     async (collectionId: string | null) => {
+      markLocalAction()
       setActiveCollectionId(collectionId)
 
       const nextVisibleBooks = filterBooksByCollection(allBooks, collectionId)
@@ -704,12 +748,13 @@ export function useLibraryStore(userId: string | null) {
 
       setLibraryError('')
     },
-    [allBooks, hydrateFirstVisibleBook, selection.bookId],
+    [allBooks, hydrateFirstVisibleBook, markLocalAction, selection.bookId],
   )
 
   const createCollection = useCallback(
     async (name: string) => {
       try {
+        markLocalAction()
         const cloudUserId = requireCloudUser(userId)
         const payload = await createCollectionInLibrary(cloudUserId, name)
         setCollections(payload.collections)
@@ -722,12 +767,13 @@ export function useLibraryStore(userId: string | null) {
         setLibraryError(error instanceof Error ? error.message : '集合创建失败。')
       }
     },
-    [allBooks, hydrateFirstVisibleBook, userId],
+    [allBooks, hydrateFirstVisibleBook, markLocalAction, userId],
   )
 
   const deleteCollection = useCallback(
     async (collectionId: string) => {
       try {
+        markLocalAction()
         const target = collections.find((collection) => collection.id === collectionId)
         const cloudUserId = requireCloudUser(userId)
         const payload = await deleteCollectionFromLibrary(cloudUserId, collectionId)
@@ -750,12 +796,13 @@ export function useLibraryStore(userId: string | null) {
         setLibraryError(error instanceof Error ? error.message : '集合删除失败。')
       }
     },
-    [activeCollectionId, collections, hydrateFirstVisibleBook, selection.bookId, userId],
+    [activeCollectionId, collections, hydrateFirstVisibleBook, markLocalAction, selection.bookId, userId],
   )
 
   const moveBookToCollection = useCallback(
     async (bookId: string, collectionId: string | null) => {
       try {
+        markLocalAction()
         const cloudUserId = requireCloudUser(userId)
         const payload = await moveBookToCollectionInLibrary(cloudUserId, bookId, collectionId)
         const nextVisibleBooks = filterBooksByCollection(payload.books, activeCollectionId)
@@ -780,10 +827,11 @@ export function useLibraryStore(userId: string | null) {
         setLibraryError(error instanceof Error ? error.message : '移动书籍失败。')
       }
     },
-    [activeCollectionId, collections, hydrateFirstVisibleBook, selection.bookId, userId],
+    [activeCollectionId, collections, hydrateFirstVisibleBook, markLocalAction, selection.bookId, userId],
   )
 
   const clearLibrary = useCallback(async () => {
+    markLocalAction()
     const cloudUserId = requireCloudUser(userId)
     await clearLibraryStorage(cloudUserId)
     setAllBooks([])
@@ -797,7 +845,7 @@ export function useLibraryStore(userId: string | null) {
     setSelection({ bookId: null, chapterId: null })
     setLibraryNotice('书架数据已清空。')
     setLibraryError('')
-  }, [userId])
+  }, [markLocalAction, userId])
 
   const getBookFile = useCallback(async (bookId: string) => {
     const cloudUserId = requireCloudUser(userId)
@@ -805,6 +853,7 @@ export function useLibraryStore(userId: string | null) {
   }, [userId])
 
   const migrateLegacyLocalLibrary = useCallback(async () => {
+    markLocalAction()
     const cloudUserId = requireCloudUser(userId)
     setIsMigratingLegacyLibrary(true)
     setLibraryError('')
@@ -825,7 +874,7 @@ export function useLibraryStore(userId: string | null) {
     } finally {
       setIsMigratingLegacyLibrary(false)
     }
-  }, [applyHydratedBook, userId])
+  }, [applyHydratedBook, markLocalAction, userId])
 
   return {
     adjacentChapterIds,
