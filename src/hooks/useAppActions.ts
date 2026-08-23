@@ -9,8 +9,15 @@ import {
 } from '../lib/anki'
 import type { AnkiConfigChangeHandler, AnkiFieldMappingChangeHandler } from '../lib/appState'
 import { createPendingAnkiNote } from '../lib/anki/pendingQueue'
-import { DEFAULT_CHAPTER_RANGE_SIZE, doesRangeContainSentenceIndex, getSentenceRangeAroundIndex } from '../lib/chapterRange'
+import { createChapterSentencesForLanguage } from '../lib/chapterText'
+import {
+  DEFAULT_CHAPTER_RANGE_SIZE,
+  doesRangeContainSentenceIndex,
+  getFullSentenceRange,
+  getSentenceRangeAroundIndex,
+} from '../lib/chapterRange'
 import { buildKnowledgeSignature } from '../lib/knowledge'
+import { isNativeAndroid } from '../lib/platform'
 import { buildReadingResumeAnchor, resolveReadingResumeAnchor } from '../lib/readingAnchor'
 import type {
   AddToAnkiResult,
@@ -144,20 +151,36 @@ export function useAppActions({
     persistent.setArticleTitle(value)
   }, [library, persistent])
 
-  const handleOpenChapterWorkspace = useCallback(async (chapterId: string) => {
-    const chapter = await library.openChapter(chapterId)
-    if (!chapter) {
-      return
+  const handleOpenChapterReading = useCallback(async (
+    chapterId: string,
+    language?: BookLanguage,
+  ) => {
+    let chapter = await library.openChapter(chapterId)
+    if (!chapter) return
+
+    if (chapter.sentences.length === 0 && chapter.sourceText) {
+      const nextSentences = await createChapterSentencesForLanguage(
+        chapter.sourceText,
+        language ?? library.selectedBook?.language ?? currentLanguage,
+      )
+      const updated = await library.updateCurrentChapter((currentChapter) => ({
+        ...currentChapter,
+        sentences: nextSentences,
+      }))
+      if (updated) {
+        chapter = updated
+      }
     }
 
-    setWorkspaceSource('chapter')
-    setActivePage('workspace')
-  }, [library, setActivePage, setWorkspaceSource])
-
-  const handleOpenChapterReading = useCallback(async (chapterId: string) => {
-    const chapter = await library.openChapter(chapterId)
-    if (!chapter) {
-      return
+    if (isNativeAndroid() && chapter.sentences.length > 0 && !chapter.activeRange) {
+      const fullRange = getFullSentenceRange(chapter.sentences.length)
+      const updated = await library.updateCurrentChapter((currentChapter) => ({
+        ...currentChapter,
+        activeRange: fullRange,
+      }))
+      if (updated) {
+        chapter = updated
+      }
     }
 
     const resolvedResumeAnchor = resolveReadingResumeAnchor(
@@ -191,8 +214,19 @@ export function useAppActions({
 
     setWorkspaceSource('chapter')
     setActivePage('reading')
-  }, [library, setActivePage, setWorkspaceSource])
+  }, [currentLanguage, library, setActivePage, setWorkspaceSource])
 
+  const handleOpenChapterWorkspace = useCallback(async (chapterId: string) => {
+    if (isNativeAndroid()) {
+      await handleOpenChapterReading(chapterId)
+      return
+    }
+
+    const chapter = await library.openChapter(chapterId)
+    if (!chapter) return
+    setWorkspaceSource('chapter')
+    setActivePage('workspace')
+  }, [handleOpenChapterReading, library, setActivePage, setWorkspaceSource])
   const handleOpenRecentChapter = useCallback(async () => {
     if (!library.selectedBook?.lastReadChapterId) {
       return
@@ -234,14 +268,18 @@ export function useAppActions({
   const handleImportFile = useCallback(async (file: File, language: BookLanguage) => {
     const payload = await library.importBook(file, language)
     if (payload.chapters[0]) {
-      setWorkspaceSource('chapter')
-      setActivePage('workspace')
+      if (isNativeAndroid()) {
+        await handleOpenChapterReading(payload.chapters[0].id, language)
+      } else {
+        setWorkspaceSource('chapter')
+        setActivePage('workspace')
+      }
     }
-  }, [library, setActivePage, setWorkspaceSource])
+  }, [handleOpenChapterReading, library, setActivePage, setWorkspaceSource])
 
   const handleSaveManualDraft = useCallback(async (input: ManualDraftSaveInput = {}) => {
     if (effectiveWorkspaceSource !== 'draft') {
-      return
+      return false
     }
 
     setIsSavingManualDraft(true)
@@ -256,11 +294,17 @@ export function useAppActions({
       })
 
       if (!payload?.chapters[0]) {
-        return
+        return false
+      }
+
+      if (isNativeAndroid()) {
+        setActivePage('library')
+        return true
       }
 
       setWorkspaceSource('chapter')
       setActivePage('workspace')
+      return true
     } finally {
       setIsSavingManualDraft(false)
     }

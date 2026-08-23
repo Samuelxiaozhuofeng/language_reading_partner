@@ -1,4 +1,6 @@
-import { formatTime, statusLabelMap } from '../lib/appState'
+import { formatTime } from '../lib/appState'
+import { languageLabel } from '../lib/languages'
+import { isNativeAndroid } from '../lib/platform'
 import type {
   ApiConfig,
   BookLanguage,
@@ -8,6 +10,7 @@ import type {
   SentenceRange,
   WorkspaceSource,
 } from '../types'
+import SentenceEditorPanel from './workspace/SentenceEditorPanel'
 
 type WorkspacePageProps = {
   apiConfig: ApiConfig
@@ -115,8 +118,8 @@ function WorkspacePage({
       ? apiConfig.languageOverrides?.ja?.concurrency ?? apiConfig.concurrency
       : apiConfig.concurrency
   const workspaceTitle = isChapterMode
-    ? contextTitle?.chapterTitle ?? '章节工作区'
-    : articleTitle.trim() || '文章解析工作区'
+    ? contextTitle?.chapterTitle ?? '解析'
+    : articleTitle.trim() || '粘贴文章'
 
   return (
     <>
@@ -130,8 +133,13 @@ function WorkspacePage({
             <button className="page-tab" type="button" onClick={onBackToLibrary}>
               返回书架
             </button>
-            <button className="ghost-button" type="button" disabled={readingDisabled} onClick={onOpenReading}>
-              打开阅读
+            <button
+              className={readingDisabled ? 'ghost-button' : 'primary-button'}
+              type="button"
+              disabled={readingDisabled}
+              onClick={onOpenReading}
+            >
+              阅读
             </button>
             <button className="ghost-button settings-button" type="button" onClick={onOpenSettings}>
               设置
@@ -143,7 +151,7 @@ function WorkspacePage({
           <span className="status-pill">模型 {apiConfig.model || '未设置'}</span>
           <span className="status-pill">并发 {effectiveConcurrency}</span>
           <span className="status-pill">{currentSentenceCount} 句</span>
-          <span className="status-pill">{bookLanguage === 'ja' ? '日本語' : '西班牙语'}</span>
+          <span className="status-pill">{languageLabel(bookLanguage)}</span>
           <span className="status-pill">完成 {completedResultCount}</span>
           <span className="status-pill">失败 {errorCount}</span>
           {contextTitle?.bookTitle ? <span className="status-pill">{contextTitle.bookTitle}</span> : null}
@@ -166,7 +174,7 @@ function WorkspacePage({
               <h2>{isEpubChapterMode ? '原生阅读模式' : isChapterMode ? '章节正文' : '原文'}</h2>
             </div>
             <div className="panel-actions">
-              {!isEpubChapterMode ? (
+              {!isEpubChapterMode && !isNativeAndroid() ? (
                 <button
                   className="secondary-button"
                   type="button"
@@ -198,8 +206,9 @@ function WorkspacePage({
                     onDraftLanguageChange(event.currentTarget.value as BookLanguage)
                   }
                 >
-                  <option value="es">西班牙语</option>
-                  <option value="ja">日本語</option>
+                  <option value="es">{languageLabel('es')}</option>
+                  <option value="ja">{languageLabel('ja')}</option>
+                  <option value="ar">{languageLabel('ar')}</option>
                 </select>
               </label>
             </div>
@@ -234,9 +243,11 @@ function WorkspacePage({
               </label>
 
               <p className="panel-tip">
-                {isChapterMode
+                {isNativeAndroid()
+                  ? '贴上原文，点开始阅读。点词即可查义。'
+                  : isChapterMode
                   ? '修改正文后记得分句，当前区间会按新的文本重新解析。'
-                  : '适合粘贴整篇文章、章节或短篇，解析后可加入书架。'}
+                  : '贴上原文，点分句，再点解析。'}
               </p>
             </>
           )}
@@ -249,15 +260,17 @@ function WorkspacePage({
               <h2>解析与阅读</h2>
             </div>
             <p className="panel-meta">
-              {isEpubChapterMode
+              {isNativeAndroid()
+                ? '贴上原文，点开始阅读。点词即可查义。'
+                : isEpubChapterMode
                 ? '正文保持 EPUB 原始样式，只解析你选中的句子区间。'
                 : isChapterMode
                 ? '只会重跑当前区间，并覆盖这一段已有结果。'
-                : '会重跑当前草稿，并在本地保留最近几次结果。'}
+                : '贴上原文，点分句，再点解析。'}
             </p>
           </div>
 
-          {isChapterMode && totalSentenceCount > 0 ? (
+          {isChapterMode && totalSentenceCount > 0 && !isNativeAndroid() ? (
             <div className="analysis-progress-card chapter-progress-card" aria-live="polite">
               <div className="analysis-progress-header">
                 <div>
@@ -288,7 +301,7 @@ function WorkspacePage({
             </div>
           ) : null}
 
-          {isChapterMode ? (
+          {isChapterMode && !isNativeAndroid() ? (
             <div className="range-card">
               <div className="range-card-header">
                 <span>本章共 {totalSentenceCount} 句</span>
@@ -339,24 +352,31 @@ function WorkspacePage({
           ) : null}
 
           <div className="analysis-actions">
+            {!isNativeAndroid() ? (
+              <button
+                className="primary-button"
+                type="button"
+                onClick={isRunning ? onCancelAnalysis : onRunAnalysis}
+              >
+                {isRunning ? (isChapterMode ? '停止当前区间解析' : '停止当前解析') : isChapterMode ? '开始当前区间解析' : '开始解析'}
+              </button>
+            ) : null}
             <button
-              className="primary-button"
+              className={readingDisabled && !isNativeAndroid() ? 'ghost-button' : 'primary-button'}
               type="button"
-              onClick={isRunning ? onCancelAnalysis : onRunAnalysis}
+              disabled={isNativeAndroid() ? !sourceText.trim() && sentences.length === 0 : readingDisabled}
+              onClick={onOpenReading}
             >
-              {isRunning ? (isChapterMode ? '停止当前区间解析' : '停止当前解析') : isChapterMode ? '开始当前区间解析' : '开始整章解析'}
-            </button>
-            <button className="ghost-button" type="button" disabled={readingDisabled} onClick={onOpenReading}>
-              {isChapterMode ? '打开当前区间阅读' : '打开沉浸阅读'}
+              {isNativeAndroid() ? '开始阅读' : isChapterMode ? '打开当前区间阅读' : '阅读'}
             </button>
           </div>
 
-          {(isRunning || progressTotal > 0) && (
+          {(isRunning || progressTotal > 0) && !isNativeAndroid() && (
             <div className="analysis-progress-card" aria-live="polite">
               <div className="analysis-progress-header">
                 <div>
                   <p className="analysis-progress-label">
-                    {isChapterMode ? (isRunning ? '当前区间解析进度' : '当前区间解析状态') : isRunning ? '整章解析进度' : '当前章节解析状态'}
+                    {isChapterMode ? (isRunning ? '当前区间解析进度' : '当前区间解析状态') : isRunning ? '解析进度' : '解析状态'}
                   </p>
                   <strong>
                     {finishedCount}/{progressTotal || 0} 句
@@ -385,67 +405,18 @@ function WorkspacePage({
           )}
         </section>
 
-        {!isEpubChapterMode ? (
-          <section className="panel editor-panel">
-            <div className="panel-header">
-              <div>
-                <p className="section-kicker">Sentences</p>
-                <h2>逐句校对</h2>
-              </div>
-              <p className="panel-meta">
-                {isChapterMode ? '这里只显示当前区间内的句子。' : 'AI 会以编辑后的句子内容为准。'}
-              </p>
-            </div>
-
-            <div className="sentence-list">
-              {sentences.length === 0 ? (
-                <div className="empty-state">
-                  <p>
-                    {isChapterMode
-                      ? selectedRange
-                        ? '当前区间还没有可编辑的句子。'
-                        : '先在 Step 2 选择一个句子区间，这里会显示对应内容。'
-                      : '先粘贴一段原文并点击“分句”，这里就会出现可编辑句子。'}
-                  </p>
-                </div>
-              ) : (
-                sentences.map((sentence, index) => (
-                  <article className="sentence-card" key={sentence.id}>
-                    <div className="sentence-card-header">
-                      <span className="sentence-index">#{isChapterMode ? sentenceStartIndex + index : index + 1}</span>
-                      <span className={`status-badge status-${sentence.status}`}>
-                        {statusLabelMap[sentence.status]}
-                      </span>
-                    </div>
-
-                    <textarea
-                      className="sentence-textarea"
-                      value={sentence.editedText}
-                      onChange={(event) => onSentenceChange(sentence.id, event.target.value)}
-                      placeholder="句子内容"
-                    />
-
-                    {sentence.error ? <p className="sentence-error">{sentence.error}</p> : null}
-
-                    <div className="sentence-actions">
-                      <span>{sentence.editedText.trim().length} 字符</span>
-                      <button
-                        className="ghost-button"
-                        type="button"
-                        onClick={() => onRetrySentence(sentence.id)}
-                        disabled={isRunning || !sentence.editedText.trim()}
-                      >
-                        重试本句
-                      </button>
-                    </div>
-                  </article>
-                ))
-              )}
-            </div>
-          </section>
+        {!isEpubChapterMode && !isNativeAndroid() ? (
+          <SentenceEditorPanel
+            isChapterMode={isChapterMode}
+            isRunning={isRunning}
+            onRetrySentence={onRetrySentence}
+            onSentenceChange={onSentenceChange}
+            selectedRange={selectedRange}
+            sentenceStartIndex={sentenceStartIndex}
+            sentences={sentences}
+          />
         ) : null}
-
-        {!isChapterMode ? (
+        {!isChapterMode && !isNativeAndroid() ? (
           <aside className="panel history-panel">
             <div className="panel-header">
               <div>
@@ -476,6 +447,7 @@ function WorkspacePage({
             )}
           </aside>
         ) : null}
+
       </main>
     </>
   )

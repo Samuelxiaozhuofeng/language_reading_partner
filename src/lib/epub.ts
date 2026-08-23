@@ -445,9 +445,29 @@ function normalizeEpubLanguage(language?: string | null): BookLanguage | null {
     return null
   }
 
-  return normalized === 'ja' || normalized === 'jpn' || normalized.startsWith('ja-')
-    ? 'ja'
-    : null
+  if (normalized === 'ja' || normalized === 'jpn' || normalized.startsWith('ja-')) {
+    return 'ja'
+  }
+
+  if (
+    normalized === 'ar' ||
+    normalized === 'ara' ||
+    normalized === 'arabic' ||
+    normalized.startsWith('ar-')
+  ) {
+    return 'ar'
+  }
+
+  if (
+    normalized === 'es' ||
+    normalized === 'spa' ||
+    normalized === 'spanish' ||
+    normalized.startsWith('es-')
+  ) {
+    return 'es'
+  }
+
+  return null
 }
 
 function buildBookRecord(

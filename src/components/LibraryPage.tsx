@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { chapterStatusLabelMap, formatTime } from '../lib/appState'
 import { detectEpubLanguage } from '../lib/epub'
+import { languageLabel } from '../lib/languages'
 import type { IpadicFeatures, Tokenizer } from 'kuromoji'
 import { getTokenizer } from '../lib/kuromoji'
 import type { BookChapterRecord, BookLanguage, BookRecord, CollectionRecord } from '../types'
+import BookCard from './library/BookCard'
 import ChapterNavigator from './library/ChapterNavigator'
 import CollectionsBar from './library/CollectionsBar'
+import ImportChooser from './library/ImportChooser'
 import LibraryEmptyState from './library/LibraryEmptyState'
 
 type LibraryPageProps = {
@@ -25,10 +28,10 @@ type LibraryPageProps = {
   onDeleteCollection: (collectionId: string) => void | Promise<void>
   onImportFile: (file: File, language: BookLanguage) => void | Promise<void>
   onMoveBookToCollection: (bookId: string, collectionId: string | null) => void | Promise<void>
+  onOpenBook: (bookId: string) => void
   onOpenChapterReading: (chapterId: string) => void
   onOpenChapterWorkspace: (chapterId: string) => void
   onOpenRecentChapter: () => void
-  onOpenResources: () => void
   onOpenManualWorkspace: () => void
   onOpenSettings: () => void
   recentChapterTitle?: string
@@ -39,7 +42,7 @@ type LibraryPageProps = {
   totalBookCount: number
 }
 
-function LibraryPage({
+export default function LibraryPage({
   activeCollectionId,
   books,
   chapters,
@@ -56,10 +59,10 @@ function LibraryPage({
   onDeleteCollection,
   onImportFile,
   onMoveBookToCollection,
+  onOpenBook,
   onOpenChapterReading,
   onOpenChapterWorkspace,
   onOpenRecentChapter,
-  onOpenResources,
   onOpenManualWorkspace,
   onOpenSettings,
   recentChapterTitle,
@@ -79,16 +82,19 @@ function LibraryPage({
   const [japaneseTokenizerError, setJapaneseTokenizerError] = useState('')
   const languageDialogRef = useRef<HTMLDialogElement | null>(null)
   const japaneseTokenizerPromiseRef = useRef<Promise<Tokenizer<IpadicFeatures>> | null>(null)
+
   const hasRecentChapter = Boolean(selectedBook?.lastReadChapterId && recentChapterTitle)
-  const totalChapterCount = books.reduce((sum, book) => sum + book.chapterCount, 0)
-  const activeCollectionName = activeCollectionId
-    ? collections.find((collection) => collection.id === activeCollectionId)?.name
-    : null
   const selectedBookLastOpenedAt = selectedBook?.lastOpenedAt
     ? formatTime(selectedBook.lastOpenedAt)
     : '未开始阅读'
   const isPreparingJapaneseImport =
     selectedImportLanguage === 'ja' && japaneseTokenizerStatus === 'loading'
+  const isSelectedBookSingleArticle = selectedBook
+    ? selectedBook.sourceType === 'manual' ||
+      selectedBook.chapterCount <= 1 ||
+      chapters.length <= 1
+    : false
+  const showChapterPanel = Boolean(selectedBook && !isSelectedBookSingleArticle)
 
   const preloadJapaneseTokenizer = useCallback(async () => {
     setJapaneseTokenizerError('')
@@ -167,12 +173,17 @@ function LibraryPage({
             <h1>阅读搭子</h1>
           </div>
           <div className="hero-actions">
-            <button className="page-tab is-active" type="button">
-              书架首页
-            </button>
-            <button className="page-tab" type="button" onClick={onOpenResources}>
-              学习资源
-            </button>
+            <ImportChooser
+              isImporting={isImporting}
+              manualWorkspaceLabel={manualWorkspaceLabel}
+              onFileSelected={(file) => void handleFileSelected(file)}
+              onOpenManualWorkspace={onOpenManualWorkspace}
+            />
+            {hasRecentChapter ? (
+              <button className="ghost-button" type="button" onClick={onOpenRecentChapter}>
+                继续最近阅读
+              </button>
+            ) : null}
             <button className="ghost-button settings-button" type="button" onClick={onOpenSettings}>
               设置
             </button>
@@ -180,40 +191,11 @@ function LibraryPage({
         </div>
 
         <div className="library-header-actions">
-          <div className="library-hero-actions">
-            <label className="primary-button file-trigger">
-              {isImporting ? '导入中...' : '导入 EPUB 图书'}
-              <input
-                accept=".epub,application/epub+zip"
-                type="file"
-                onChange={(event) => {
-                  const file = event.target.files?.[0]
-                  if (!file) {
-                    return
-                  }
-
-                  void handleFileSelected(file)
-                  event.currentTarget.value = ''
-                }}
-              />
-            </label>
-            <button className="ghost-button" type="button" onClick={onOpenManualWorkspace}>
-              {manualWorkspaceLabel}
-            </button>
-            {hasRecentChapter ? (
-              <button className="ghost-button" type="button" onClick={onOpenRecentChapter}>
-                继续最近阅读
-              </button>
-            ) : null}
-          </div>
           <div className="library-status-strip" aria-label="书架概览">
-            <span className="status-pill">
-              {activeCollectionName ? `${activeCollectionName}：${books.length} 本书` : `${totalBookCount} 本书`}
-            </span>
-            <span className="status-pill">{totalChapterCount} 个章节</span>
-            <span className="status-pill">
-              {selectedBook ? `当前：${selectedBook.title}` : '还没有选中的书'}
-            </span>
+            <span className="status-pill">{totalBookCount} 篇</span>
+            {hasRecentChapter ? (
+              <span className="status-pill">最近：{recentChapterTitle}</span>
+            ) : null}
           </div>
         </div>
 
@@ -221,14 +203,14 @@ function LibraryPage({
         {libraryError ? <p className="notice error">{libraryError}</p> : null}
       </header>
 
-      <main className="library-grid">
+      <main className={`library-grid${showChapterPanel ? '' : ' is-articles-only'}`}>
         <section className="panel bookshelf-panel">
           <div className="panel-header library-section-header">
             <div>
               <p className="section-kicker">Bookshelf</p>
               <h2>书架</h2>
             </div>
-            <p className="panel-meta">本地保存书籍、章节、EPUB 文件和解析结果。</p>
+            <p className="panel-meta">点卡片阅读。未解析完的文章会继续分句和解析。</p>
           </div>
 
           <CollectionsBar
@@ -260,111 +242,69 @@ function LibraryPage({
             )
           ) : (
             <div className="book-grid">
-              {books.map((book) => (
-                <article
-                  className={`book-card ${selectedBook?.id === book.id ? 'is-active' : ''}`}
-                  key={book.id}
-                >
-                  <button className="book-card-main" type="button" onClick={() => onSelectBook(book.id)}>
-                    <div className="book-cover">
-                      {book.coverUrl ? (
-                        <img alt={`${book.title} 封面`} src={book.coverUrl} />
-                      ) : (
-                        <div className="book-cover-fallback">
-                          <span>{book.sourceType === 'manual' ? 'TEXT' : 'EPUB'}</span>
-                        </div>
-                      )}
-                    </div>
+              {books.map((book) => {
+                const isSingleArticle =
+                  book.sourceType === 'manual' ||
+                  book.chapterCount <= 1 ||
+                  (selectedBook?.id === book.id && chapters.length <= 1)
 
-                    <div className="book-card-copy">
-                      <div className="book-card-header">
-                        <div className="book-card-title">
-                          <h3>{book.title}</h3>
-                          <p>{book.author}</p>
-                        </div>
-                        <span className="status-pill">{chapterStatusLabelMap[book.analysisState]}</span>
-                      </div>
-                      <div className="book-card-meta">
-                        <span>{book.chapterCount} 章</span>
-                        <span>{book.sourceType === 'manual' ? '手动保存' : 'EPUB 导入'}</span>
-                        <span>{(book.language ?? 'es') === 'ja' ? '日本語' : '西班牙语'}</span>
-                        <span>导入于 {formatTime(book.importedAt)}</span>
-                      </div>
-                    </div>
-                  </button>
-
-                  <div className="book-card-actions">
-                    <span className="book-card-hint">
-                      {selectedBook?.id === book.id ? '当前查看中' : '点击查看章节'}
-                    </span>
-                    <label className="book-collection-control">
-                      <span>集合</span>
-                      <select
-                        className="book-collection-select"
-                        value={book.collectionId ?? ''}
-                        onChange={(event) =>
-                          void onMoveBookToCollection(book.id, event.target.value || null)
-                        }
-                      >
-                        <option value="">全部</option>
-                        {collections.map((collection) => (
-                          <option key={collection.id} value={collection.id}>
-                            {collection.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <button className="ghost-button danger-button" type="button" onClick={() => onDeleteBook(book.id)}>
-                      删除本书
-                    </button>
-                  </div>
-                </article>
-              ))}
+                return (
+                  <BookCard
+                    book={book}
+                    collections={collections}
+                    isSingleArticle={isSingleArticle}
+                    isSelected={selectedBook?.id === book.id}
+                    key={book.id}
+                    onDeleteBook={onDeleteBook}
+                    onMoveBookToCollection={onMoveBookToCollection}
+                    onOpenBook={onOpenBook}
+                    onSelectBook={onSelectBook}
+                  />
+                )
+              })}
             </div>
           )}
         </section>
 
-        <section className="panel chapter-panel">
-          <div className="panel-header library-section-header">
-            <div>
-              <p className="section-kicker">Chapters</p>
-              <h2>{selectedBook ? '章节' : '章节目录'}</h2>
-            </div>
-          </div>
-
-          {!selectedBook ? (
-            <div className="empty-state compact">
-              <p>从左侧选一本书，这里会显示章节列表和最近阅读入口。</p>
-            </div>
-          ) : chapters.length === 0 ? (
-            <div className="empty-state compact">
-              <p>这本书目前还没有可显示的章节。</p>
-            </div>
-          ) : (
-            <>
-              <div className="chapter-summary">
-                <div className="chapter-summary-copy">
-                  <h3>{selectedBook.title}</h3>
-                  <p>{selectedBook.author}</p>
-                </div>
-                <div className="chapter-summary-meta">
-                  <span className="status-pill">{selectedBook.chapterCount} 章</span>
-                  <span className="status-pill">{chapterStatusLabelMap[selectedBook.analysisState]}</span>
-                  <span className="status-pill">最近打开 {selectedBookLastOpenedAt}</span>
-                </div>
+        {showChapterPanel && selectedBook ? (
+          <section className="panel chapter-panel">
+            <div className="panel-header library-section-header">
+              <div>
+                <p className="section-kicker">Chapters</p>
+                <h2>章节目录</h2>
               </div>
+            </div>
 
-              <ChapterNavigator
-                chapters={chapters}
-                key={selectedBook.id}
-                selectedChapterId={selectedChapterId}
-                onDeleteChapter={onDeleteChapter}
-                onOpenChapterReading={onOpenChapterReading}
-                onOpenChapterWorkspace={onOpenChapterWorkspace}
-              />
-            </>
-          )}
-        </section>
+            {chapters.length === 0 ? (
+              <div className="empty-state compact">
+                <p>这本书目前还没有可显示的章节。</p>
+              </div>
+            ) : (
+              <>
+                <div className="chapter-summary">
+                  <div className="chapter-summary-copy">
+                    <h3>{selectedBook.title}</h3>
+                    <p>{selectedBook.author}</p>
+                  </div>
+                  <div className="chapter-summary-meta">
+                    <span className="status-pill">{selectedBook.chapterCount} 章</span>
+                    <span className="status-pill">{chapterStatusLabelMap[selectedBook.analysisState]}</span>
+                    <span className="status-pill">最近打开 {selectedBookLastOpenedAt}</span>
+                  </div>
+                </div>
+
+                <ChapterNavigator
+                  chapters={chapters}
+                  key={selectedBook.id}
+                  selectedChapterId={selectedChapterId}
+                  onDeleteChapter={onDeleteChapter}
+                  onOpenChapterReading={onOpenChapterReading}
+                  onOpenChapterWorkspace={onOpenChapterWorkspace}
+                />
+              </>
+            )}
+          </section>
+        ) : null}
       </main>
 
       {showLanguageDialog ? (
@@ -378,7 +318,7 @@ function LibraryPage({
             </div>
             <p className="panel-tip">
               {detectedLanguage
-                ? `检测到 EPUB 语言为${detectedLanguage === 'ja' ? '日本語' : '西班牙语'}。`
+                ? `检测到 EPUB 语言为${languageLabel(detectedLanguage)}。`
                 : '未能从 EPUB 元数据中识别语言，请手动选择。'}
             </p>
             <label className="field field-block">
@@ -389,6 +329,7 @@ function LibraryPage({
               >
                 <option value="es">西班牙语</option>
                 <option value="ja">日本語</option>
+                <option value="ar">阿拉伯语</option>
               </select>
             </label>
             {selectedImportLanguage === 'ja' ? (
@@ -421,5 +362,3 @@ function LibraryPage({
     </>
   )
 }
-
-export default LibraryPage

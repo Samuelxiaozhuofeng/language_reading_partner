@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { chapterStatusLabelMap, formatTime } from '../../lib/appState'
+import { isNativeAndroid } from '../../lib/platform'
 import type { BookChapterRecord } from '../../types'
 
 const CHAPTER_RANGE_SIZE = 10
@@ -81,6 +82,7 @@ export default function ChapterNavigator({
   onOpenChapterReading,
   onOpenChapterWorkspace,
 }: ChapterNavigatorProps) {
+  const isAndroid = isNativeAndroid()
   const orderedChapters = useMemo(
     () => [...chapters].sort((first, second) => first.order - second.order),
     [chapters],
@@ -96,7 +98,6 @@ export default function ChapterNavigator({
   const effectiveQuickChapterId = orderedChapters.some((chapter) => chapter.id === quickChapterId)
     ? quickChapterId
     : defaultChapterId
-  const quickChapter = orderedChapters.find((chapter) => chapter.id === effectiveQuickChapterId)
   const trimmedQuery = chapterQuery.trim()
   const chapterRanges = useMemo(() => getChapterRanges(orderedChapters), [orderedChapters])
   const recentChapterId = useMemo(() => getRecentChapter(orderedChapters)?.id ?? null, [orderedChapters])
@@ -151,25 +152,6 @@ export default function ChapterNavigator({
             placeholder="输入章节号或标题"
           />
         </label>
-
-        <div className="chapter-nav-actions">
-          <button
-            className="primary-button"
-            type="button"
-            onClick={() => quickChapter && handleOpenChapterReading(quickChapter.id)}
-            disabled={!quickChapter}
-          >
-            阅读
-          </button>
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={() => quickChapter && handleOpenChapterWorkspace(quickChapter.id)}
-            disabled={!quickChapter}
-          >
-            工作区
-          </button>
-        </div>
       </div>
 
       {chapterRanges.length > 1 && !trimmedQuery ? (
@@ -193,38 +175,64 @@ export default function ChapterNavigator({
         </div>
       ) : (
         <div className="chapter-list" aria-label="章节目录">
-          {visibleChapters.map((chapter) => (
-            <article
-              className={`chapter-card chapter-row ${selectedChapterId === chapter.id ? 'is-active' : ''} ${
-                recentChapterId === chapter.id ? 'is-recent' : ''
-              }`}
-              key={chapter.id}
-            >
-              <div className="chapter-card-copy">
-                <div className="chapter-card-header">
-                  <span className="sentence-index">第 {chapter.order + 1} 章</span>
-                  <span className="status-pill">{chapterStatusLabelMap[chapter.analysisState]}</span>
-                </div>
-                <h3>{chapter.title}</h3>
-                <div className="chapter-card-meta">
-                  <span>{chapter.sentences.length} 句可解析</span>
-                  {chapter.lastOpenedAt ? <span>最近打开 {formatTime(chapter.lastOpenedAt)}</span> : null}
-                </div>
-              </div>
+          {visibleChapters.map((chapter) => {
+            const isChapterAnalyzed =
+              chapter.analysisState === 'analyzed' ||
+              chapter.sentences.some((s) => s.status === 'success')
 
-              <div className="chapter-card-actions">
-                <button className="secondary-button" type="button" onClick={() => handleOpenChapterWorkspace(chapter.id)}>
-                  工作区
-                </button>
-                <button className="ghost-button" type="button" onClick={() => handleOpenChapterReading(chapter.id)}>
-                  阅读
-                </button>
-                <button className="ghost-button danger-button" type="button" onClick={() => onDeleteChapter(chapter.id)}>
-                  删除
-                </button>
-              </div>
-            </article>
-          ))}
+            return (
+              <article
+                className={`chapter-card chapter-row ${selectedChapterId === chapter.id ? 'is-active' : ''} ${
+                  recentChapterId === chapter.id ? 'is-recent' : ''
+                }`}
+                key={chapter.id}
+              >
+                <div className="chapter-card-copy">
+                  <div className="chapter-card-header">
+                    <span className="sentence-index">第 {chapter.order + 1} 章</span>
+                    {!isAndroid ? (
+                      <span className="status-pill">{chapterStatusLabelMap[chapter.analysisState]}</span>
+                    ) : null}
+                  </div>
+                  <h3>{chapter.title}</h3>
+                  <div className="chapter-card-meta">
+                    {!isAndroid ? <span>{chapter.sentences.length} 句可解析</span> : null}
+                    {chapter.lastOpenedAt ? <span>最近打开 {formatTime(chapter.lastOpenedAt)}</span> : null}
+                  </div>
+                </div>
+                <div className="chapter-card-actions">
+                  {isAndroid || isChapterAnalyzed ? (
+                    <button
+                      className="primary-button"
+                      type="button"
+                      onClick={() => handleOpenChapterReading(chapter.id)}
+                    >
+                      阅读
+                    </button>
+                  ) : (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => handleOpenChapterWorkspace(chapter.id)}
+                    >
+                      解析
+                    </button>
+                  )}
+                  <button
+                    className="quiet-delete-button"
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`确定删除「${chapter.title}」？删除后无法恢复。`)) {
+                        onDeleteChapter(chapter.id)
+                      }
+                    }}
+                  >
+                    删除
+                  </button>
+                </div>
+              </article>
+            )
+          })}
         </div>
       )}
     </div>

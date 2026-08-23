@@ -5,6 +5,7 @@ import {
   type VocabularyPromptConfigChangeHandler,
 } from '../../lib/appState'
 import type { PromptConfig, VocabularyPromptConfig } from '../../types'
+import { isNativeAndroid } from '../../lib/platform'
 
 type PromptSettingsTabProps = {
   onPromptChange: PromptConfigChangeHandler
@@ -23,6 +24,104 @@ function PromptSettingsTab({
   promptConfig,
   vocabularyPromptConfig,
 }: PromptSettingsTabProps) {
+  const isAndroid = isNativeAndroid()
+
+  if (isAndroid) {
+    const currentStyle = vocabularyPromptConfig.style || 'dictionary'
+
+    return (
+      <div className="settings-panel prompt-panel">
+        <section className="prompt-config-section">
+          <div className="form-grid">
+            <label className="field">
+              <span>上下文句子数量</span>
+              <input
+                type="number"
+                min={0}
+                max={MAX_PROMPT_CONTEXT_SENTENCE_COUNT}
+                value={promptConfig.previousSentenceCount}
+                onChange={(event) => {
+                  const count = Math.max(
+                    0,
+                    Math.min(
+                      MAX_PROMPT_CONTEXT_SENTENCE_COUNT,
+                      Number(event.target.value) || 0,
+                    ),
+                  )
+                  onPromptChange('previousSentenceCount', count)
+                  onPromptChange('nextSentenceCount', count)
+                }}
+              />
+            </label>
+          </div>
+
+          <div className="field field-block">
+            <span>词汇讲解风格</span>
+            <div className="prompt-style-options" style={{ display: 'grid', gap: '12px', marginTop: '8px' }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="vocabularyStyle"
+                  value="dictionary"
+                  checked={currentStyle === 'dictionary'}
+                  onChange={() => onVocabularyPromptChange('style', 'dictionary')}
+                  style={{ marginTop: '3px' }}
+                />
+                <div>
+                  <div style={{ fontWeight: 600 }}>词典式</div>
+                  <div className="panel-tip" style={{ margin: '2px 0 0' }}>先给中文意思，再补词性和本句用法</div>
+                </div>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="vocabularyStyle"
+                  value="tutor"
+                  checked={currentStyle === 'tutor'}
+                  onChange={() => onVocabularyPromptChange('style', 'tutor')}
+                  style={{ marginTop: '3px' }}
+                />
+                <div>
+                  <div style={{ fontWeight: 600 }}>老师讲解</div>
+                  <div className="panel-tip" style={{ margin: '2px 0 0' }}>口语化讲这个词在本句里怎么理解，并给短记忆提示</div>
+                </div>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="vocabularyStyle"
+                  value="custom"
+                  checked={currentStyle === 'custom'}
+                  onChange={() => onVocabularyPromptChange('style', 'custom')}
+                  style={{ marginTop: '3px' }}
+                />
+                <div>
+                  <div style={{ fontWeight: 600 }}>自定义</div>
+                  <div className="panel-tip" style={{ margin: '2px 0 0' }}>自定义词汇解释的提示词要求与风格</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {currentStyle === 'custom' ? (
+            <label className="field field-block">
+              <span>自定义解释风格</span>
+              <textarea
+                className="settings-textarea"
+                value={vocabularyPromptConfig.customStyle || ''}
+                onChange={(event) => onVocabularyPromptChange('customStyle', event.target.value)}
+                placeholder="填写自定义风格说明..."
+                style={{ minHeight: '120px' }}
+              />
+            </label>
+          ) : null}
+        </section>
+      </div>
+    )
+  }
+
   return (
     <div className="settings-panel prompt-panel">
       <section className="prompt-config-section">

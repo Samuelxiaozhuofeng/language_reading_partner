@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import './App.css'
+import AndroidPastePage from './components/AndroidPastePage'
 import LibraryPage from './components/LibraryPage'
 import ReadingPage from './components/ReadingPage'
 import ResourcesPage from './components/ResourcesPage'
@@ -7,6 +8,7 @@ import SettingsDialog from './components/SettingsDialog'
 import WorkspacePage from './components/WorkspacePage'
 import { countByStatus } from './lib/appState'
 import { explainVocabulary } from './lib/openai'
+import { isNativeAndroid } from './lib/platform'
 import {
   getAutoAdvanceSentenceRange,
   DEFAULT_CHAPTER_RANGE_SIZE,
@@ -164,10 +166,6 @@ function App() {
     effectiveWorkspaceSource === 'chapter'
       ? readingVisibleSentences.length
       : countByStatus(readingVisibleSentences, 'success')
-  const readingErrorCount =
-    effectiveWorkspaceSource === 'chapter'
-      ? countByStatus(readingRangeSentences, 'error')
-      : countByStatus(readingVisibleSentences, 'error')
   const recentChapter =
     library.selectedBook?.lastReadChapterId
       ? library.chapters.find((chapter) => chapter.id === library.selectedBook?.lastReadChapterId) ?? null
@@ -208,11 +206,30 @@ function App() {
     workspaceSourceText,
   })
 
-  const handleChapterRangeChange = (nextRange: SentenceRange) => {
-    if (effectiveWorkspaceSource !== 'chapter' || !activeChapter) {
-      return
-    }
+  const handleOpenBook = useCallback(
+    async (bookId: string) => {
+      const hydrated = await library.hydrateBook(bookId)
+      if (!hydrated) return
+      const isSingle = hydrated.book.sourceType === 'manual' || hydrated.book.chapterCount <= 1 || hydrated.chapters.length <= 1
+      if (isSingle && hydrated.chapters[0]) {
+        const chapter = hydrated.chapters[0]
+        if (isNativeAndroid()) {
+          await handleOpenChapterReading(chapter.id, hydrated.book.language)
+          return
+        }
+        const isAnalyzed = hydrated.book.analysisState === 'analyzed' || chapter.analysisState === 'analyzed' || chapter.sentences.some((s) => s.status === 'success')
+        if (isAnalyzed) {
+          await handleOpenChapterReading(chapter.id)
+        } else {
+          await handleOpenChapterWorkspace(chapter.id)
+        }
+      }
+    },
+    [handleOpenChapterReading, handleOpenChapterWorkspace, library],
+  )
 
+  const handleChapterRangeChange = (nextRange: SentenceRange) => {
+    if (effectiveWorkspaceSource !== 'chapter' || !activeChapter) return
     setChapterRangeOverrides((current) => ({
       ...current,
       [activeChapter.id]: getSafeChapterRange(workspaceSentences, nextRange),
@@ -220,63 +237,54 @@ function App() {
   }
 
   const handleUseNextChapterRange = () => {
-    if (effectiveWorkspaceSource !== 'chapter' || !activeChapter) {
-      return
-    }
-
+    if (effectiveWorkspaceSource !== 'chapter' || !activeChapter) return
     setChapterRangeOverrides((current) => ({
       ...current,
-      [activeChapter.id]: getNextSentenceRange(
-        workspaceSentences.length,
-        activeChapter.lastReadEnd ?? -1,
-        activeChapter.activeRange ?? null,
-      ),
+      [activeChapter.id]: getNextSentenceRange(workspaceSentences.length, activeChapter.lastReadEnd ?? -1, activeChapter.activeRange ?? null),
     }))
   }
 
   const handleRunAnalysis = async () => {
     const nextPage = await analysis.runAnalysis()
-    if (nextPage === 'reading') {
-      setActivePage('reading')
-    }
+    if (nextPage === 'reading') setActivePage('reading')
   }
 
   const handleSegment = async () => {
     const nextSentences = await analysis.handleSegment()
-    if (effectiveWorkspaceSource !== 'draft' || !nextSentences) {
-      return
-    }
-
-    await handleSaveManualDraft({
-      sentences: nextSentences,
-      results: {},
-    })
+    if (effectiveWorkspaceSource !== 'draft' || !nextSentences) return
+    await handleSaveManualDraft({ sentences: nextSentences, results: {} })
   }
 
-  const handleDraftLanguageChange = (language: typeof persistent.draftLanguage) => {
-    if (language === persistent.draftLanguage) {
+  const handleSaveAndroidPaste = async () => {
+    if (!workspaceSourceText.trim()) {
       return
     }
 
+    const saved = await handleSaveManualDraft({ sentences: [], results: {} })
+    if (!saved) {
+      return
+    }
+
+    persistent.setArticleTitle('')
+    setWorkspaceSourceText('')
+    setWorkspaceSentences([])
+    setWorkspaceResults({})
+  }
+
+
+  const handleDraftLanguageChange = (language: typeof persistent.draftLanguage) => {
+    if (language === persistent.draftLanguage) return
     persistent.setDraftLanguage(language)
     setWorkspaceSentences([])
     setWorkspaceResults({})
     analysis.setNotice('已切换解析语言，请重新分句后再运行解析。')
   }
 
-  const openSettings = () => {
-    setIsSettingsOpen(true)
-  }
-
-  const openResources = () => {
-    setActivePage('resources')
-  }
-
   const handleExplainVocabulary = useCallback((context: string, word: string) => {
-    const vocabularyConfig = persistent.isVocabularyAiShared
-      ? persistent.apiConfig
-      : persistent.vocabularyApiConfig
-
+    const vocabularyConfig =
+      isNativeAndroid() || persistent.isVocabularyAiShared
+        ? persistent.apiConfig
+        : persistent.vocabularyApiConfig
     return explainVocabulary(
       vocabularyConfig,
       persistent.vocabularyPromptConfig,
@@ -316,29 +324,25 @@ function App() {
       vocabularyPromptConfig={persistent.vocabularyPromptConfig}
     />
   )
+
   if (activePage === 'reading') {
     return (
       <>
         <ReadingPage
           activeRange={activeReadingRange}
+          contextSentenceCount={persistent.promptConfig.previousSentenceCount}
           contextTitle={currentContextTitle}
-          errorCount={readingErrorCount}
+          errorCount={0}
           globalError={analysis.globalError}
-          onAddToAnki={(sentence, result, highlight) =>
-            handleAddHighlightToAnki(sentence, result, highlight)
-          }
-          onBackToWorkspace={() => setActivePage('workspace')}
+          onAddToAnki={handleAddHighlightToAnki}
+          onBackToWorkspace={() => setActivePage(isNativeAndroid() ? 'library' : 'workspace')}
           onExplainVocabulary={handleExplainVocabulary}
-          onOpenResources={openResources}
+          onOpenResources={() => setActivePage('resources')}
           onReadingPreferencesChange={persistent.handleReadingPreferencesChange}
           onRemoveHighlight={(signature) => void handleRemoveHighlight(signature)}
           onRetrySentence={(sentenceId) => void analysis.retrySingleSentence(sentenceId)}
-          onSaveHighlight={(sentence, result, highlight) =>
-            void handleSaveHighlight(sentence, result, highlight)
-          }
-          onSetResumeAnchor={(sentence, sentenceIndex) =>
-            void handleSetResumeAnchor(sentence, sentenceIndex)
-          }
+          onSaveHighlight={(sentence, result, highlight) => void handleSaveHighlight(sentence, result, highlight)}
+          onSetResumeAnchor={(sentence, sentenceIndex) => void handleSetResumeAnchor(sentence, sentenceIndex)}
           paragraphBlocks={activeChapter?.paragraphBlocks}
           readingPreferences={persistent.readingPreferences}
           bookLanguage={currentLanguage}
@@ -382,12 +386,12 @@ function App() {
           onMoveBookToCollection={(bookId, collectionId) =>
             void library.moveBookToCollection(bookId, collectionId)
           }
+          onOpenBook={handleOpenBook}
           onOpenChapterReading={handleOpenChapterReading}
           onOpenChapterWorkspace={handleOpenChapterWorkspace}
           onOpenRecentChapter={() => void handleOpenRecentChapter()}
-          onOpenResources={openResources}
           onOpenManualWorkspace={handleOpenManualWorkspace}
-          onOpenSettings={openSettings}
+          onOpenSettings={() => setIsSettingsOpen(true)}
           recentChapterTitle={recentChapter?.title}
           onSelectBook={(bookId) => void library.selectBook(bookId)}
           onSetActiveCollection={(collectionId) => void library.setActiveCollection(collectionId)}
@@ -395,15 +399,31 @@ function App() {
           selectedChapterId={library.selection.chapterId}
           totalBookCount={library.totalBookCount}
         />
+      ) : activePage === 'workspace' && isNativeAndroid() && effectiveWorkspaceSource === 'draft' ? (
+        <AndroidPastePage
+          articleTitle={persistent.articleTitle}
+          draftLanguage={persistent.draftLanguage}
+          error={library.libraryError}
+          isSaving={isSavingManualDraft}
+          notice={library.libraryNotice}
+          onArticleTitleChange={handleManualArticleTitleChange}
+          onCancel={() => setActivePage('library')}
+          onDraftLanguageChange={handleDraftLanguageChange}
+          onSave={() => void handleSaveAndroidPaste()}
+          onSourceTextChange={setWorkspaceSourceText}
+          sourceText={workspaceSourceText}
+        />
       ) : activePage === 'workspace' ? (
         <WorkspacePage
           apiConfig={persistent.apiConfig}
           articleTitle={persistent.articleTitle}
-          draftLanguage={persistent.draftLanguage}
+          bookLanguage={currentLanguage}
           chapterProgressPercent={chapterProgressPercent}
           chapterResolvedCount={completedResultCount}
+          chapterSourceType={effectiveWorkspaceSource === 'chapter' ? library.selectedBook?.sourceType : undefined}
           completedResultCount={completedResultCount}
           contextTitle={currentContextTitle}
+          draftLanguage={persistent.draftLanguage}
           errorCount={errorCount}
           finishedCount={finishedCount}
           globalError={analysis.globalError}
@@ -416,24 +436,24 @@ function App() {
           onArticleTitleChange={handleManualArticleTitleChange}
           onBackToLibrary={() => setActivePage('library')}
           onCancelAnalysis={analysis.cancelAnalysis}
+          onDraftLanguageChange={handleDraftLanguageChange}
           onOpenReading={() => setActivePage('reading')}
-          onOpenSettings={openSettings}
+          onOpenSettings={() => setIsSettingsOpen(true)}
           onRestoreSession={(session) => {
             persistent.setDraftLanguage(session.language ?? 'es')
             analysis.restoreSession(session)
           }}
           onRetrySentence={analysis.retrySingleSentence}
-          onSelectNextRange={handleUseNextChapterRange}
-          onUpdateRange={handleChapterRangeChange}
           onRunAnalysis={() => void handleRunAnalysis()}
           onSegment={() => void handleSegment()}
+          onSelectNextRange={handleUseNextChapterRange}
           onSentenceChange={analysis.handleSentenceChange}
-          onDraftLanguageChange={handleDraftLanguageChange}
           onSourceTextChange={setWorkspaceSourceText}
-          rangeSize={DEFAULT_CHAPTER_RANGE_SIZE}
+          onUpdateRange={handleChapterRangeChange}
           progressPercent={progressPercent}
           progressTotal={progressTotal}
           queuedCount={queuedCount}
+          rangeSize={DEFAULT_CHAPTER_RANGE_SIZE}
           readingDisabled={
             effectiveWorkspaceSource === 'chapter'
               ? readingVisibleSentences.length === 0 ||
@@ -444,13 +464,11 @@ function App() {
           }
           runningCount={runningCount}
           selectedRange={selectedChapterRange}
-          sentences={workspaceVisibleSentences}
           sentenceStartIndex={selectedChapterRange?.start ?? 0}
+          sentences={workspaceVisibleSentences}
           sourceText={workspaceSourceText}
-          bookLanguage={currentLanguage}
           successCount={successCount}
           totalSentenceCount={workspaceSentences.length}
-          chapterSourceType={effectiveWorkspaceSource === 'chapter' ? library.selectedBook?.sourceType : undefined}
           workspaceSource={effectiveWorkspaceSource}
         />
       ) : (

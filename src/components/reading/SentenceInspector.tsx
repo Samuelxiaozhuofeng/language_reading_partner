@@ -7,6 +7,7 @@ import type {
   AddToAnkiResult,
   AnalysisHighlight,
   AnalysisResult,
+  BookLanguage,
   SentenceItem,
   VocabularyExplanation,
 } from '../../types'
@@ -37,7 +38,7 @@ type SentenceInspectorProps = {
     result: AnalysisResult,
     highlight: AnalysisHighlight,
   ) => void
-  bookLanguage: 'es' | 'ja'
+  bookLanguage: BookLanguage
   onSelectHighlight: (sentenceId: string, highlightId: string) => void
   onSelectChunk: (sentenceId: string, chunkIndex: number) => void
   onSetCurrentResumeAnchor: () => void
@@ -159,7 +160,7 @@ function ActiveSentenceInspector({
         ) : (
           <ClickableSentenceWords
             activeWord={vocabularyInteraction.state?.word}
-            disabled={!result || vocabularyInteraction.state?.status === 'loading'}
+            disabled={vocabularyInteraction.state?.status === 'loading'}
             text={vocabularyInteraction.sentenceText}
             onWordClick={(word) => void vocabularyInteraction.handleWordClick(word)}
           />

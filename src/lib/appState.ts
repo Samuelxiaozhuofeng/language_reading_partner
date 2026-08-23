@@ -36,7 +36,7 @@ export const MIN_READING_CONTENT_WIDTH = 720
 export const MAX_READING_CONTENT_WIDTH = 1180
 export const MIN_READING_FONT_SIZE = 16
 export const MAX_READING_FONT_SIZE = 24
-const supportedBookLanguages = ['es', 'ja'] satisfies BookLanguage[]
+const supportedBookLanguages = ['es', 'ja', 'ar'] satisfies BookLanguage[]
 
 export const defaultConfig: ApiConfig = {
   baseUrl: 'https://api.openai.com/v1',
@@ -166,6 +166,8 @@ export const defaultVocabularyPromptConfig: VocabularyPromptConfig = {
     '当前句：{context}',
     '目标词：{word}',
   ].join('\n'),
+  style: 'dictionary',
+  customStyle: '',
 }
 
 export const defaultReadingPreferences: ReadingPreferences = {
@@ -471,9 +473,22 @@ export function restoreVocabularyPromptConfig(): VocabularyPromptConfig {
 
   try {
     const parsed = JSON.parse(saved) as Partial<VocabularyPromptConfig>
+    const style =
+      parsed.style === 'tutor' || parsed.style === 'custom' || parsed.style === 'dictionary'
+        ? parsed.style
+        : 'dictionary'
+    const customStyle = typeof parsed.customStyle === 'string' ? parsed.customStyle : ''
     return typeof parsed.template === 'string' && parsed.template.trim()
-      ? { template: parsed.template }
-      : defaultVocabularyPromptConfig
+      ? {
+          template: parsed.template,
+          style,
+          customStyle,
+        }
+      : {
+          ...defaultVocabularyPromptConfig,
+          style,
+          customStyle,
+        }
   } catch {
     return defaultVocabularyPromptConfig
   }
@@ -560,7 +575,7 @@ export function restoreDraft(): PersistedDraft {
 
     return {
       articleTitle: typeof parsed.articleTitle === 'string' ? parsed.articleTitle : '',
-      language: parsed.language === 'ja' ? 'ja' : 'es',
+      language: parsed.language === 'ja' || parsed.language === 'ar' ? parsed.language : 'es',
       sourceText: parsed.sourceText ?? defaultSourceText,
       sentences: restoredSentences,
       results,

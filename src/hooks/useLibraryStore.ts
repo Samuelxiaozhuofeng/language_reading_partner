@@ -724,6 +724,7 @@ export function useLibraryStore(userId: string | null = 'local') {
     adjacentChapterIds,
     activeCollectionId,
     chapters,
+    hydrateBook,
     clearLibrary,
     collectionBookCounts,
     collections,

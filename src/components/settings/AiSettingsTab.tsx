@@ -1,6 +1,7 @@
 import type { ConfigChangeHandler, ModelFetchStatus } from '../../lib/appState'
 import { MAX_CONCURRENCY, updateLanguageConcurrencyOverride } from '../../lib/appState'
 import type { ApiConfig } from '../../types'
+import { isNativeAndroid } from '../../lib/platform'
 
 type ModelPickerProps = {
   apiConfig: ApiConfig
@@ -285,6 +286,40 @@ function AiSettingsTab({
   vocabularyTotalModelPages,
   vocabularyVisibleModels,
 }: AiSettingsTabProps) {
+  const isAndroid = isNativeAndroid()
+
+  if (isAndroid) {
+    return (
+      <div className="settings-panel ai-settings-panel">
+        <AiConfigForm
+          apiConfig={apiConfig}
+          availableModels={availableModels}
+          currentModelPage={currentModelPage}
+          datalistId={SENTENCE_MODELS_DATALIST_ID}
+          filteredModelCount={filteredModelCount}
+          modelFetchMessage={modelFetchMessage}
+          modelFetchStatus={modelFetchStatus}
+          modelSearchTerm={modelSearchTerm}
+          onConfigChange={onConfigChange}
+          onModelSearchTermChange={onModelSearchTermChange}
+          onNextModelPage={onNextModelPage}
+          onPreviousModelPage={onPreviousModelPage}
+          onRefetchModels={onRefetchModels}
+          shouldPaginateModels={shouldPaginateModels}
+          showConcurrency={false}
+          title="AI 配置"
+          totalModelPages={totalModelPages}
+          visibleModels={visibleModels}
+        />
+
+        <p className="panel-tip">
+          兼容 OpenAI Chat Completions 协议。输入 URL 和 API Key 后会自动请求 `models`
+          端点，并把返回的模型列表提供给你选择。
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="settings-panel ai-settings-panel">
       <AiConfigForm

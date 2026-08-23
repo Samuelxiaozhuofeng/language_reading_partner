@@ -1,6 +1,6 @@
-import type { AnkiFieldSource } from '../../types'
+import type { AnkiFieldSource, BookLanguage } from '../../types'
 
-export type SraNoteTypeLanguage = 'es' | 'ja'
+export type SraNoteTypeLanguage = BookLanguage
 
 export const SRA_ES_NOTE_TYPE_NAME = 'SRA-ES'
 export const SRA_JA_NOTE_TYPE_NAME = 'SRA-JA'

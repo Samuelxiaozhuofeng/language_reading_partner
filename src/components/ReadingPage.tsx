@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { statusLabelMap } from '../lib/appState'
+import { languageDir, languageHtmlLang } from '../lib/languages'
 import { resolveReadingResumeAnchor } from '../lib/readingAnchor'
 import {
   buildChapterReadingParagraphs,
@@ -38,11 +39,12 @@ import type {
 type ReadingPageProps = {
   activeRange?: SentenceRange | null
   bookLanguage: BookLanguage
+  contextSentenceCount?: number
   contextTitle?: {
     bookTitle: string
     chapterTitle: string
   }
-  errorCount: number
+  errorCount?: number
   globalError: string
   onAddToAnki: (
     sentence: SentenceItem,
@@ -78,6 +80,7 @@ type ReadingPageProps = {
 function ReadingPage({
   activeRange,
   bookLanguage,
+  contextSentenceCount = 1,
   contextTitle,
   globalError,
   onAddToAnki,
@@ -487,7 +490,7 @@ function ReadingPage({
   }, [handleChangeChapterPage, isChapterMode])
 
   return (
-    <main className="reading-page">
+    <main className="reading-page" dir={languageDir(bookLanguage)} lang={languageHtmlLang(bookLanguage)}>
       <section
         className={`reading-shell ${isChapterMode ? 'is-chapter-shell' : ''} ${shouldDockInspector ? 'has-docked-inspector' : ''}`}
         ref={readingShellRef}
@@ -506,14 +509,17 @@ function ReadingPage({
                 chapterBodyRef={chapterBodyRef}
                 chapterPageCount={chapterPageCount}
                 chapterParagraphs={chapterParagraphs}
+                contextSentenceCount={contextSentenceCount}
                 currentChapterPage={currentChapterPage}
                 currentChapterPageData={currentChapterPageData}
                 effectiveActiveSentenceId={effectiveActiveSentenceId}
                 activeChunkSelection={effectiveActiveChunkSelection}
                 bookLanguage={bookLanguage}
                 isReadingSettingsOpen={isReadingSettingsOpen}
+                onAddToAnki={onAddToAnki}
                 onBackToWorkspace={onBackToWorkspace}
                 onCloseReadingSettings={() => setIsReadingSettingsOpen(false)}
+                onExplainVocabulary={onExplainVocabulary}
                 onChangeChapterPage={handleChangeChapterPage}
                 onOpenSentence={handleOpenSentence}
                 onReadingPreferencesChange={onReadingPreferencesChange}
@@ -530,6 +536,7 @@ function ReadingPage({
                 activeSelection={effectiveActiveSelection}
                 activeChunkSelection={effectiveActiveChunkSelection}
                 areAllSentencesExpanded={areAllSentencesExpanded}
+                contextSentenceCount={contextSentenceCount}
                 expandedSentenceIds={effectiveExpandedSentenceIds}
                 isReadingSettingsOpen={isReadingSettingsOpen}
                 onAddToAnki={onAddToAnki}

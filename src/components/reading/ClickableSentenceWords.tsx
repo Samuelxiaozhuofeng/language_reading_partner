@@ -3,6 +3,7 @@ import { tokenizeSpanishWords } from '../../lib/vocabulary'
 
 type ClickableSentenceWordsProps = {
   activeWord?: string
+  className?: string
   disabled?: boolean
   onWordClick: (word: string) => void
   text: string
@@ -10,6 +11,7 @@ type ClickableSentenceWordsProps = {
 
 export function ClickableSentenceWords({
   activeWord,
+  className,
   disabled = false,
   onWordClick,
   text,
@@ -21,7 +23,7 @@ export function ClickableSentenceWords({
   }
 
   return (
-    <span className="clickable-sentence-words">
+    <span className={`clickable-sentence-words ${className ?? ''}`.trim()}>
       {tokens.map((token, index) =>
         token.kind === 'word' ? (
           <button

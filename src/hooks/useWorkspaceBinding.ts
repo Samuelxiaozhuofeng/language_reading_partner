@@ -2,9 +2,11 @@ import { useCallback, useMemo } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import {
   getDefaultSentenceRange,
+  getFullSentenceRange,
   getSentencesInRange,
   normalizeSentenceRange,
 } from '../lib/chapterRange'
+import { isNativeAndroid } from '../lib/platform'
 import type {
   AnalysisDocumentContext,
   AnalysisResult,
@@ -140,13 +142,18 @@ export function useWorkspaceBinding({
     ],
   )
 
-  const activeReadingRange = useMemo(
-    () =>
-      effectiveWorkspaceSource === 'chapter'
-        ? getSafeChapterRange(workspaceSentences, activeChapter?.activeRange)
-        : null,
-    [activeChapter?.activeRange, effectiveWorkspaceSource, workspaceSentences],
-  )
+  const activeReadingRange = useMemo(() => {
+    if (effectiveWorkspaceSource !== 'chapter') {
+      return null
+    }
+
+    const storedRange = getSafeChapterRange(workspaceSentences, activeChapter?.activeRange)
+    if (isNativeAndroid()) {
+      return storedRange ?? getFullSentenceRange(workspaceSentences.length)
+    }
+
+    return storedRange
+  }, [activeChapter?.activeRange, effectiveWorkspaceSource, workspaceSentences])
 
   const workspaceVisibleSentences =
     effectiveWorkspaceSource === 'chapter'

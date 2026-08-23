@@ -12,6 +12,7 @@ import type {
 import { sanitizeChunkAnalysis } from './analysisResult'
 import { isJapaneseAnalysisPunctuation } from './japaneseUtils'
 import { sanitizeHighlights } from './knowledge'
+import { isNativeAndroid } from './platform'
 
 type ChatCompletionResponse = {
   choices?: Array<{
@@ -256,8 +257,35 @@ function interpolatePrompt(
   return `${buildDocumentMetadata(job.documentContext)}\n\n${interpolated}`
 }
 
-function interpolateVocabularyPrompt(template: string, job: VocabularyExplanationJob) {
-  return template
+function interpolateVocabularyPrompt(promptConfig: VocabularyPromptConfig, job: VocabularyExplanationJob) {
+  if (isNativeAndroid() && promptConfig.style) {
+    let styleInstruction = '3. 解释风格：先给中文意思，再补词性和本句用法。'
+    if (promptConfig.style === 'tutor') {
+      styleInstruction = '3. 解释风格：口语化讲这个词在本句里怎么理解，并给短记忆提示。'
+    } else if (promptConfig.style === 'custom') {
+      const custom = promptConfig.customStyle?.trim()
+      styleInstruction = custom ? `3. 解释风格要求：${custom}` : '3. 解释风格：先给中文意思，再补词性和本句用法。'
+    }
+
+    return [
+      '你是一名帮助中文母语者阅读外语文本的多语言词汇老师。请根据语境解释指定外语单词或短语，并且必须只输出一个 JSON 对象，不要输出 Markdown，不要输出额外说明。',
+      '',
+      'JSON 结构固定为：',
+      '{',
+      '  "explanation": "string"',
+      '}',
+      '',
+      '要求：',
+      '1. 必须使用中文回答。',
+      '2. 解释要简短，贴合语境，不要脱离语境罗列过多词义。',
+      styleInstruction,
+      '',
+      `当前句：${job.context}`,
+      `目标词：${job.word}`,
+    ].join('\n')
+  }
+
+  return (promptConfig.template || '')
     .replaceAll('{context}', job.context)
     .replaceAll('{word}', job.word)
 }
@@ -572,7 +600,7 @@ function buildVocabularyRequestBody(
     messages: [
       {
         role: 'user',
-        content: interpolateVocabularyPrompt(promptConfig.template, job),
+        content: interpolateVocabularyPrompt(promptConfig, job),
       },
     ],
   }

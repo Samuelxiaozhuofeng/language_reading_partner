@@ -37,6 +37,17 @@ export function getDefaultSentenceRange(
   }
 }
 
+export function getFullSentenceRange(sentenceCount: number): SentenceRange | null {
+  if (sentenceCount <= 0) {
+    return null
+  }
+
+  return {
+    start: 0,
+    end: sentenceCount - 1,
+  }
+}
+
 export function doesRangeContainSentenceIndex(
   range: SentenceRange | null | undefined,
   sentenceIndex: number,

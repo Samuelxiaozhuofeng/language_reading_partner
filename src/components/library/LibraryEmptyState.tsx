@@ -1,4 +1,4 @@
-import type { ChangeEvent } from 'react'
+import ImportChooser from './ImportChooser'
 
 type LibraryEmptyStateProps = {
   isImporting: boolean
@@ -13,16 +13,6 @@ function LibraryEmptyState({
   onFileSelected,
   onOpenManualWorkspace,
 }: LibraryEmptyStateProps) {
-  const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) {
-      return
-    }
-
-    onFileSelected(file)
-    event.currentTarget.value = ''
-  }
-
   return (
     <div className="empty-state library-empty-state">
       <div className="library-empty-copy">
@@ -30,21 +20,12 @@ function LibraryEmptyState({
         <p>导入一本 EPUB 电子书，或者粘贴一段外语文章直接开始逐句精读与解析。</p>
       </div>
       <div className="library-empty-actions">
-        <label className="primary-button file-trigger">
-          {isImporting ? '导入中...' : '导入 EPUB'}
-          <input
-            accept=".epub,application/epub+zip"
-            type="file"
-            onChange={handleInputChange}
-          />
-        </label>
-        <button
-          className="ghost-button"
-          type="button"
-          onClick={onOpenManualWorkspace}
-        >
-          {manualWorkspaceLabel}
-        </button>
+        <ImportChooser
+          isImporting={isImporting}
+          manualWorkspaceLabel={manualWorkspaceLabel}
+          onFileSelected={onFileSelected}
+          onOpenManualWorkspace={onOpenManualWorkspace}
+        />
       </div>
     </div>
   )
