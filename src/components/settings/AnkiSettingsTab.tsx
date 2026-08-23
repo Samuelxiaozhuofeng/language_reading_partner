@@ -7,6 +7,7 @@ import {
   ankiFieldSourceLabelMap,
   getAnkiFieldSourceOrder,
   getSraNoteTypeName,
+  shouldUseAnkiDroid,
   type AnkiCompatibilityIssue,
 } from '../../lib/anki'
 import type { AnkiConfig, BookLanguage } from '../../types'
@@ -20,10 +21,12 @@ type AnkiSettingsTabProps = {
   availableDecks: string[]
   availableNoteFields: string[]
   availableNoteTypes: string[]
+  isAndroid?: boolean
   onAnkiConfigChange: AnkiConfigChangeHandler
   onAnkiFieldMappingChange: AnkiFieldMappingChangeHandler
   onAnkiLanguageChange: (language: BookLanguage) => void
   onCreateSraNoteType: () => void
+  onRequestPermission?: () => void
   onRunAnkiFetch: () => void
 }
 
@@ -36,12 +39,15 @@ function AnkiSettingsTab({
   availableDecks,
   availableNoteFields,
   availableNoteTypes,
+  isAndroid: isAndroidProp,
   onAnkiConfigChange,
   onAnkiFieldMappingChange,
   onAnkiLanguageChange,
   onCreateSraNoteType,
+  onRequestPermission,
   onRunAnkiFetch,
 }: AnkiSettingsTabProps) {
+  const isAndroid = isAndroidProp ?? shouldUseAnkiDroid()
   const deckOptions = ankiConfig.deck.trim() && !availableDecks.includes(ankiConfig.deck)
     ? [ankiConfig.deck, ...availableDecks]
     : availableDecks
@@ -57,16 +63,25 @@ function AnkiSettingsTab({
     <div className="settings-panel prompt-panel">
       <div className="panel-header settings-subheader">
         <div>
-          <h3>AnkiConnect</h3>
+          <h3>{isAndroid ? 'AnkiDroid' : 'AnkiConnect'}</h3>
         </div>
         <div className="panel-actions">
+          {isAndroid && onRequestPermission ? (
+            <button
+              className="ghost-button"
+              type="button"
+              disabled={ankiFetchStatus === 'loading'}
+              onClick={onRequestPermission}
+            >
+              {ankiFetchStatus === 'loading' ? '处理中...' : '授权 AnkiDroid'}
+            </button>
+          ) : null}
           <button
             className="ghost-button"
             type="button"
             disabled={
               ankiFetchStatus === 'loading' ||
-              !ankiConfig.endpoint.trim() ||
-              Boolean(ankiCompatibilityIssue)
+              (!isAndroid && (!ankiConfig.endpoint.trim() || Boolean(ankiCompatibilityIssue)))
             }
             onClick={onRunAnkiFetch}
           >
@@ -74,19 +89,24 @@ function AnkiSettingsTab({
               ? '连接中...'
               : ankiCompatibilityIssue
                 ? 'Safari 当前不可直连'
-                : '测试连接并刷新'}
+                : isAndroid
+                  ? '测试连接'
+                  : '测试连接并刷新'}
           </button>
           <button
             className="ghost-button"
             type="button"
             disabled={
               ankiFetchStatus === 'loading' ||
-              !ankiConfig.endpoint.trim() ||
-              Boolean(ankiCompatibilityIssue)
+              (!isAndroid && (!ankiConfig.endpoint.trim() || Boolean(ankiCompatibilityIssue)))
             }
             onClick={onCreateSraNoteType}
           >
-            {ankiFetchStatus === 'loading' ? '处理中...' : `创建 / 修复 ${sraNoteTypeName}`}
+            {ankiFetchStatus === 'loading'
+              ? '处理中...'
+              : isAndroid
+                ? `创建 / 就绪 ${sraNoteTypeName}`
+                : `创建 / 修复 ${sraNoteTypeName}`}
           </button>
         </div>
       </div>
@@ -112,7 +132,7 @@ function AnkiSettingsTab({
         </button>
       </div>
 
-      {ankiCompatibilityIssue ? (
+      {!isAndroid && ankiCompatibilityIssue ? (
         <div className="compatibility-callout" role="status" aria-live="polite">
           <p className="compatibility-callout-title">Safari 兼容说明</p>
           <p>{ankiCompatibilityIssue.summary}</p>
@@ -123,15 +143,17 @@ function AnkiSettingsTab({
       ) : null}
 
       <div className="form-grid">
-        <label className="field">
-          <span>AnkiConnect URL</span>
-          <input
-            type="url"
-            value={ankiConfig.endpoint}
-            onChange={(event) => onAnkiConfigChange('endpoint', event.target.value)}
-            placeholder="http://127.0.0.1:8765"
-          />
-        </label>
+        {!isAndroid ? (
+          <label className="field">
+            <span>AnkiConnect URL</span>
+            <input
+              type="url"
+              value={ankiConfig.endpoint}
+              onChange={(event) => onAnkiConfigChange('endpoint', event.target.value)}
+              placeholder="http://127.0.0.1:8765"
+            />
+          </label>
+        ) : null}
 
         <label className="field">
           <span>Deck</span>
@@ -194,15 +216,23 @@ function AnkiSettingsTab({
         添加到 Anki 时允许重复卡片，失败会直接提示，不会静默跳过。
       </p>
 
-      <p className="panel-tip">
-        “创建 / 修复 {sraNoteTypeName}”会先请求当前页面访问 AnkiConnect 的权限，再自动创建或更新当前语言模板，并把
-        {isJapaneseAnki ? '8 个字段映射到同名字段。日语模板会在背面显示自动生成的振假名字段。' : '6 个字段映射到同名字段。'}
-      </p>
+      {isAndroid ? (
+        <p className="panel-tip">
+          安卓版直连本地 AnkiDroid 官方 API，点击“创建 / 就绪 {sraNoteTypeName}”会自动在 AnkiDroid 中建立专属模板并自动完成字段映射。
+        </p>
+      ) : (
+        <>
+          <p className="panel-tip">
+            “创建 / 修复 {sraNoteTypeName}”会先请求当前页面访问 AnkiConnect 的权限，再自动创建或更新当前语言模板，并把
+            {isJapaneseAnki ? '8 个字段映射到同名字段。日语模板会在背面显示自动生成的振假名字段。' : '6 个字段映射到同名字段。'}
+          </p>
 
-      <p className="panel-tip">
-        如果你在 Safari 中使用线上 HTTPS 页面，浏览器会拦截它直接访问本机 HTTP 版
-        AnkiConnect。这个限制来自浏览器安全策略，不是 Anki 配置错误。
-      </p>
+          <p className="panel-tip">
+            如果你在 Safari 中使用线上 HTTPS 页面，浏览器会拦截它直接访问本机 HTTP 版
+            AnkiConnect。这个限制来自浏览器安全策略，不是 Anki 配置错误。
+          </p>
+        </>
+      )}
     </div>
   )
 }

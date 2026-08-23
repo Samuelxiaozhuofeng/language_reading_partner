@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { shouldQueueAnkiOnThisDevice } from '../../lib/anki'
+import { shouldQueueAnkiOnThisDevice, shouldUseAnkiDroid } from '../../lib/anki'
 import { knowledgeKindLabelMap } from '../../lib/knowledge'
 import type { PendingAnkiNote } from '../../types'
 
@@ -11,13 +11,14 @@ type PendingAnkiImportPanelProps = {
 function PendingAnkiImportPanel({ notes, onImport }: PendingAnkiImportPanelProps) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
+  const isAndroid = shouldUseAnkiDroid()
   const isMobileDevice = shouldQueueAnkiOnThisDevice()
   const failedCount = useMemo(
     () => notes.filter((note) => Boolean(note.lastError)).length,
     [notes],
   )
   const previewNotes = notes.slice(0, 3)
-  const canImport = notes.length > 0 && !isMobileDevice && status !== 'loading'
+  const canImport = notes.length > 0 && !isAndroid && !isMobileDevice && status !== 'loading'
 
   const handleImport = async () => {
     setStatus('loading')
@@ -33,6 +34,22 @@ function PendingAnkiImportPanel({ notes, onImport }: PendingAnkiImportPanelProps
     }
   }
 
+  if (isAndroid) {
+    return (
+      <section className="panel resources-anki-panel">
+        <div className="panel-header library-section-header">
+          <div>
+            <p className="section-kicker">AnkiDroid</p>
+            <h2>本机 Anki</h2>
+          </div>
+          <p className="panel-meta">
+            安卓版会直接把卡片写入本机 AnkiDroid，不用再回到电脑导入。
+          </p>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="panel resources-anki-panel">
       <div className="panel-header library-section-header">
@@ -41,7 +58,7 @@ function PendingAnkiImportPanel({ notes, onImport }: PendingAnkiImportPanelProps
           <h2>移动端 Anki 待导入</h2>
         </div>
         <p className="panel-meta">
-          手机端保存的条目会先进入云端队列，在桌面端打开 Anki 后可一次性导入。
+          手机浏览器保存的条目会先留在本机待导入列表，在电脑上打开 Anki 后可一次性导入。
         </p>
       </div>
 

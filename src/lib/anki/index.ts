@@ -33,8 +33,6 @@ export {
 } from './client'
 export { toUserFacingAnkiError } from './errors'
 export {
-  addNotesToAnki,
-  addNoteToAnki,
   buildAnkiNotePayload,
   buildFields,
   createAnkiFieldMappingFromFieldNames,
@@ -42,8 +40,23 @@ export {
   getAnkiFieldMappingIssues,
   highlightKnowledgeInSentence,
 } from './payload'
+export {
+  addNotesToAnki,
+  addNoteToAnki,
+} from './addNote'
+export type { AddNoteToAnkiResult } from './addNote'
 export type { AnkiNotePayload } from './payload'
-export { shouldQueueAnkiOnThisDevice } from './environment'
+export {
+  AnkiDroid,
+  ensureAnkiDroidSraNoteType,
+} from './ankiDroid'
+export type {
+  AddNoteOptions,
+  AnkiDroidPlugin,
+  EnsureSraNoteTypeOptions,
+  ShareNoteOptions,
+} from './ankiDroid'
+export { shouldQueueAnkiOnThisDevice, shouldUseAnkiDroid } from './environment'
 export {
   createOrRepairSraAnkiNoteType,
   fetchAnkiModelTemplates,

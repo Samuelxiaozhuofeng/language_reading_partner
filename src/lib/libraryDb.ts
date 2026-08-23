@@ -3,11 +3,12 @@ import type {
   BookChapterRecord,
   BookRecord,
   CollectionRecord,
+  PendingAnkiNote,
   SavedKnowledgeResource,
 } from '../types'
 
 const DB_NAME = 'spanish-reading-assistant/library'
-const DB_VERSION = 5
+const DB_VERSION = 6
 
 type BookFileRecord = {
   bookId: string
@@ -54,6 +55,14 @@ interface LibraryDbSchema extends DBSchema {
     key: string
     value: CollectionRecord
   }
+  pendingAnkiNotes: {
+    key: string
+    value: PendingAnkiNote
+    indexes: {
+      'by-created-at': string
+      'by-dedupe-key': string
+    }
+  }
 }
 
 let dbPromise: Promise<IDBPDatabase<LibraryDbSchema>> | null = null
@@ -90,6 +99,12 @@ function getDb() {
 
         if (!database.objectStoreNames.contains('collections')) {
           database.createObjectStore('collections', { keyPath: 'id' })
+        }
+
+        if (!database.objectStoreNames.contains('pendingAnkiNotes')) {
+          const pendingStore = database.createObjectStore('pendingAnkiNotes', { keyPath: 'id' })
+          pendingStore.createIndex('by-created-at', 'createdAt')
+          pendingStore.createIndex('by-dedupe-key', 'dedupeKey', { unique: true })
         }
 
         if (oldVersion < 5) {
@@ -319,13 +334,83 @@ export async function deleteBookCascade(bookId: string) {
   await tx.done
 }
 
+export async function getPendingAnkiNotes() {
+  const db = await getDb()
+  const notes = await db.getAll('pendingAnkiNotes')
+  return notes
+    .filter((note) => !note.importedAt)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+}
+
+export async function savePendingAnkiNote(note: PendingAnkiNote) {
+  const db = await getDb()
+  const existing = await db.getFromIndex('pendingAnkiNotes', 'by-dedupe-key', note.dedupeKey)
+  const nextNote: PendingAnkiNote = {
+    ...(existing ?? {}),
+    ...note,
+    id: existing?.id ?? note.id,
+    importedAt: undefined,
+    lastError: undefined,
+  }
+  await db.put('pendingAnkiNotes', nextNote)
+  return nextNote
+}
+
+export async function markPendingAnkiNotesImported(noteIds: string[]) {
+  if (noteIds.length === 0) {
+    return
+  }
+
+  const db = await getDb()
+  const tx = db.transaction('pendingAnkiNotes', 'readwrite')
+  const now = new Date().toISOString()
+
+  for (const id of noteIds) {
+    const note = await tx.store.get(id)
+    if (note) {
+      await tx.store.put({
+        ...note,
+        importedAt: now,
+        lastError: undefined,
+      })
+    }
+  }
+
+  await tx.done
+}
+
+export async function savePendingAnkiNoteErrors(noteIds: string[], message: string) {
+  if (noteIds.length === 0) {
+    return
+  }
+
+  const db = await getDb()
+  const tx = db.transaction('pendingAnkiNotes', 'readwrite')
+
+  for (const id of noteIds) {
+    const note = await tx.store.get(id)
+    if (note) {
+      await tx.store.put({
+        ...note,
+        lastError: message,
+      })
+    }
+  }
+
+  await tx.done
+}
+
 export async function clearLibraryDb() {
   const db = await getDb()
-  const tx = db.transaction(['books', 'chapters', 'bookFiles', 'resources', 'collections'], 'readwrite')
+  const tx = db.transaction(
+    ['books', 'chapters', 'bookFiles', 'resources', 'collections', 'pendingAnkiNotes'],
+    'readwrite',
+  )
   await tx.objectStore('books').clear()
   await tx.objectStore('chapters').clear()
   await tx.objectStore('bookFiles').clear()
   await tx.objectStore('resources').clear()
   await tx.objectStore('collections').clear()
+  await tx.objectStore('pendingAnkiNotes').clear()
   await tx.done
 }

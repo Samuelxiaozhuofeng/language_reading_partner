@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { chapterStatusLabelMap, formatTime } from '../lib/appState'
 import { detectEpubLanguage } from '../lib/epub'
+import type { IpadicFeatures, Tokenizer } from 'kuromoji'
 import { getTokenizer } from '../lib/kuromoji'
 import type { BookChapterRecord, BookLanguage, BookRecord, CollectionRecord } from '../types'
 import ChapterNavigator from './library/ChapterNavigator'
-import CloudAuthGate from './library/CloudAuthGate'
 import CollectionsBar from './library/CollectionsBar'
-import LegacyMigrationPrompt from './library/LegacyMigrationPrompt'
+import LibraryEmptyState from './library/LibraryEmptyState'
 
 type LibraryPageProps = {
   activeCollectionId: string | null
@@ -14,16 +14,8 @@ type LibraryPageProps = {
   chapters: BookChapterRecord[]
   collectionBookCounts: Record<string, number>
   collections: CollectionRecord[]
-  authError: string
-  authNotice: string
-  authUserEmail?: string | null
-  hasLegacyLocalLibrary: boolean
   isImporting: boolean
-  isAuthConfigured: boolean
-  isAuthLoading: boolean
-  isAuthSubmitting: boolean
   isLoading: boolean
-  isMigratingLegacyLibrary: boolean
   libraryError: string
   libraryNotice: string
   manualWorkspaceLabel: string
@@ -32,7 +24,6 @@ type LibraryPageProps = {
   onDeleteChapter: (chapterId: string) => void
   onDeleteCollection: (collectionId: string) => void | Promise<void>
   onImportFile: (file: File, language: BookLanguage) => void | Promise<void>
-  onMigrateLegacyLocalLibrary: () => void | Promise<void>
   onMoveBookToCollection: (bookId: string, collectionId: string | null) => void | Promise<void>
   onOpenChapterReading: (chapterId: string) => void
   onOpenChapterWorkspace: (chapterId: string) => void
@@ -40,13 +31,7 @@ type LibraryPageProps = {
   onOpenResources: () => void
   onOpenManualWorkspace: () => void
   onOpenSettings: () => void
-  onResendConfirmation: (email: string) => void | Promise<void>
-  onSignIn: (email: string, password: string) => void | Promise<void>
-  onSignOut: () => void | Promise<void>
-  onSignUp: (email: string, password: string) => void | Promise<void>
-  pendingConfirmationEmail?: string | null
   recentChapterTitle?: string
-  resendCooldownSeconds: number
   onSelectBook: (bookId: string) => void
   onSetActiveCollection: (collectionId: string | null) => void | Promise<void>
   selectedBook: BookRecord | null
@@ -60,16 +45,8 @@ function LibraryPage({
   chapters,
   collectionBookCounts,
   collections,
-  authError,
-  authNotice,
-  authUserEmail,
-  hasLegacyLocalLibrary,
   isImporting,
-  isAuthConfigured,
-  isAuthLoading,
-  isAuthSubmitting,
   isLoading,
-  isMigratingLegacyLibrary,
   libraryError,
   libraryNotice,
   manualWorkspaceLabel,
@@ -78,7 +55,6 @@ function LibraryPage({
   onDeleteChapter,
   onDeleteCollection,
   onImportFile,
-  onMigrateLegacyLocalLibrary,
   onMoveBookToCollection,
   onOpenChapterReading,
   onOpenChapterWorkspace,
@@ -86,13 +62,7 @@ function LibraryPage({
   onOpenResources,
   onOpenManualWorkspace,
   onOpenSettings,
-  onResendConfirmation,
-  onSignIn,
-  onSignOut,
-  onSignUp,
-  pendingConfirmationEmail,
   recentChapterTitle,
-  resendCooldownSeconds,
   onSelectBook,
   onSetActiveCollection,
   selectedBook,
@@ -108,7 +78,7 @@ function LibraryPage({
   >('idle')
   const [japaneseTokenizerError, setJapaneseTokenizerError] = useState('')
   const languageDialogRef = useRef<HTMLDialogElement | null>(null)
-  const japaneseTokenizerPromiseRef = useRef<ReturnType<typeof getTokenizer> | null>(null)
+  const japaneseTokenizerPromiseRef = useRef<Promise<Tokenizer<IpadicFeatures>> | null>(null)
   const hasRecentChapter = Boolean(selectedBook?.lastReadChapterId && recentChapterTitle)
   const totalChapterCount = books.reduce((sum, book) => sum + book.chapterCount, 0)
   const activeCollectionName = activeCollectionId
@@ -119,7 +89,6 @@ function LibraryPage({
     : '未开始阅读'
   const isPreparingJapaneseImport =
     selectedImportLanguage === 'ja' && japaneseTokenizerStatus === 'loading'
-  const isSignedIn = Boolean(authUserEmail)
 
   const preloadJapaneseTokenizer = useCallback(async () => {
     setJapaneseTokenizerError('')
@@ -198,92 +167,59 @@ function LibraryPage({
             <h1>阅读搭子</h1>
           </div>
           <div className="hero-actions">
-            {isSignedIn ? (
-              <>
-                <button className="page-tab is-active" type="button">
-                  书架首页
-                </button>
-                <button className="page-tab" type="button" onClick={onOpenResources}>
-                  学习资源
-                </button>
-              </>
-            ) : null}
+            <button className="page-tab is-active" type="button">
+              书架首页
+            </button>
+            <button className="page-tab" type="button" onClick={onOpenResources}>
+              学习资源
+            </button>
             <button className="ghost-button settings-button" type="button" onClick={onOpenSettings}>
               设置
             </button>
-            {isSignedIn ? (
-              <button className="ghost-button" type="button" onClick={() => void onSignOut()}>
-                退出
-              </button>
-            ) : null}
           </div>
         </div>
 
-        {isSignedIn ? (
-          <div className="library-header-actions">
-            <div className="library-hero-actions">
-              <label className="primary-button file-trigger">
-                {isImporting ? '导入中...' : '导入 EPUB 图书'}
-                <input
-                  accept=".epub,application/epub+zip"
-                  type="file"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0]
-                    if (!file) {
-                      return
-                    }
+        <div className="library-header-actions">
+          <div className="library-hero-actions">
+            <label className="primary-button file-trigger">
+              {isImporting ? '导入中...' : '导入 EPUB 图书'}
+              <input
+                accept=".epub,application/epub+zip"
+                type="file"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (!file) {
+                    return
+                  }
 
-                    void handleFileSelected(file)
-                    event.currentTarget.value = ''
-                  }}
-                />
-              </label>
-              <button className="ghost-button" type="button" onClick={onOpenManualWorkspace}>
-                {manualWorkspaceLabel}
+                  void handleFileSelected(file)
+                  event.currentTarget.value = ''
+                }}
+              />
+            </label>
+            <button className="ghost-button" type="button" onClick={onOpenManualWorkspace}>
+              {manualWorkspaceLabel}
+            </button>
+            {hasRecentChapter ? (
+              <button className="ghost-button" type="button" onClick={onOpenRecentChapter}>
+                继续最近阅读
               </button>
-              {hasRecentChapter ? (
-                <button className="ghost-button" type="button" onClick={onOpenRecentChapter}>
-                  继续最近阅读
-                </button>
-              ) : null}
-            </div>
-            <div className="library-status-strip" aria-label="书架概览">
-              <span className="status-pill">
-                {activeCollectionName ? `${activeCollectionName}：${books.length} 本书` : `${totalBookCount} 本书`}
-              </span>
-              <span className="status-pill">{totalChapterCount} 个章节</span>
-              <span className="status-pill">
-                {selectedBook ? `当前：${selectedBook.title}` : '还没有选中的书'}
-              </span>
-              <span className="status-pill">{authUserEmail}</span>
-            </div>
+            ) : null}
           </div>
-        ) : null}
+          <div className="library-status-strip" aria-label="书架概览">
+            <span className="status-pill">
+              {activeCollectionName ? `${activeCollectionName}：${books.length} 本书` : `${totalBookCount} 本书`}
+            </span>
+            <span className="status-pill">{totalChapterCount} 个章节</span>
+            <span className="status-pill">
+              {selectedBook ? `当前：${selectedBook.title}` : '还没有选中的书'}
+            </span>
+          </div>
+        </div>
 
         {libraryNotice ? <p className="notice success">{libraryNotice}</p> : null}
         {libraryError ? <p className="notice error">{libraryError}</p> : null}
       </header>
-
-      {!isSignedIn ? (
-        <CloudAuthGate
-          authError={authError}
-          authNotice={authNotice}
-          isAuthConfigured={isAuthConfigured}
-          isAuthLoading={isAuthLoading}
-          isAuthSubmitting={isAuthSubmitting}
-          onResendConfirmation={onResendConfirmation}
-          onSignIn={onSignIn}
-          onSignUp={onSignUp}
-          pendingConfirmationEmail={pendingConfirmationEmail}
-          resendCooldownSeconds={resendCooldownSeconds}
-        />
-      ) : (
-        <>
-          <LegacyMigrationPrompt
-            hasLegacyLocalLibrary={hasLegacyLocalLibrary}
-            isMigratingLegacyLibrary={isMigratingLegacyLibrary}
-            onMigrateLegacyLocalLibrary={onMigrateLegacyLocalLibrary}
-          />
 
       <main className="library-grid">
         <section className="panel bookshelf-panel">
@@ -292,7 +228,7 @@ function LibraryPage({
               <p className="section-kicker">Bookshelf</p>
               <h2>书架</h2>
             </div>
-            <p className="panel-meta">云端保存书籍、章节、EPUB 文件和解析结果。</p>
+            <p className="panel-meta">本地保存书籍、章节、EPUB 文件和解析结果。</p>
           </div>
 
           <CollectionsBar
@@ -307,16 +243,21 @@ function LibraryPage({
 
           {isLoading ? (
             <div className="empty-state">
-              <p>正在载入云端书架...</p>
+              <p>正在载入书架...</p>
             </div>
           ) : books.length === 0 ? (
-            <div className="empty-state">
-              <p>
-                {activeCollectionId && totalBookCount > 0
-                  ? '这个集合还没有书。可以从全部中把书移动进来。'
-                  : '书架还是空的。先导入一本 EPUB，或者粘贴一篇文章开始解析。'}
-              </p>
-            </div>
+            activeCollectionId && totalBookCount > 0 ? (
+              <div className="empty-state">
+                <p>这个集合还没有书。可以从全部中把书移动进来。</p>
+              </div>
+            ) : (
+              <LibraryEmptyState
+                isImporting={isImporting}
+                manualWorkspaceLabel={manualWorkspaceLabel}
+                onFileSelected={(file) => void handleFileSelected(file)}
+                onOpenManualWorkspace={onOpenManualWorkspace}
+              />
+            )
           ) : (
             <div className="book-grid">
               {books.map((book) => (
@@ -425,8 +366,6 @@ function LibraryPage({
           )}
         </section>
       </main>
-        </>
-      )}
 
       {showLanguageDialog ? (
         <dialog ref={languageDialogRef} className="language-dialog" onCancel={handleCancelLanguageDialog}>

@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/opt/homebrew/opt/python@3.14/bin/python3.14 /Users/samdagreat/.local/share/codex-dual/bin/ccb-provider-finish-hook --provider claude --completion-dir '/Users/samdagreat/Documents/vibe coding/西语阅读助手/.ccb/agents/agent3/provider-runtime/claude/completion' --agent-name agent3 --workspace '/Users/samdagreat/Documents/vibe coding/西语阅读助手'"
+          }
+        ]
+      }
+    ]
+  }
+}

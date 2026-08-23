@@ -127,7 +127,7 @@ function SettingsDialog({
           <div className="settings-header-copy">
             <p className="section-kicker">Settings</p>
             <h2>设置</h2>
-            <p className="panel-tip settings-header-tip">配置保存在当前浏览器；书架登录后保存在云端。</p>
+            <p className="panel-tip settings-header-tip">配置和书架都保存在这台设备上。</p>
           </div>
           <div className="panel-actions settings-header-actions">
             <button className="ghost-button danger-button" type="button" onClick={onClearLocalData}>
@@ -228,10 +228,16 @@ function SettingsDialog({
             availableDecks={ankiConnection.availableDecks}
             availableNoteFields={ankiConnection.availableNoteFields}
             availableNoteTypes={ankiConnection.availableNoteTypes}
+            isAndroid={ankiConnection.isAndroid}
             onAnkiConfigChange={activeAnkiConfigChange}
             onAnkiFieldMappingChange={activeAnkiFieldMappingChange}
             onAnkiLanguageChange={setActiveAnkiLanguage}
             onCreateSraNoteType={() => void ankiConnection.handleCreateSraNoteType()}
+            onRequestPermission={
+              ankiConnection.handleRequestPermission
+                ? () => void ankiConnection.handleRequestPermission?.()
+                : undefined
+            }
             onRunAnkiFetch={() => void ankiConnection.runAnkiFetch()}
           />
         )}

@@ -7,6 +7,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
   @Override
   protected void onCreate(@Nullable Bundle savedInstanceState) {
+    registerPlugin(AnkiDroidPlugin.class);
     super.onCreate(savedInstanceState);
     SystemUiController.hideStatusBar(this);
   }

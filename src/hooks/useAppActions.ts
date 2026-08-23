@@ -5,7 +5,9 @@ import {
   addNoteToAnki,
   buildAnkiNotePayload,
   shouldQueueAnkiOnThisDevice,
+  shouldUseAnkiDroid,
 } from '../lib/anki'
+import type { AnkiConfigChangeHandler, AnkiFieldMappingChangeHandler } from '../lib/appState'
 import { createPendingAnkiNote } from '../lib/anki/pendingQueue'
 import { DEFAULT_CHAPTER_RANGE_SIZE, doesRangeContainSentenceIndex, getSentenceRangeAroundIndex } from '../lib/chapterRange'
 import { buildKnowledgeSignature } from '../lib/knowledge'
@@ -15,6 +17,7 @@ import type {
   AnalysisHighlight,
   AnalysisResult,
   AnkiConfig,
+  AnkiFieldSource,
   AppPage,
   BookLanguage,
   BookChapterRecord,
@@ -28,6 +31,10 @@ type PersistentActionState = {
   ankiConfig: AnkiConfig
   articleTitle: string
   draftLanguage: BookLanguage
+  handleAnkiConfigChange?: AnkiConfigChangeHandler
+  handleAnkiFieldMappingChange?: AnkiFieldMappingChangeHandler
+  handleJaAnkiConfigChange?: AnkiConfigChangeHandler
+  handleJaAnkiFieldMappingChange?: AnkiFieldMappingChangeHandler
   jaAnkiConfig: AnkiConfig
   resetAll: () => void
   setArticleTitle: Dispatch<SetStateAction<string>>
@@ -310,6 +317,46 @@ export function useAppActions({
       currentLanguage === 'ja' ? persistent.jaAnkiConfig : persistent.ankiConfig
     const payload = buildAnkiNotePayload(sentence, result, noteHighlight, currentLanguage)
 
+    if (shouldUseAnkiDroid()) {
+      const addResult = await addNoteToAnki(
+        targetAnkiConfig,
+        payload,
+        currentLanguage,
+      )
+
+      if (addResult.updatedConfig) {
+        const isJa = currentLanguage === 'ja'
+        const onConfigChange = isJa
+          ? persistent.handleJaAnkiConfigChange
+          : persistent.handleAnkiConfigChange
+        const onFieldMappingChange = isJa
+          ? persistent.handleJaAnkiFieldMappingChange
+          : persistent.handleAnkiFieldMappingChange
+
+        if (onConfigChange) {
+          if (addResult.updatedConfig.deck !== targetAnkiConfig.deck) {
+            onConfigChange('deck', addResult.updatedConfig.deck)
+          }
+          if (addResult.updatedConfig.noteType !== targetAnkiConfig.noteType) {
+            onConfigChange('noteType', addResult.updatedConfig.noteType)
+          }
+        }
+        if (onFieldMappingChange) {
+          const fieldMappingEntries = Object.entries(addResult.updatedConfig.fieldMapping) as [AnkiFieldSource, string][]
+          for (const [source, value] of fieldMappingEntries) {
+            if (value && value !== targetAnkiConfig.fieldMapping[source]) {
+              onFieldMappingChange(source, value)
+            }
+          }
+        }
+      }
+
+      return {
+        mode: 'direct',
+        message: `已将「${highlight.text}」添加到 AnkiDroid。`,
+      }
+    }
+
     if (shouldQueueAnkiOnThisDevice()) {
       await library.enqueuePendingAnkiNote(createPendingAnkiNote({
         book: library.selectedBook,
@@ -341,8 +388,7 @@ export function useAppActions({
     activeChapter,
     currentLanguage,
     library,
-    persistent.ankiConfig,
-    persistent.jaAnkiConfig,
+    persistent,
   ])
 
   const handleImportPendingAnkiNotes = useCallback(async () => {

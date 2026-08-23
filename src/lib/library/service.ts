@@ -39,18 +39,8 @@ import {
   updateBookCollection,
   updateChapterLastOpenedAt,
   updateChapterSnapshot,
-} from './remoteRepository'
-import {
-  hasLegacyLocalLibraryData,
-  loadLegacyLocalLibrarySnapshot,
-} from './localMigration'
+} from './localRepository'
 import { createManualDraftBookPayload, type CreateManualDraftBookPayloadInput } from './manualDraft'
-import {
-  clearCloudLibrarySnapshot,
-  loadCloudLibrarySnapshot,
-  saveCloudLibrarySnapshot,
-  type CloudLibrarySnapshot,
-} from './cloudCache'
 import { getChaptersRequiringOrderSync } from './chapterOrderSync'
 
 export type RemoveChapterResult = {
@@ -123,14 +113,16 @@ export async function loadInitialLibraryState(userId: string) {
 }
 
 export async function loadCachedInitialLibraryState(userId: string) {
-  return loadCloudLibrarySnapshot(userId)
+  void userId
+  return null
 }
 
 export async function saveInitialLibraryStateCache(
   userId: string,
-  snapshot: CloudLibrarySnapshot,
+  snapshot: unknown,
 ) {
-  await saveCloudLibrarySnapshot(userId, snapshot)
+  void userId
+  void snapshot
 }
 
 export async function createCollectionInLibrary(userId: string, name: string) {
@@ -461,27 +453,12 @@ export async function removeKnowledgeResourcesFromLibrary(userId: string, resour
 
 export async function clearLibraryStorage(userId: string) {
   await clearLibraryDb(userId)
-  await clearCloudLibrarySnapshot(userId)
 }
 
 export async function hasLegacyLocalLibraryStorage() {
-  return hasLegacyLocalLibraryData()
+  return false
 }
 
 export async function migrateLegacyLocalLibraryStorage(userId: string) {
-  const snapshot = await loadLegacyLocalLibrarySnapshot()
-
-  for (const collection of snapshot.collections) {
-    await saveCollection(userId, collection)
-  }
-
-  for (const payload of snapshot.books) {
-    await saveImportedBook(userId, payload.book, payload.chapters, payload.fileData)
-  }
-
-  for (const resource of snapshot.savedResources) {
-    await saveKnowledgeResource(userId, resource)
-  }
-
   return loadInitialLibraryState(userId)
 }

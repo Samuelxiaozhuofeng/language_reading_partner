@@ -18,7 +18,6 @@ import { useAppActions } from './hooks/useAppActions'
 import { useAnalysisRunner } from './hooks/useAnalysisRunner'
 import { useLibraryStore } from './hooks/useLibraryStore'
 import { usePersistentConfig } from './hooks/usePersistentConfig'
-import { useSupabaseAuth } from './hooks/useSupabaseAuth'
 import { useWorkspaceBinding } from './hooks/useWorkspaceBinding'
 import type {
   AppPage,
@@ -49,8 +48,7 @@ function App() {
   const [isSavingManualDraft, setIsSavingManualDraft] = useState(false)
 
   const persistent = usePersistentConfig()
-  const auth = useSupabaseAuth()
-  const library = useLibraryStore(auth.user?.id ?? null)
+  const library = useLibraryStore('local')
   const {
     activeChapter,
     activeReadingRange,
@@ -318,9 +316,7 @@ function App() {
       vocabularyPromptConfig={persistent.vocabularyPromptConfig}
     />
   )
-  const effectiveActivePage = auth.user ? activePage : 'library'
-
-  if (effectiveActivePage === 'reading') {
+  if (activePage === 'reading') {
     return (
       <>
         <ReadingPage
@@ -366,23 +362,15 @@ function App() {
 
   return (
     <div className="app-shell">
-      {effectiveActivePage === 'library' ? (
+      {activePage === 'library' ? (
         <LibraryPage
           activeCollectionId={library.activeCollectionId}
-          authError={auth.authError}
-          authNotice={auth.authNotice}
-          authUserEmail={auth.user?.email}
           books={library.books}
           chapters={library.chapters}
           collectionBookCounts={library.collectionBookCounts}
           collections={library.collections}
-          hasLegacyLocalLibrary={library.hasLegacyLocalLibrary}
-          isAuthConfigured={auth.isAuthConfigured}
-          isAuthLoading={auth.isAuthLoading}
-          isAuthSubmitting={auth.isAuthSubmitting}
           isImporting={library.isImporting}
           isLoading={library.isLoading}
-          isMigratingLegacyLibrary={library.isMigratingLegacyLibrary}
           libraryError={library.libraryError}
           libraryNotice={library.libraryNotice}
           manualWorkspaceLabel={manualWorkspaceLabel}
@@ -391,7 +379,6 @@ function App() {
           onDeleteChapter={handleDeleteChapter}
           onDeleteCollection={(collectionId) => void library.deleteCollection(collectionId)}
           onImportFile={handleImportFile}
-          onMigrateLegacyLocalLibrary={() => void library.migrateLegacyLocalLibrary()}
           onMoveBookToCollection={(bookId, collectionId) =>
             void library.moveBookToCollection(bookId, collectionId)
           }
@@ -401,20 +388,14 @@ function App() {
           onOpenResources={openResources}
           onOpenManualWorkspace={handleOpenManualWorkspace}
           onOpenSettings={openSettings}
-          onResendConfirmation={auth.resendSignUpConfirmation}
-          onSignIn={auth.signInWithPassword}
-          onSignOut={auth.signOut}
-          onSignUp={auth.signUpWithPassword}
-          pendingConfirmationEmail={auth.pendingConfirmationEmail}
           recentChapterTitle={recentChapter?.title}
-          resendCooldownSeconds={auth.resendCooldownSeconds}
           onSelectBook={(bookId) => void library.selectBook(bookId)}
           onSetActiveCollection={(collectionId) => void library.setActiveCollection(collectionId)}
           selectedBook={library.selectedBook}
           selectedChapterId={library.selection.chapterId}
           totalBookCount={library.totalBookCount}
         />
-      ) : effectiveActivePage === 'workspace' ? (
+      ) : activePage === 'workspace' ? (
         <WorkspacePage
           apiConfig={persistent.apiConfig}
           articleTitle={persistent.articleTitle}
