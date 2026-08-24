@@ -283,12 +283,13 @@ export function useAnkiConnection({
       setAnkiFetchMessage(`正在在 AnkiDroid 中创建或检查 ${noteTypeName} 模板...`)
 
       try {
-        await ensureAnkiDroidSraNoteType(language)
+        const result = await ensureAnkiDroidSraNoteType(language)
+        const targetModelName = result?.modelName || noteTypeName
         const { decks, noteTypes, fields, nextDeck } = await loadAnkiDroidConnectionData(
-          noteTypeName,
+          targetModelName,
         )
 
-        applyAnkiSelection(nextDeck, noteTypeName)
+        applyAnkiSelection(nextDeck, targetModelName)
         syncAnkiFieldMapping(fields)
 
         setAvailableDecks(decks)
@@ -296,7 +297,7 @@ export function useAnkiConnection({
         setAvailableNoteFields(fields)
         setAnkiFetchStatus('success')
         setAnkiFetchMessage(
-          `已就绪 ${languageLabel} ${noteTypeName} 模板，并自动选中和映射 ${fields.length} 个字段。`,
+          `已就绪 ${languageLabel} ${targetModelName} 模板，并自动选中和映射 ${fields.length} 个字段。`,
         )
       } catch (error) {
         setAnkiFetchStatus('error')

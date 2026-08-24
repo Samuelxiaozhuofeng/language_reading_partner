@@ -15,6 +15,7 @@ export type AnkiFieldSource =
   | 'knowledgeFurigana'
   | 'knowledgeKind'
   | 'knowledgeExplanation'
+  | 'audio'
 export type SentenceRange = {
   start: number
   end: number

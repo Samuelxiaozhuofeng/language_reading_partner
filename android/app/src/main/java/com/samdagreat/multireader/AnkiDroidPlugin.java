@@ -2,7 +2,10 @@ package com.samdagreat.multireader;
 
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.util.Base64;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -14,10 +17,11 @@ import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 import com.ichi2.anki.api.AddContentApi;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-
 @CapacitorPlugin(
     name = "AnkiDroid",
     permissions = {
@@ -188,55 +192,156 @@ public class AnkiDroidPlugin extends Plugin {
 
         try {
             Long existingId = findModelIdByName(modelName);
+            String finalModelName = modelName;
+            boolean needCreate = false;
+
             if (existingId != null) {
+                String[] existingFields = getApi().getFieldList(existingId);
+                boolean hasAudioField = false;
+                if (existingFields != null) {
+                    for (String f : existingFields) {
+                        if ("发音".equals(f)) {
+                            hasAudioField = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (hasAudioField) {
+                    JSObject ret = new JSObject();
+                    ret.put("modelName", modelName);
+                    ret.put("created", false);
+                    call.resolve(ret);
+                    return;
+                } else {
+                    finalModelName = modelName + "-Voice";
+                    Long voiceId = findModelIdByName(finalModelName);
+                    if (voiceId != null) {
+                        JSObject ret = new JSObject();
+                        ret.put("modelName", finalModelName);
+                        ret.put("created", false);
+                        call.resolve(ret);
+                        return;
+                    }
+                    needCreate = true;
+                }
+            } else {
+                needCreate = true;
+            }
+
+            if (needCreate) {
+                JSArray fieldsArray = call.getArray("fields");
+                if (fieldsArray == null || fieldsArray.length() == 0) {
+                    call.reject("INVALID_ARGUMENT", "fields 不能为空");
+                    return;
+                }
+
+                String[] fields = new String[fieldsArray.length()];
+                for (int i = 0; i < fieldsArray.length(); i++) {
+                    fields[i] = fieldsArray.getString(i);
+                }
+
+                String front = call.getString("front", "");
+                String back = call.getString("back", "");
+                String css = call.getString("css", "");
+
+                String[] cards = new String[] { "Card 1" };
+                String[] qfmt = new String[] { front };
+                String[] afmt = new String[] { back };
+
+                Long newModelId = getApi().addNewCustomModel(
+                    finalModelName,
+                    fields,
+                    cards,
+                    qfmt,
+                    afmt,
+                    css,
+                    null,
+                    null
+                );
+
+                if (newModelId == null) {
+                    call.reject("CREATE_MODEL_FAILED", "创建 Anki 模板失败: " + finalModelName);
+                    return;
+                }
+
                 JSObject ret = new JSObject();
-                ret.put("modelName", modelName);
-                ret.put("created", false);
+                ret.put("modelName", finalModelName);
+                ret.put("created", true);
                 call.resolve(ret);
-                return;
+            }
+        } catch (Exception e) {
+            call.reject("ENSURE_MODEL_FAILED", e.getMessage(), e);
+        }
+    }
+
+    @PluginMethod
+    public void addMedia(PluginCall call) {
+        if (!isPermissionGranted()) {
+            call.reject("PERMISSION_DENIED", "未获得 AnkiDroid 数据库读写权限");
+            return;
+        }
+
+        String preferredName = call.getString("preferredName");
+        String audioBase64 = call.getString("audioBase64");
+
+        if (preferredName == null || preferredName.isEmpty()) {
+            call.reject("INVALID_ARGUMENT", "preferredName 不能为空");
+            return;
+        }
+        if (audioBase64 == null || audioBase64.isEmpty()) {
+            call.reject("INVALID_ARGUMENT", "audioBase64 不能为空");
+            return;
+        }
+
+        String preferredBase = preferredName.replaceAll("(?i)\\.mp3$", "").replace(" ", "_");
+        if (preferredBase.isEmpty()) {
+            preferredBase = "sra_audio";
+        }
+        String filename = preferredBase + ".mp3";
+        File tempFile = new File(getContext().getCacheDir(), filename);
+        Uri uri = null;
+
+        try {
+            byte[] audioBytes = Base64.decode(audioBase64, Base64.DEFAULT);
+            try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+                fos.write(audioBytes);
+                fos.flush();
             }
 
-            JSArray fieldsArray = call.getArray("fields");
-            if (fieldsArray == null || fieldsArray.length() == 0) {
-                call.reject("INVALID_ARGUMENT", "fields 不能为空");
-                return;
+            String authority = getContext().getPackageName() + ".fileprovider";
+            uri = FileProvider.getUriForFile(getContext(), authority, tempFile);
+
+            getContext().grantUriPermission("com.ichi2.anki", uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            String ankiPkg = AddContentApi.getAnkiDroidPackageName(getContext());
+            if (ankiPkg != null && !ankiPkg.equals("com.ichi2.anki")) {
+                getContext().grantUriPermission(ankiPkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
             }
 
-            String[] fields = new String[fieldsArray.length()];
-            for (int i = 0; i < fieldsArray.length(); i++) {
-                fields[i] = fieldsArray.getString(i);
-            }
-
-            String front = call.getString("front", "");
-            String back = call.getString("back", "");
-            String css = call.getString("css", "");
-
-            String[] cards = new String[] { "Card 1" };
-            String[] qfmt = new String[] { front };
-            String[] afmt = new String[] { back };
-
-            Long newModelId = getApi().addNewCustomModel(
-                modelName,
-                fields,
-                cards,
-                qfmt,
-                afmt,
-                css,
-                null,
-                null
-            );
-
-            if (newModelId == null) {
-                call.reject("CREATE_MODEL_FAILED", "创建 Anki 模板失败");
+            String soundTag = getApi().addMediaFromUri(uri, preferredBase, "audio");
+            if (soundTag == null || soundTag.isEmpty()) {
+                call.reject("ADD_MEDIA_FAILED", "AnkiDroid 添加媒体文件失败");
                 return;
             }
 
             JSObject ret = new JSObject();
-            ret.put("modelName", modelName);
-            ret.put("created", true);
+            ret.put("soundTag", soundTag);
             call.resolve(ret);
         } catch (Exception e) {
-            call.reject("ENSURE_MODEL_FAILED", e.getMessage(), e);
+            call.reject("ADD_MEDIA_FAILED", e.getMessage(), e);
+        } finally {
+            if (uri != null) {
+                try {
+                    getContext().revokeUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } catch (Exception ignored) {
+                }
+            }
+            if (tempFile.exists()) {
+                try {
+                    tempFile.delete();
+                } catch (Exception ignored) {
+                }
+            }
         }
     }
 

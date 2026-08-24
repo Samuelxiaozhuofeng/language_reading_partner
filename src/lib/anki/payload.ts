@@ -34,6 +34,7 @@ function createEmptyAnkiFieldMapping(): AnkiFieldMapping {
     knowledgeFurigana: '',
     knowledgeKind: '',
     knowledgeExplanation: '',
+    audio: '',
   }
 }
 
@@ -217,6 +218,7 @@ export function buildAnkiNotePayload(
     knowledgeFurigana: isJapanese ? buildKnowledgeFurigana(sentence, highlight.text) : '',
     knowledgeKind: ankiKnowledgeKindLabelMap[highlight.kind],
     knowledgeExplanation: highlight.explanation,
+    audio: '',
   }
 }
 

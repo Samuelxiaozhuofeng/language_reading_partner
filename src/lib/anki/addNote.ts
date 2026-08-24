@@ -1,4 +1,7 @@
 import type { AnkiConfig } from '../../types'
+import { getSpeechLocale, getSpeechVoice } from '../speech'
+import { getCachedSpeech } from '../speechCache'
+import { synthesizeEdgeTts } from '../edgeTts'
 import { AnkiDroid, ensureAnkiDroidSraNoteType } from './ankiDroid'
 import { invokeAnkiAction } from './client'
 import {
@@ -15,6 +18,14 @@ import {
   type AnkiNotePayload,
 } from './payload'
 
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const len = bytes.byteLength
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary)
+}
 export type AddNoteToAnkiResult = {
   noteId: number
   updatedConfig?: AnkiConfig
@@ -52,8 +63,8 @@ export async function addNoteToAnki(
     }
 
     if (!noteType) {
-      await ensureAnkiDroidSraNoteType(language)
-      noteType = getSraNoteTypeName(language)
+      const ensured = await ensureAnkiDroidSraNoteType(language)
+      noteType = ensured?.modelName || getSraNoteTypeName(language)
       fieldMapping = createAnkiFieldMappingFromFieldNames(getSraFieldNames(language), language)
     }
 
@@ -83,7 +94,36 @@ export async function addNoteToAnki(
       throw new Error(issues[0])
     }
 
-    const fields = buildFields(effectiveConfig, payload, language)
+    const finalPayload = { ...payload }
+    if (language !== 'ja') {
+      try {
+        const text = (finalPayload.knowledge || finalPayload.sentence || '').trim()
+        const voice = getSpeechVoice(language)
+        if (text && voice) {
+          const locale = getSpeechLocale(language) || language
+          let audioBytes = await getCachedSpeech(locale, text)
+          if (!audioBytes || audioBytes.length === 0) {
+            audioBytes = await synthesizeEdgeTts(text, voice)
+          }
+          if (audioBytes && audioBytes.length > 0) {
+            const sanitized = text.replace(/[^a-zA-Z0-9]/g, '').slice(0, 40)
+            const preferredName = `sra_${sanitized || 'audio'}`
+            const audioBase64 = uint8ArrayToBase64(audioBytes)
+            const mediaResult = await AnkiDroid.addMedia({
+              preferredName,
+              audioBase64,
+            })
+            if (mediaResult?.soundTag) {
+              finalPayload.audio = mediaResult.soundTag
+            }
+          }
+        }
+      } catch (audioError) {
+        console.warn('添加发音到 AnkiDroid 失败，继续添加普通卡片:', audioError)
+      }
+    }
+
+    const fields = buildFields(effectiveConfig, finalPayload, language)
     try {
       const { noteId } = await AnkiDroid.addNote({
         deckName: deck,

@@ -13,6 +13,7 @@ export const baseAnkiFieldSourceOrder: AnkiFieldSource[] = [
   'knowledge',
   'knowledgeKind',
   'knowledgeExplanation',
+  'audio',
 ]
 
 export const jaAnkiFieldSourceOrder: AnkiFieldSource[] = [
@@ -24,6 +25,7 @@ export const jaAnkiFieldSourceOrder: AnkiFieldSource[] = [
   'knowledgeFurigana',
   'knowledgeKind',
   'knowledgeExplanation',
+  'audio',
 ]
 
 export const ankiFieldSourceOrder: AnkiFieldSource[] = jaAnkiFieldSourceOrder
@@ -37,6 +39,7 @@ export const ankiFieldSourceLabelMap: Record<AnkiFieldSource, string> = {
   knowledgeFurigana: '知识点振假名',
   knowledgeKind: '知识点类型',
   knowledgeExplanation: '知识点解释',
+  audio: '发音',
 }
 
 export const ankiFieldSourceCandidateLabelsMap: Record<AnkiFieldSource, string[]> = {
@@ -48,6 +51,7 @@ export const ankiFieldSourceCandidateLabelsMap: Record<AnkiFieldSource, string[]
   knowledgeFurigana: ['知识点振假名', 'KnowledgeFurigana', 'ExpressionFurigana'],
   knowledgeKind: ['知识点类型', 'KnowledgeKind', 'Type'],
   knowledgeExplanation: ['知识点解释', 'KnowledgeExplanation', 'Explanation'],
+  audio: ['发音', 'Audio', 'Sound'],
 }
 
 export const sraFieldNames = baseAnkiFieldSourceOrder.map((source) => ankiFieldSourceLabelMap[source])
@@ -65,6 +69,9 @@ export const sraFrontTemplate = `<div class="es-card">
 </div>
     {{/语法}}
   </div>
+  {{#发音}}
+  <div class="es-audio">{{发音}}</div>
+  {{/发音}}
 </div>`
 
 export const sraJaFrontTemplate = `<div class="es-card">

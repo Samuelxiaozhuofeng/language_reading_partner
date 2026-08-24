@@ -28,6 +28,10 @@ export interface ShareNoteOptions {
   text: string
 }
 
+export interface AddMediaOptions {
+  preferredName: string
+  audioBase64: string
+}
 export interface AnkiDroidPlugin {
   isAvailable(): Promise<{ available: boolean; packageName?: string }>
   requestPermission(): Promise<{ granted: boolean }>
@@ -36,6 +40,7 @@ export interface AnkiDroidPlugin {
   getModelFields(options: { modelName: string }): Promise<{ fields: string[] }>
   ensureSraNoteType(options: EnsureSraNoteTypeOptions): Promise<{ modelName: string; created?: boolean }>
   addNote(options: AddNoteOptions): Promise<{ noteId: number }>
+  addMedia(options: AddMediaOptions): Promise<{ soundTag: string }>
   shareNote(options: ShareNoteOptions): Promise<{ shared: boolean }>
 }
 
@@ -71,6 +76,10 @@ class AnkiDroidWeb implements AnkiDroidPlugin {
   async shareNote(): Promise<{ shared: boolean }> {
     throw new Error('AnkiDroid 仅在安卓原生应用中可用。')
   }
+
+  async addMedia(): Promise<{ soundTag: string }> {
+    throw new Error('AnkiDroid 仅在安卓原生应用中可用。')
+  }
 }
 
 export const AnkiDroid = registerPlugin<AnkiDroidPlugin>('AnkiDroid', {
@@ -79,7 +88,7 @@ export const AnkiDroid = registerPlugin<AnkiDroidPlugin>('AnkiDroid', {
 
 export async function ensureAnkiDroidSraNoteType(
   language: SraNoteTypeLanguage = 'es',
-) {
+): Promise<{ modelName: string; created?: boolean }> {
   const modelName = getSraNoteTypeName(language)
   const fields = getSraFieldNames(language)
   const templates = getSraNoteTypeTemplates(language)
