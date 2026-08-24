@@ -518,6 +518,7 @@ function ReadingPage({
                 effectiveActiveSentenceId={effectiveActiveSentenceId}
                 activeChunkSelection={effectiveActiveChunkSelection}
                 bookLanguage={bookLanguage}
+                lookupSentences={sentences}
                 isReadingSettingsOpen={isReadingSettingsOpen}
                 onAddToAnki={onAddToAnki}
                 onBackToWorkspace={onBackToWorkspace}

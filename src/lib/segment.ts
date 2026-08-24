@@ -1,4 +1,5 @@
 import type { BookLanguage } from '../types'
+import { segmentArabicText, splitArabicParagraphs } from './segmentArabic'
 
 const CLOSING_PUNCTUATION = new Set(['"', "'", '”', '’', ')', ']', '»'])
 const JAPANESE_CLOSING_PUNCTUATION = new Set(['」', '』', '）', '】', '〕', '］', '》', '〉'])
@@ -291,102 +292,19 @@ export function segmentJapaneseText(text: string): string[] {
     .filter(hasMeaningfulJapaneseContent)
 }
 
-const ARABIC_SENTENCE_TERMINATORS = new Set([
-  '.',
-  '۔',
-  '．',
-  '。',
-  '؟',
-  '?',
-  '!',
-  '！',
-  '؛',
-  ';',
-  '…',
-])
+export { segmentArabicText, splitArabicParagraphs } from './segmentArabic'
 
-const ARABIC_TRAILING_MARKS = new Set([
-  ...CLOSING_PUNCTUATION,
-  '»',
-  '‹',
-  '›',
-  '\u061C',
-  '\u200E',
-  '\u200F',
-  '\u202A',
-  '\u202B',
-  '\u202C',
-  '\u202D',
-  '\u202E',
-  '\u2066',
-  '\u2067',
-  '\u2068',
-  '\u2069',
-])
-
-function hasMeaningfulArabicContent(sentence: string) {
-  return sentence.replace(/[۔．。؟?！!;؛…,.،¡¿\s]/g, '').trim().length > 0
-}
-
-function isArabicDecimalDot(text: string, index: number) {
-  const previous = text[index - 1] ?? ''
-  const next = text[index + 1] ?? ''
-  return /\p{Nd}/u.test(previous) && /\p{Nd}/u.test(next)
-}
-
-function shouldBreakArabicAt(text: string, index: number, char: string) {
-  if (!ARABIC_SENTENCE_TERMINATORS.has(char)) {
-    return false
+export function splitSourceParagraphs(text: string, language: BookLanguage) {
+  if (language === 'ar') {
+    return splitArabicParagraphs(text)
   }
 
-  if ((char === '.' || char === '．') && isArabicDecimalDot(text, index)) {
-    return false
-  }
-
-  return true
-}
-
-function segmentArabicParagraph(paragraph: string) {
-  const sentences: string[] = []
-  let buffer = ''
-
-  for (let index = 0; index < paragraph.length; index += 1) {
-    const char = paragraph[index]
-    buffer += char
-
-    if (!shouldBreakArabicAt(paragraph, index, char)) {
-      continue
-    }
-
-    while (paragraph[index + 1] && ARABIC_TRAILING_MARKS.has(paragraph[index + 1])) {
-      index += 1
-      buffer += paragraph[index]
-    }
-
-    const piece = normalizeSentenceText(buffer)
-    if (piece) {
-      sentences.push(piece)
-    }
-    buffer = ''
-  }
-
-  const trailing = normalizeSentenceText(buffer)
-  if (trailing) {
-    sentences.push(trailing)
-  }
-
-  return sentences
-}
-
-export function segmentArabicText(text: string): string[] {
   const normalized = normalizeInput(text)
   if (!normalized) {
     return []
   }
 
   return splitIntoParagraphs(normalized)
-    .flatMap(segmentArabicParagraph)
-    .filter(hasMeaningfulArabicContent)
 }
 
 export function shouldResegmentChapterText(
@@ -402,11 +320,11 @@ export function shouldResegmentChapterText(
     return true
   }
 
-  if (language !== 'ar' || sentenceCount !== 1) {
-    return false
+  if (language === 'ar') {
+    return segmentArabicText(sourceText).length !== sentenceCount
   }
 
-  return segmentArabicText(sourceText).length > 1
+  return false
 }
 
 export function segmentText(text: string, language: BookLanguage): string[] {

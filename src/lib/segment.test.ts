@@ -1,5 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { sanitizeChunkAnalysis } from './analysisResult.ts'
 import {
@@ -95,9 +98,70 @@ test('resegments a saved Arabic chapter that was stored as one blob', () => {
     shouldResegmentChapterText('هذا كتاب. ذلك قلم.', 2, 'ar'),
     false,
   )
+  assert.equal(
+    shouldResegmentChapterText('هذا كتاب. ذلك قلم.', 8, 'ar'),
+    true,
+  )
   assert.equal(shouldResegmentChapterText('Hello. There.', 1, 'es'), false)
   assert.equal(shouldResegmentChapterText('Hello. There.', 0, 'es'), true)
 })
+
+test('joins Arabic lines that wrap before a sentence ends', () => {
+  const text = [
+    '۱ - ما يتعيَّن نَصْبُهُ على أنه مفعول',
+    '',
+    'معه',
+    '',
+    '۲ - ما يجوز نصْبُهُ على ذلك.',
+  ].join('\n')
+
+  assert.deepEqual(segmentArabicText(text), [
+    '۱ - ما يتعيَّن نَصْبُهُ على أنه مفعول معه',
+    '۲ - ما يجوز نصْبُهُ على ذلك.',
+  ])
+})
+
+test('joins Arabic quote wraps and isolated connectors', () => {
+  const text = [
+    'نحو: «حَضَر محمد',
+    '',
+    'وخالد (۳).',
+    '',
+    'فإنَّ',
+    '',
+    'الجبل لا يصح تشريكه للمتكلم في السَّيْر.',
+  ].join('\n')
+
+  const sentences = segmentArabicText(text)
+  assert.equal(sentences.length, 2)
+  assert.match(sentences[0], /حَضَر محمد وخالد/)
+  assert.match(sentences[1], /فإنَّ الجبل/)
+})
+
+test('keeps Arabic page numbers out of neighboring sentences', () => {
+  const text = ['المفعولُ معه', '', '(٤١٣', '', 'وَهُوَ: الاسم المنصوب.'].join('\n')
+  assert.deepEqual(segmentArabicText(text), [
+    'المفعولُ معه',
+    '(٤١٣',
+    'وَهُوَ: الاسم المنصوب.',
+  ])
+})
+test('joins wrapped sentences in the Arabic textbook sample', () => {
+  const samplePath = join(dirname(fileURLToPath(import.meta.url)), '../../测试专用.txt')
+  const sentences = segmentArabicText(readFileSync(samplePath, 'utf8'))
+  const stripMarks = (value: string) => value.replace(/[\u064B-\u0652\u0670]/g, '')
+  assert.ok(sentences.some((sentence) => /ما يتعيَّن/.test(sentence) && /معه/.test(sentence)))
+  assert.ok(sentences.some((sentence) => /حَضَر محمد/.test(sentence) && /وخالد/.test(sentence)))
+  assert.ok(
+    sentences.some((sentence) => {
+      const plain = stripMarks(sentence)
+      return /استوى الماء/.test(plain) && /خشب/.test(plain)
+    }),
+  )
+  assert.equal(sentences.includes('معه'), false)
+  assert.ok(sentences.length < 50)
+})
+
 
 test('segments Japanese text by sentence punctuation', () => {
   assert.deepEqual(segmentJapaneseText('私は学生です。明日、京都へ行きます！'), [

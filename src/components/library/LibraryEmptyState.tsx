@@ -17,7 +17,7 @@ function LibraryEmptyState({
     <div className="empty-state library-empty-state">
       <div className="library-empty-copy">
         <h3>书架还是空的</h3>
-        <p>导入一本 EPUB 电子书，或者粘贴一段外语文章直接开始逐句精读与解析。</p>
+        <p>导入 EPUB 或 TXT，也可以粘贴一段外语文章，直接开始逐句精读。</p>
       </div>
       <div className="library-empty-actions">
         <ImportChooser

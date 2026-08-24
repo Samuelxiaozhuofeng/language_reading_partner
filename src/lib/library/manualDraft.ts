@@ -10,6 +10,8 @@ import {
   deriveBookAnalysisState,
   normalizeChapterRecord,
 } from '../chapterText'
+import { splitSourceParagraphs } from '../segment'
+
 
 export type CreateManualDraftBookPayloadInput = {
   articleTitle: string
@@ -39,12 +41,12 @@ export function buildManualBookTitle(
   return seed.length > 28 ? `${seed.slice(0, 28)}...` : seed
 }
 
-export function buildManualParagraphBlocks(sourceText: string) {
-  return sourceText
-    .split(/\n\s*\n+/)
+export function buildManualParagraphBlocks(sourceText: string, language: BookLanguage = 'es') {
+  return splitSourceParagraphs(sourceText, language)
     .map((paragraph) => createParagraphBlock(paragraph))
     .filter((paragraph) => paragraph.text.length > 0)
 }
+
 
 export function createManualDraftBookPayload({
   articleTitle,
@@ -67,7 +69,7 @@ export function createManualDraftBookPayload({
     order: 0,
     originalText: sourceText,
     sourceText,
-    paragraphBlocks: buildManualParagraphBlocks(sourceText),
+    paragraphBlocks: buildManualParagraphBlocks(sourceText, language),
     sentences,
     results,
     analysisState: 'idle',

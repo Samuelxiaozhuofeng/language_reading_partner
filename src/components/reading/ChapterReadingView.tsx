@@ -33,6 +33,7 @@ type ChapterReadingViewProps = {
   effectiveActiveSentenceId: string | null
   activeChunkSelection: JapaneseChunkSelection | null
   bookLanguage: BookLanguage
+  lookupSentences?: SentenceItem[]
   isReadingSettingsOpen: boolean
   onAddToAnki?: (
     sentence: SentenceItem,
@@ -68,6 +69,7 @@ export function ChapterReadingView({
   effectiveActiveSentenceId,
   activeChunkSelection,
   bookLanguage,
+  lookupSentences,
   isReadingSettingsOpen,
   onAddToAnki,
   onBackToWorkspace,
@@ -101,7 +103,7 @@ export function ChapterReadingView({
       return
     }
 
-    const allSentences = chapterParagraphs.flatMap((p) => p.sentences)
+    const allSentences = lookupSentences ?? chapterParagraphs.flatMap((p) => p.sentences)
     const sentenceIndex = allSentences.findIndex((s) => s.id === sentence.id)
     const currentText = getSentenceDisplayText(sentence)
     let explanationContext = currentText

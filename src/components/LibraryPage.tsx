@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { chapterStatusLabelMap, formatTime } from '../lib/appState'
 import { detectEpubLanguage } from '../lib/epub'
 import { languageLabel } from '../lib/languages'
+import { isTxtFile } from '../lib/txt'
 import type { IpadicFeatures, Tokenizer } from 'kuromoji'
 import { getTokenizer } from '../lib/kuromoji'
 import type { BookChapterRecord, BookLanguage, BookRecord, CollectionRecord } from '../types'
@@ -135,13 +136,16 @@ export default function LibraryPage({
     setJapaneseTokenizerStatus('idle')
     setJapaneseTokenizerError('')
 
-    const detected = await detectEpubLanguage(file)
-    setDetectedLanguage(detected)
-    setSelectedImportLanguage(detected ?? 'es')
-    setShowLanguageDialog(true)
-    if (detected === 'ja') {
-      void preloadJapaneseTokenizer()
+    if (!isTxtFile(file)) {
+      const detected = await detectEpubLanguage(file)
+      setDetectedLanguage(detected)
+      setSelectedImportLanguage(detected ?? 'es')
+      if (detected === 'ja') {
+        void preloadJapaneseTokenizer()
+      }
     }
+
+    setShowLanguageDialog(true)
   }
 
   const handleCancelLanguageDialog = () => {
@@ -317,9 +321,11 @@ export default function LibraryPage({
               </div>
             </div>
             <p className="panel-tip">
-              {detectedLanguage
-                ? `检测到 EPUB 语言为${languageLabel(detectedLanguage)}。`
-                : '未能从 EPUB 元数据中识别语言，请手动选择。'}
+              {pendingImportFile && isTxtFile(pendingImportFile)
+                ? 'TXT 没有语言元数据，请选择正文语言后再导入。'
+                : detectedLanguage
+                  ? `检测到 EPUB 语言为${languageLabel(detectedLanguage)}。`
+                  : '未能从 EPUB 元数据中识别语言，请手动选择。'}
             </p>
             <label className="field field-block">
               <span>解析语言</span>

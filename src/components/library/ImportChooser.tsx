@@ -62,7 +62,7 @@ export default function ImportChooser({
   return (
     <div className={`import-chooser ${className}`} ref={menuRef}>
       <input
-        accept=".epub,application/epub+zip"
+        accept=".epub,.txt,application/epub+zip,text/plain"
         ref={fileInputRef}
         style={{ display: 'none' }}
         type="file"
@@ -96,6 +96,15 @@ export default function ImportChooser({
           >
             <span className="import-chooser-title">导入 EPUB</span>
             <span className="import-chooser-desc">选择本地 EPUB 电子书</span>
+          </button>
+          <button
+            className="import-chooser-item"
+            role="menuitem"
+            type="button"
+            onClick={handleEpubClick}
+          >
+            <span className="import-chooser-title">导入 TXT</span>
+            <span className="import-chooser-desc">直接丢入纯文本，按语言分句后阅读</span>
           </button>
           <button
             className="import-chooser-item"

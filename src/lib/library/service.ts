@@ -9,6 +9,8 @@ import type {
 } from '../../types'
 import { deriveBookAnalysisState, normalizeChapterRecord } from '../chapterText'
 import { importEpubBook } from '../epub'
+import { importTxtBook, isTxtFile } from '../txt'
+
 import { sortSavedResources } from '../knowledge'
 import {
   clearLibraryDb,
@@ -302,8 +304,9 @@ export async function syncChapterSnapshotToCloud(
 }
 
 export async function importBookToLibrary(userId: string, file: File, language: BookLanguage) {
-  const payload = await importEpubBook(file, language)
+  const payload = isTxtFile(file) ? await importTxtBook(file, language) : await importEpubBook(file, language)
   const chapters = payload.chapters.map((chapter) => normalizeChapterRecord(chapter))
+
   const book = await saveImportedBook(userId, payload.book, chapters, payload.fileData)
 
   return {
