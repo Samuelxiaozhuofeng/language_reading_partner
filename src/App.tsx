@@ -313,6 +313,7 @@ function App() {
       onJaAnkiConfigChange={persistent.handleJaAnkiConfigChange}
       onJaAnkiFieldMappingChange={persistent.handleJaAnkiFieldMappingChange}
       onPromptChange={persistent.handlePromptChange}
+      onReadingPreferencesChange={persistent.handleReadingPreferencesChange}
       onResetPrompt={persistent.resetPromptConfig}
       onSettingsTabChange={setActiveSettingsTab}
       onVocabularyAiSharedChange={persistent.handleVocabularyAiSharedChange}
@@ -320,6 +321,7 @@ function App() {
       onVocabularyPromptChange={persistent.handleVocabularyPromptChange}
       onResetVocabularyPrompt={persistent.resetVocabularyPromptConfig}
       promptConfig={persistent.promptConfig}
+      readingPreferences={persistent.readingPreferences}
       vocabularyApiConfig={persistent.vocabularyApiConfig}
       vocabularyPromptConfig={persistent.vocabularyPromptConfig}
     />

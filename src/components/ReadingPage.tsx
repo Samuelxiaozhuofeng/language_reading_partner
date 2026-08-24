@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { useAutoReadingPosition } from '../hooks/useAutoReadingPosition'
+import { useChapterResumeView } from '../hooks/useChapterResumeView'
 import { statusLabelMap } from '../lib/appState'
 import { languageDir, languageHtmlLang } from '../lib/languages'
 import { resolveReadingResumeAnchor } from '../lib/readingAnchor'
@@ -176,26 +178,31 @@ function ReadingPage({
     [resumeAnchor, sentences],
   )
   const resumeAnchorSentenceId = resolvedResumeAnchor?.sentence.id ?? null
+  const readingMode = readingPreferences.readingMode === 'scroll' ? 'scroll' : 'paged'
   const isMobileChapterReading =
     isChapterMode && viewportSize.width <= READING_DESKTOP_BREAKPOINT
-  const effectiveReadingFontSize = isMobileChapterReading ? 18 : readingPreferences.fontSize
+  const effectiveReadingFontSize = readingPreferences.fontSize
   const chapterPages = useMemo(
     () =>
-      paginateChapterParagraphs(chapterParagraphs, {
-        fontSize: effectiveReadingFontSize,
-        measureContainer: paginationMeasureContainer,
-        pageLayout: chapterPageLayout,
-        viewportHeight: viewportSize.height,
-        viewportWidth:
-          viewportSize.width > READING_DESKTOP_BREAKPOINT
-            ? viewportSize.width * 0.7
-            : viewportSize.width,
-      }),
+      isChapterMode && readingMode === 'paged'
+        ? paginateChapterParagraphs(chapterParagraphs, {
+            fontSize: effectiveReadingFontSize,
+            measureContainer: paginationMeasureContainer,
+            pageLayout: chapterPageLayout,
+            viewportHeight: viewportSize.height,
+            viewportWidth:
+              viewportSize.width > READING_DESKTOP_BREAKPOINT
+                ? viewportSize.width * 0.7
+                : viewportSize.width,
+          })
+        : [],
     [
       chapterPageLayout,
       chapterParagraphs,
       effectiveReadingFontSize,
+      isChapterMode,
       paginationMeasureContainer,
+      readingMode,
       viewportSize.height,
       viewportSize.width,
     ],
@@ -283,67 +290,34 @@ function ReadingPage({
     return () => resizeObserver.disconnect()
   }, [chapterPageCount, effectiveReadingFontSize, isChapterMode])
 
-  useEffect(() => {
-    if (!isChapterMode) {
-      return
-    }
+  const pagedLeadSentence = currentChapterPageData?.paragraphs[0]?.sentences[0] ?? null
+  const handleRememberPosition = useCallback(
+    (sentence: SentenceItem, sentenceIndex: number) => {
+      onSetResumeAnchor?.(sentence, sentenceStartIndex + sentenceIndex)
+    },
+    [onSetResumeAnchor, sentenceStartIndex],
+  )
 
-    const frameId = window.requestAnimationFrame(() => {
-      setResumeHighlightSentenceId(resumeAnchorSentenceId)
-    })
-
-    return () => window.cancelAnimationFrame(frameId)
-  }, [isChapterMode, resumeAnchorSentenceId])
-
-  useEffect(() => {
-    if (!resumeHighlightSentenceId) {
-      return
-    }
-
-    const timerId = window.setTimeout(() => {
-      setResumeHighlightSentenceId((current) =>
-        current === resumeHighlightSentenceId ? null : current,
-      )
-    }, 2600)
-
-    return () => window.clearTimeout(timerId)
-  }, [resumeHighlightSentenceId])
-
-  useEffect(() => {
-    if (!isChapterMode || !resumeAnchorSentenceId) {
-      return
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      setCurrentChapterPage(resumeAnchorPageIndex)
-    })
-
-    return () => window.cancelAnimationFrame(frameId)
-  }, [isChapterMode, resumeAnchorPageIndex, resumeAnchorSentenceId])
-
-  useEffect(() => {
-    if (!isChapterMode || resumeAnchorSentenceId) {
-      return
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      setCurrentChapterPage(0)
-    })
-
-    return () => window.cancelAnimationFrame(frameId)
-  }, [chapterReadingKey, isChapterMode, resumeAnchorSentenceId])
-
-  useEffect(() => {
-    if (!isChapterMode) {
-      return
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      setCurrentChapterPage((current) => Math.min(current, Math.max(0, chapterPages.length - 1)))
-    })
-
-    return () => window.cancelAnimationFrame(frameId)
-  }, [chapterPages.length, isChapterMode])
+  useChapterResumeView({
+    chapterBodyRef,
+    chapterPageCount,
+    chapterReadingKey,
+    isChapterMode,
+    mode: readingMode,
+    resumeAnchorPageIndex,
+    resumeAnchorSentenceId,
+    setCurrentChapterPage,
+    setResumeHighlightSentenceId,
+  })
+  useAutoReadingPosition({
+    enabled: isChapterMode && Boolean(onSetResumeAnchor),
+    mode: readingMode,
+    observeKey: `${chapterReadingKey}:${readingMode}`,
+    pagedLeadSentence,
+    rootRef: chapterBodyRef,
+    sentences,
+    onRemember: handleRememberPosition,
+  })
 
   useEffect(() => {
     if (!shouldDockInspector || !activeSentence) {
@@ -463,7 +437,7 @@ function ReadingPage({
   }, [chapterPageCount, currentChapterPage])
 
   useEffect(() => {
-    if (!isChapterMode) {
+    if (!isChapterMode || readingMode !== 'paged') {
       return
     }
 
@@ -489,7 +463,7 @@ function ReadingPage({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleChangeChapterPage, isChapterMode])
+  }, [handleChangeChapterPage, isChapterMode, readingMode])
 
   return (
     <main className="reading-page" dir={languageDir(bookLanguage)} lang={languageHtmlLang(bookLanguage)}>
@@ -519,21 +493,15 @@ function ReadingPage({
                 activeChunkSelection={effectiveActiveChunkSelection}
                 bookLanguage={bookLanguage}
                 lookupSentences={sentences}
-                isReadingSettingsOpen={isReadingSettingsOpen}
                 onAddToAnki={onAddToAnki}
                 onBackToWorkspace={onBackToWorkspace}
-                onCloseReadingSettings={() => setIsReadingSettingsOpen(false)}
                 onExplainVocabulary={onExplainVocabulary}
                 onChangeChapterPage={handleChangeChapterPage}
                 onOpenSentence={handleOpenSentence}
-                onReadingPreferencesChange={onReadingPreferencesChange}
                 onSelectChunk={handleSelectChunk}
-                onToggleReadingSettings={() => setIsReadingSettingsOpen((current) => !current)}
                 readingPreferences={readingPreferences}
-                readingTitle={readingTitle}
                 results={results}
                 resumeHighlightSentenceId={resumeHighlightSentenceId}
-                showReadingSettings={!isMobileChapterReading}
               />
             ) : (
               <DraftReadingView

@@ -81,6 +81,25 @@ export function ReadingDisplaySettings({
               收起
             </button>
           </div>
+          <div className="reading-display-field">
+            <span>阅读模式</span>
+            <div className="reading-mode-toggle" role="group" aria-label="阅读模式">
+              <button
+                className={`ghost-button${readingPreferences.readingMode === 'scroll' ? '' : ' is-selected'}`}
+                type="button"
+                onClick={() => onReadingPreferencesChange('readingMode', 'paged')}
+              >
+                翻页
+              </button>
+              <button
+                className={`ghost-button${readingPreferences.readingMode === 'scroll' ? ' is-selected' : ''}`}
+                type="button"
+                onClick={() => onReadingPreferencesChange('readingMode', 'scroll')}
+              >
+                滚动
+              </button>
+            </div>
+          </div>
 
           <label className="reading-display-field">
             <span>阅读容器宽度</span>

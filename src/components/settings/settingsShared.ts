@@ -7,4 +7,5 @@ export const settingsTabLabelMap: Record<SettingsTab, string> = {
   ai: 'AI 配置',
   prompt: 'Prompt',
   anki: 'Anki',
+  reading: '阅读',
 }

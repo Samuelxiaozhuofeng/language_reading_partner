@@ -1,6 +1,6 @@
 export type SentenceStatus = 'idle' | 'queued' | 'running' | 'success' | 'error'
 export type AppPage = 'library' | 'workspace' | 'reading' | 'resources'
-export type SettingsTab = 'ai' | 'prompt' | 'anki'
+export type SettingsTab = 'ai' | 'prompt' | 'anki' | 'reading'
 export type WorkspaceSource = 'draft' | 'chapter'
 export type ChapterAnalysisState = 'idle' | 'partial' | 'running' | 'analyzed'
 export type KnowledgeKind = 'grammar' | 'phrase' | 'vocabulary'
@@ -52,10 +52,13 @@ export type VocabularyExplanation = {
   rawText?: string
 }
 
+export type ReadingMode = 'paged' | 'scroll'
+
 export type ReadingPreferences = {
   contentWidth: number
   fontSize: number
   showFurigana?: boolean
+  readingMode?: ReadingMode
 }
 
 export type AnkiFieldMapping = Record<AnkiFieldSource, string>

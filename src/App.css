@@ -1401,6 +1401,57 @@ blockquote {
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
+.reading-book-page.is-immersive {
+  grid-template-rows: minmax(0, 1fr);
+  position: relative;
+  padding: 18px 18px 20px;
+}
+
+.reading-book-page.is-immersive .reading-book-body {
+  padding-bottom: 52px;
+}
+
+
+.reading-float-chrome {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.reading-float-pager,
+.reading-float-exit {
+  pointer-events: auto;
+}
+
+.reading-float-pager {
+  display: flex;
+  gap: 6px;
+}
+
+.reading-float-button {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 253, 247, 0.86);
+  color: var(--ink);
+  box-shadow: 0 6px 16px rgba(69, 72, 82, 0.12);
+  font-size: 0.78rem;
+}
+
+.reading-float-button:disabled {
+  opacity: 0.4;
+}
+
+.reading-float-exit {
+  min-width: 44px;
+}
+
 .epub-book-page {
   min-height: 0;
   height: 100%;
@@ -1459,10 +1510,46 @@ blockquote {
   padding: 0 0 calc(var(--reading-body-font-size, 18px) * 1.15);
 }
 
+
 .reading-book-body {
   min-height: 0;
   overflow: hidden;
 }
+
+.reading-book-body.is-scroll {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.reading-flow.is-scroll {
+  height: auto;
+  gap: var(--reading-page-paragraph-gap, 20px);
+  align-content: start;
+  padding: 0 0 calc(var(--reading-body-font-size, 18px) * 1.15);
+}
+
+.reading-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid rgba(31, 92, 122, 0.18);
+  border-radius: 999px;
+}
+
+.reading-mode-toggle .ghost-button {
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 0;
+}
+
+.reading-mode-toggle .ghost-button.is-selected {
+  background: rgba(31, 92, 122, 0.12);
+  color: var(--accent-deep);
+}
+
 
 .reading-paragraph {
   margin: 0;
@@ -3155,3 +3242,4 @@ blockquote {
   justify-content: flex-end;
   gap: 10px;
 }
+

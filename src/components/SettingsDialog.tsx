@@ -4,13 +4,15 @@ import type {
   AnkiFieldMappingChangeHandler,
   ConfigChangeHandler,
   PromptConfigChangeHandler,
+  ReadingPreferencesChangeHandler,
   SettingsTab,
   VocabularyPromptConfigChangeHandler,
 } from '../lib/appState'
-import type { AnkiConfig, ApiConfig, BookLanguage, PromptConfig, VocabularyPromptConfig } from '../types'
+import type { AnkiConfig, ApiConfig, BookLanguage, PromptConfig, ReadingPreferences, VocabularyPromptConfig } from '../types'
 import AiSettingsTab from './settings/AiSettingsTab'
 import AnkiSettingsTab from './settings/AnkiSettingsTab'
 import PromptSettingsTab from './settings/PromptSettingsTab'
+import ReadingSettingsTab from './settings/ReadingSettingsTab'
 import { settingsTabLabelMap } from './settings/settingsShared'
 import { useAnkiConnection } from './settings/useAnkiConnection'
 import { useModelFetch } from './settings/useModelFetch'
@@ -30,6 +32,7 @@ type SettingsDialogProps = {
   onJaAnkiConfigChange: AnkiConfigChangeHandler
   onJaAnkiFieldMappingChange: AnkiFieldMappingChangeHandler
   onPromptChange: PromptConfigChangeHandler
+  onReadingPreferencesChange: ReadingPreferencesChangeHandler
   onResetPrompt: () => void
   onResetVocabularyPrompt: () => void
   onSettingsTabChange: (tab: SettingsTab) => void
@@ -37,6 +40,7 @@ type SettingsDialogProps = {
   onVocabularyConfigChange: ConfigChangeHandler
   onVocabularyPromptChange: VocabularyPromptConfigChangeHandler
   promptConfig: PromptConfig
+  readingPreferences: ReadingPreferences
   vocabularyApiConfig: ApiConfig
   vocabularyPromptConfig: VocabularyPromptConfig
 }
@@ -56,6 +60,7 @@ function SettingsDialog({
   onJaAnkiConfigChange,
   onJaAnkiFieldMappingChange,
   onPromptChange,
+  onReadingPreferencesChange,
   onResetPrompt,
   onResetVocabularyPrompt,
   onSettingsTabChange,
@@ -63,6 +68,7 @@ function SettingsDialog({
   onVocabularyConfigChange,
   onVocabularyPromptChange,
   promptConfig,
+  readingPreferences,
   vocabularyApiConfig,
   vocabularyPromptConfig,
 }: SettingsDialogProps) {
@@ -172,6 +178,15 @@ function SettingsDialog({
           >
             Anki
           </button>
+          <button
+            className={`settings-tab ${activeSettingsTab === 'reading' ? 'is-active' : ''}`}
+            type="button"
+            role="tab"
+            aria-selected={activeSettingsTab === 'reading'}
+            onClick={() => onSettingsTabChange('reading')}
+          >
+            阅读
+          </button>
         </div>
 
         {activeSettingsTab === 'ai' ? (
@@ -217,6 +232,11 @@ function SettingsDialog({
             onVocabularyPromptChange={onVocabularyPromptChange}
             promptConfig={promptConfig}
             vocabularyPromptConfig={vocabularyPromptConfig}
+          />
+        ) : activeSettingsTab === 'reading' ? (
+          <ReadingSettingsTab
+            onReadingPreferencesChange={onReadingPreferencesChange}
+            readingPreferences={readingPreferences}
           />
         ) : (
           <AnkiSettingsTab

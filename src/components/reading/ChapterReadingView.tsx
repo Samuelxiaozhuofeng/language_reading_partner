@@ -5,9 +5,7 @@ import {
   getSentenceDisplayText,
   type ChapterReadingPage,
 } from './readingShared'
-import { ClickableSentenceWords } from './ClickableSentenceWords'
-import { JapaneseChunkView } from './JapaneseChunkView'
-import { ReadingDisplaySettings } from './ReadingDisplaySettings'
+import { ChapterInlineSentences } from './ChapterInlineSentences'
 import { WordLookupPopover } from './WordLookupPopover'
 import { isNativeAndroid } from '../../lib/platform'
 import type { JapaneseChunkSelection } from '../../lib/japaneseUtils'
@@ -34,28 +32,19 @@ type ChapterReadingViewProps = {
   activeChunkSelection: JapaneseChunkSelection | null
   bookLanguage: BookLanguage
   lookupSentences?: SentenceItem[]
-  isReadingSettingsOpen: boolean
   onAddToAnki?: (
     sentence: SentenceItem,
     result: AnalysisResult,
     highlight: AnalysisHighlight,
   ) => Promise<AddToAnkiResult>
   onBackToWorkspace: () => void
-  onCloseReadingSettings: () => void
   onExplainVocabulary?: (context: string, word: string) => Promise<VocabularyExplanation>
   onChangeChapterPage: (direction: 'previous' | 'next') => void
   onSelectChunk: (sentenceId: string, chunkIndex: number) => void
   onOpenSentence: (sentenceId: string) => void
-  onReadingPreferencesChange: <Key extends keyof ReadingPreferences>(
-    key: Key,
-    value: ReadingPreferences[Key],
-  ) => void
-  onToggleReadingSettings: () => void
   readingPreferences: ReadingPreferences
-  readingTitle: string
   results: Record<string, AnalysisResult>
   resumeHighlightSentenceId: string | null
-  showReadingSettings: boolean
 }
 
 export function ChapterReadingView({
@@ -70,21 +59,15 @@ export function ChapterReadingView({
   activeChunkSelection,
   bookLanguage,
   lookupSentences,
-  isReadingSettingsOpen,
   onAddToAnki,
   onBackToWorkspace,
-  onCloseReadingSettings,
   onExplainVocabulary,
   onChangeChapterPage,
   onSelectChunk,
   onOpenSentence,
-  onReadingPreferencesChange,
-  onToggleReadingSettings,
   readingPreferences,
-  readingTitle,
   results,
   resumeHighlightSentenceId,
-  showReadingSettings,
 }: ChapterReadingViewProps) {
   const isAndroid = isNativeAndroid()
   const [wordLookup, setWordLookup] = useState<{
@@ -203,14 +186,10 @@ export function ChapterReadingView({
     }
   }
 
-  const visiblePageProgressCount = Math.min(chapterPageCount, 12)
-  const visiblePageProgressActiveIndex =
-    visiblePageProgressCount === chapterPageCount
-      ? currentChapterPage
-      : Math.round(
-          (currentChapterPage / Math.max(1, chapterPageCount - 1)) *
-            Math.max(0, visiblePageProgressCount - 1),
-        )
+  const isScrollMode = readingPreferences.readingMode === 'scroll'
+  const visibleParagraphs = isScrollMode
+    ? chapterParagraphs
+    : currentChapterPageData?.paragraphs ?? []
 
   if (chapterParagraphs.length === 0) {
     return (
@@ -227,126 +206,61 @@ export function ChapterReadingView({
   return (
     <div className="reading-page-stack">
       <div className="reading-book-viewport">
-        <div className="reading-book-page">
-          <div className="reading-book-page-header">
-            <h2>{readingTitle}</h2>
-          </div>
-
-          <div className="reading-book-body" ref={chapterBodyRef}>
-            <div className="reading-flow is-paged">
-              {(currentChapterPageData?.paragraphs ?? []).map((paragraph) => (
+        <div className="reading-book-page is-immersive">
+          <div className={`reading-book-body${isScrollMode ? ' is-scroll' : ''}`} ref={chapterBodyRef}>
+            <div className={`reading-flow ${isScrollMode ? 'is-scroll' : 'is-paged'}`}>
+              {visibleParagraphs.map((paragraph) => (
                 <div className={getReadingBlockClassName(paragraph)} key={paragraph.id}>
-                  {paragraph.sentences.map((sentence) => {
-                    const sentenceClassName = `reading-inline-sentence ${
-                      effectiveActiveSentenceId === sentence.id ? 'is-active' : ''
-                    } ${resumeHighlightSentenceId === sentence.id ? 'is-resumed' : ''}`
-
-                    return bookLanguage === 'ja' ? (
-                      isAndroid ? (
-                        <span className="reading-inline-sentence-ja" key={sentence.id}>
-                          <JapaneseChunkView
-                            sentenceId={sentence.id}
-                            showFurigana={readingPreferences.showFurigana}
-                            text={getSentenceDisplayText(sentence)}
-                            tokens={sentence.tokens}
-                            onChunkClick={(chunkIndex) => {
-                              const token = sentence.tokens?.[chunkIndex]
-                              if (token?.surface) {
-                                void handleWordClick(sentence, token.surface)
-                              }
-                            }}
-                          />
-                        </span>
-                      ) : (
-                        <span
-                          className="reading-inline-sentence-ja"
-                          key={sentence.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => onOpenSentence(sentence.id)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault()
-                              onOpenSentence(sentence.id)
-                            }
-                          }}
-                        >
-                          <JapaneseChunkView
-                            activeChunkSelection={activeChunkSelection}
-                            chunks={results[sentence.id]?.chunkAnalysis}
-                            sentenceId={sentence.id}
-                            showFurigana={readingPreferences.showFurigana}
-                            text={getSentenceDisplayText(sentence)}
-                            tokens={sentence.tokens}
-                            onChunkClick={(chunkIndex) => onSelectChunk(sentence.id, chunkIndex)}
-                          />
-                        </span>
-                      )
-                    ) : (
-                      <span className={sentenceClassName} key={sentence.id}>
-                        <ClickableSentenceWords
-                          activeWord={wordLookup?.word}
-                          disabled={wordLookup?.loading}
-                          text={getSentenceDisplayText(sentence)}
-                          onWordClick={(word) => void handleWordClick(sentence, word)}
-                        />
-                      </span>
-                    )
-                  })}
+                  <ChapterInlineSentences
+                    activeChunkSelection={activeChunkSelection}
+                    activeWord={wordLookup?.word}
+                    bookLanguage={bookLanguage}
+                    effectiveActiveSentenceId={effectiveActiveSentenceId}
+                    isAndroid={isAndroid}
+                    isWordLookupLoading={wordLookup?.loading}
+                    onOpenSentence={onOpenSentence}
+                    onSelectChunk={onSelectChunk}
+                    onWordClick={(sentence, word) => {
+                      void handleWordClick(sentence, word)
+                    }}
+                    paragraph={paragraph}
+                    resumeHighlightSentenceId={resumeHighlightSentenceId}
+                    results={results}
+                    showFurigana={readingPreferences.showFurigana}
+                  />
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="reading-book-toolbar" aria-label="阅读工具">
-            <div className="reading-book-toolbar-left">
-              <span className="reading-page-indicator">
-                第 {currentChapterPage + 1} / {chapterPageCount} 页
-              </span>
-              <div className="reading-page-progress" aria-hidden="true">
-                {Array.from({ length: visiblePageProgressCount }).map((_, index) => {
-                  const isActive = index === visiblePageProgressActiveIndex
-                  return (
-                    <span
-                      className={`reading-page-progress-segment ${isActive ? 'is-active' : ''}`}
-                      key={`page-progress-${index}`}
-                    />
-                  )
-                })}
+          <div className="reading-float-chrome" aria-label="阅读工具">
+            {isScrollMode ? null : (
+              <div className="reading-float-pager">
+                <button
+                  className="reading-float-button"
+                  disabled={currentChapterPage <= 0}
+                  type="button"
+                  onClick={() => onChangeChapterPage('previous')}
+                >
+                  上一页
+                </button>
+                <button
+                  className="reading-float-button"
+                  disabled={currentChapterPage >= chapterPageCount - 1}
+                  type="button"
+                  onClick={() => onChangeChapterPage('next')}
+                >
+                  下一页
+                </button>
               </div>
-            </div>
-
-            <div className="reading-book-toolbar-actions">
-              {showReadingSettings ? (
-                <ReadingDisplaySettings
-                  bookLanguage={bookLanguage}
-                  isOpen={isReadingSettingsOpen}
-                  onClose={onCloseReadingSettings}
-                  onReadingPreferencesChange={onReadingPreferencesChange}
-                  onToggle={onToggleReadingSettings}
-                  readingPreferences={readingPreferences}
-                />
-              ) : null}
-              <button
-                className="ghost-button"
-                disabled={currentChapterPage <= 0}
-                type="button"
-                onClick={() => onChangeChapterPage('previous')}
-              >
-                上一页
-              </button>
-              <button
-                className="ghost-button"
-                disabled={currentChapterPage >= chapterPageCount - 1}
-                type="button"
-                onClick={() => onChangeChapterPage('next')}
-              >
-                下一页
-              </button>
-              <button className="ghost-button" type="button" onClick={onBackToWorkspace}>
-                退出
-              </button>
-            </div>
+            )}
+            <button
+              className="reading-float-button reading-float-exit"
+              type="button"
+              onClick={onBackToWorkspace}
+            >
+              退出
+            </button>
           </div>
         </div>
       </div>

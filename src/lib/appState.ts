@@ -176,6 +176,7 @@ export const defaultReadingPreferences: ReadingPreferences = {
   contentWidth: 940,
   fontSize: 18,
   showFurigana: true,
+  readingMode: 'paged',
 }
 
 function createDefaultAnkiFieldMapping(
@@ -513,6 +514,7 @@ export function restoreReadingPreferences(): ReadingPreferences {
         typeof parsed.showFurigana === 'boolean'
           ? parsed.showFurigana
           : defaultReadingPreferences.showFurigana,
+      readingMode: parsed.readingMode === 'scroll' ? 'scroll' : 'paged',
     }
   } catch {
     return defaultReadingPreferences
