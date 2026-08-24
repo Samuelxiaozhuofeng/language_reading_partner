@@ -5,7 +5,7 @@ export type WorkspaceSource = 'draft' | 'chapter'
 export type ChapterAnalysisState = 'idle' | 'partial' | 'running' | 'analyzed'
 export type KnowledgeKind = 'grammar' | 'phrase' | 'vocabulary'
 // Current language routes. The product direction is multilingual; add new routes here with matching segmentation and prompt handling.
-export type BookLanguage = 'es' | 'ja' | 'ar'
+export type BookLanguage = 'es' | 'ja' | 'ar' | 'fr' | 'en'
 export type AnkiFieldSource =
   | 'sentence'
   | 'sentenceFurigana'

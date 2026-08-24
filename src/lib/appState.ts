@@ -16,6 +16,7 @@ import type {
   VocabularyPromptConfig,
 } from '../types'
 import { ankiFieldSourceOrder } from './anki/constants'
+import { SUPPORTED_BOOK_LANGUAGES } from './languages'
 import { segmentSpanishText } from './segment'
 
 export const CONFIG_STORAGE_KEY = 'spanish-reading-assistant/config'
@@ -36,7 +37,7 @@ export const MIN_READING_CONTENT_WIDTH = 720
 export const MAX_READING_CONTENT_WIDTH = 1180
 export const MIN_READING_FONT_SIZE = 16
 export const MAX_READING_FONT_SIZE = 24
-const supportedBookLanguages = ['es', 'ja', 'ar'] satisfies BookLanguage[]
+const supportedBookLanguages = SUPPORTED_BOOK_LANGUAGES
 
 export const defaultConfig: ApiConfig = {
   baseUrl: 'https://api.openai.com/v1',
@@ -581,7 +582,11 @@ export function restoreDraft(): PersistedDraft {
 
     return {
       articleTitle: typeof parsed.articleTitle === 'string' ? parsed.articleTitle : '',
-      language: parsed.language === 'ja' || parsed.language === 'ar' ? parsed.language : 'es',
+      language:
+        typeof parsed.language === 'string' &&
+        (SUPPORTED_BOOK_LANGUAGES as readonly string[]).includes(parsed.language)
+          ? (parsed.language as BookLanguage)
+          : 'es',
       sourceText: parsed.sourceText ?? defaultSourceText,
       sentences: restoredSentences,
       results,

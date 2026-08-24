@@ -265,6 +265,7 @@ export function DraftReadingView({
               <WordLookupPopover
                 ankiMessage={wordLookup.ankiMessage}
                 ankiStatus={wordLookup.ankiStatus}
+                bookLanguage={bookLanguage}
                 context={wordLookup.context}
                 error={wordLookup.error}
                 explanation={wordLookup.explanation}

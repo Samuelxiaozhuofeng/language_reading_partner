@@ -13,6 +13,7 @@
     "android:debug": "npm run android:sync && cd android && ./gradlew assembleDebug"
   },
   "dependencies": {
+    "@capacitor-community/text-to-speech": "^8.0.2",
     "@capacitor/android": "^8.3.1",
     "@capacitor/core": "^8.3.1",
     "@supabase/supabase-js": "^2.105.1",

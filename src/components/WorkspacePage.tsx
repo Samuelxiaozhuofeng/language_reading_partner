@@ -1,5 +1,5 @@
 import { formatTime } from '../lib/appState'
-import { languageLabel } from '../lib/languages'
+import { languageLabel, SUPPORTED_BOOK_LANGUAGES } from '../lib/languages'
 import { isNativeAndroid } from '../lib/platform'
 import type {
   ApiConfig,
@@ -206,9 +206,11 @@ function WorkspacePage({
                     onDraftLanguageChange(event.currentTarget.value as BookLanguage)
                   }
                 >
-                  <option value="es">{languageLabel('es')}</option>
-                  <option value="ja">{languageLabel('ja')}</option>
-                  <option value="ar">{languageLabel('ar')}</option>
+                  {SUPPORTED_BOOK_LANGUAGES.map((language) => (
+                    <option key={language} value={language}>
+                      {languageLabel(language)}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>

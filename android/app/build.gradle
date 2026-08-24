@@ -7,8 +7,8 @@ android {
         applicationId "com.samdagreat.multireader"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 12
-        versionName "1.20"
+        versionCode 18
+        versionName "1.33"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -23,7 +23,7 @@ android {
         }
     }
     lint {
-        disable 'DuplicateCrowdInStrings'
+        disable 'DuplicateCrowdInStrings', 'DirectDateInstantiation', 'DirectSystemCurrentTimeMillisUsage'
     }
 }
 
@@ -44,6 +44,7 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
 }
 
 apply from: 'capacitor.build.gradle'

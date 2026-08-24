@@ -554,7 +554,7 @@ export function SentenceDetailPanel({
         <p>{result.meaning || '模型未稳定返回内容解读。'}</p>
       </SectionPanel>
 
-      {bookLanguage === 'es' ? (
+      {bookLanguage !== 'ja' ? (
         <VocabularyExplanationPanel
           detailRef={activeVocabularyInteraction.detailRef}
           state={activeVocabularyInteraction.state}

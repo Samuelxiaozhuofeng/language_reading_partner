@@ -457,6 +457,23 @@ function normalizeEpubLanguage(language?: string | null): BookLanguage | null {
   ) {
     return 'ar'
   }
+  if (
+    normalized === 'fr' ||
+    normalized === 'fra' ||
+    normalized === 'french' ||
+    normalized.startsWith('fr-')
+  ) {
+    return 'fr'
+  }
+
+  if (
+    normalized === 'en' ||
+    normalized === 'eng' ||
+    normalized === 'english' ||
+    normalized.startsWith('en-')
+  ) {
+    return 'en'
+  }
 
   if (
     normalized === 'es' ||

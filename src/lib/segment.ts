@@ -7,6 +7,9 @@ const SOFT_BREAKS = new Set([';', '…'])
 const TITLE_ABBREVIATIONS = new Set([
   'dr.',
   'dra.',
+  'm.',
+  'mlle.',
+  'mme.',
   'mr.',
   'mrs.',
   'ms.',

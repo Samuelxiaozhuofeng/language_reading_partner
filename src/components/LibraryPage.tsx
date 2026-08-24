@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { chapterStatusLabelMap, formatTime } from '../lib/appState'
 import { detectEpubLanguage } from '../lib/epub'
-import { languageLabel } from '../lib/languages'
+import { languageLabel, SUPPORTED_BOOK_LANGUAGES } from '../lib/languages'
 import { isTxtFile } from '../lib/txt'
 import type { IpadicFeatures, Tokenizer } from 'kuromoji'
 import { getTokenizer } from '../lib/kuromoji'
@@ -333,9 +333,11 @@ export default function LibraryPage({
                 value={selectedImportLanguage}
                 onChange={(event) => setSelectedImportLanguage(event.currentTarget.value as BookLanguage)}
               >
-                <option value="es">西班牙语</option>
-                <option value="ja">日本語</option>
-                <option value="ar">阿拉伯语</option>
+                {SUPPORTED_BOOK_LANGUAGES.map((language) => (
+                  <option key={language} value={language}>
+                    {languageLabel(language)}
+                  </option>
+                ))}
               </select>
             </label>
             {selectedImportLanguage === 'ja' ? (

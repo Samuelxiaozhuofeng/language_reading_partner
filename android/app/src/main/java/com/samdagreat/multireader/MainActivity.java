@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
   @Override
   protected void onCreate(@Nullable Bundle savedInstanceState) {
     registerPlugin(AnkiDroidPlugin.class);
+    registerPlugin(EdgeTtsPlugin.class);
     super.onCreate(savedInstanceState);
     SystemUiController.hideStatusBar(this);
   }

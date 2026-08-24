@@ -3190,6 +3190,58 @@ blockquote {
   text-align: left;
 }
 
+.word-lookup-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.word-lookup-speak-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-subtle, rgba(0, 0, 0, 0.04));
+  color: var(--accent-strong, #0e7d78);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.word-lookup-speak-button:active {
+  background: var(--surface-active, rgba(0, 0, 0, 0.08));
+}
+
+.word-lookup-speak-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.word-lookup-speech-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  margin-bottom: 0;
+  font-size: 0.82rem;
+}
+
+.word-lookup-install-button {
+  min-height: 24px;
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
 .word-lookup-context {
   margin-top: 8px;
   padding: 8px 12px;
@@ -3203,6 +3255,27 @@ blockquote {
   margin: 0;
   font-style: italic;
 }
+
+.word-lookup-inline-speak {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15em;
+  height: 1.15em;
+  margin-left: 0.28em;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  vertical-align: -0.18em;
+  cursor: pointer;
+}
+
+.word-lookup-inline-speak svg {
+  width: 1em;
+  height: 1em;
+}
+
 
 .word-lookup-body,
 .word-lookup-explanation,
