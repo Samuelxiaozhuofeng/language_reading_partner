@@ -1033,6 +1033,12 @@ blockquote {
   direction: rtl;
 }
 
+.reading-page[dir='rtl'] .reading-inline-sentence,
+.reading-page[dir='rtl'] .reading-inline-sentence-ja {
+  display: block;
+  margin-block: 0.4em;
+}
+
 .reading-page[dir='rtl'] .reading-paragraph {
   text-align: right;
 }
@@ -3075,14 +3081,26 @@ blockquote {
   border: 1px solid rgba(69, 72, 82, 0.08);
 }
 
+.word-lookup-overlay,
+.word-lookup-card {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: isolate;
+}
+
 .word-lookup-card {
   max-width: 540px;
+}
+
+.word-lookup-header {
+  flex-direction: row;
 }
 
 .word-lookup-title {
   margin: 0;
   font-size: 1.25rem;
   color: var(--ink-strong);
+  text-align: left;
 }
 
 .word-lookup-context {
@@ -3099,6 +3117,12 @@ blockquote {
   font-style: italic;
 }
 
+.word-lookup-body,
+.word-lookup-explanation,
+.word-lookup-card .panel-actions {
+  text-align: left;
+}
+
 .word-lookup-body {
   margin-top: 12px;
 }
@@ -3107,6 +3131,10 @@ blockquote {
   font-size: 0.95rem;
   line-height: 1.6;
   color: var(--ink);
+}
+
+.word-lookup-card .panel-actions {
+  justify-content: flex-start;
 }
 
 .android-paste-page {

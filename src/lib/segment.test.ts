@@ -9,7 +9,13 @@ import {
   katakanaToHiragana,
   toHtmlRuby,
 } from './japaneseUtils.ts'
-import { segmentJapaneseText, segmentSpanishText } from './segment.ts'
+import {
+  segmentArabicText,
+  segmentJapaneseText,
+  segmentSpanishText,
+  segmentText,
+  shouldResegmentChapterText,
+} from './segment.ts'
 
 test('keeps U.S. inside the same sentence when it is not sentence-final', () => {
   const input =
@@ -41,6 +47,56 @@ test('keeps paragraph boundaries even without ending punctuation', () => {
 
 test('keeps semicolon as a split point for shorter reading chunks', () => {
   assert.deepEqual(segmentSpanishText('Uno; dos. Tres?'), ['Uno;', 'dos.', 'Tres?'])
+})
+
+test('splits Arabic on Western full stops without needing capital letters', () => {
+  assert.deepEqual(segmentArabicText('كانت السماء صافية. خرج الأطفال إلى الحديقة. لعبوا الكرة حتى الغروب.'), [
+    'كانت السماء صافية.',
+    'خرج الأطفال إلى الحديقة.',
+    'لعبوا الكرة حتى الغروب.',
+  ])
+})
+
+test('splits Arabic when the next sentence starts immediately after the period', () => {
+  assert.deepEqual(segmentArabicText('هذا كتاب.ذلك قلم.'), [
+    'هذا كتاب.',
+    'ذلك قلم.',
+  ])
+})
+
+test('splits Arabic on Arabic full stop and question mark', () => {
+  assert.deepEqual(segmentArabicText('هذا كتاب۔ هل قرأته؟ نعم.'), [
+    'هذا كتاب۔',
+    'هل قرأته؟',
+    'نعم.',
+  ])
+})
+
+test('keeps Arabic decimal numbers inside the same sentence', () => {
+  assert.deepEqual(segmentArabicText('السعر 3.5 دولار. هذا رخيص.'), [
+    'السعر 3.5 دولار.',
+    'هذا رخيص.',
+  ])
+})
+
+test('routes Arabic through the dedicated splitter', () => {
+  assert.deepEqual(segmentText('مرحبا. كيف حالك.', 'ar'), [
+    'مرحبا.',
+    'كيف حالك.',
+  ])
+})
+
+test('resegments a saved Arabic chapter that was stored as one blob', () => {
+  assert.equal(
+    shouldResegmentChapterText('هذا كتاب. ذلك قلم.', 1, 'ar'),
+    true,
+  )
+  assert.equal(
+    shouldResegmentChapterText('هذا كتاب. ذلك قلم.', 2, 'ar'),
+    false,
+  )
+  assert.equal(shouldResegmentChapterText('Hello. There.', 1, 'es'), false)
+  assert.equal(shouldResegmentChapterText('Hello. There.', 0, 'es'), true)
 })
 
 test('segments Japanese text by sentence punctuation', () => {

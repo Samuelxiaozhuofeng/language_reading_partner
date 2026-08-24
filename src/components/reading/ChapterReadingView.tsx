@@ -27,6 +27,7 @@ type ChapterReadingViewProps = {
   chapterBodyRef: RefObject<HTMLDivElement | null>
   chapterPageCount: number
   contextSentenceCount?: number
+  includeContextInExcerpt?: boolean
   currentChapterPage: number
   currentChapterPageData: ChapterReadingPage | null
   effectiveActiveSentenceId: string | null
@@ -61,6 +62,7 @@ export function ChapterReadingView({
   chapterBodyRef,
   chapterPageCount,
   contextSentenceCount = 1,
+  includeContextInExcerpt = false,
   currentChapterPage,
   currentChapterPageData,
   effectiveActiveSentenceId,
@@ -101,19 +103,21 @@ export function ChapterReadingView({
 
     const allSentences = chapterParagraphs.flatMap((p) => p.sentences)
     const sentenceIndex = allSentences.findIndex((s) => s.id === sentence.id)
-    let context = getSentenceDisplayText(sentence)
+    const currentText = getSentenceDisplayText(sentence)
+    let explanationContext = currentText
     if (sentenceIndex >= 0 && typeof contextSentenceCount === 'number' && contextSentenceCount > 0) {
       const start = Math.max(0, sentenceIndex - contextSentenceCount)
       const end = Math.min(allSentences.length, sentenceIndex + contextSentenceCount + 1)
-      context = allSentences
+      explanationContext = allSentences
         .slice(start, end)
         .map((s) => getSentenceDisplayText(s))
         .join(' ')
     }
+    const excerptText = includeContextInExcerpt ? explanationContext : currentText
 
     setWordLookup({
       word,
-      context,
+      context: excerptText,
       sentence,
       explanation: null,
       loading: true,
@@ -123,7 +127,7 @@ export function ChapterReadingView({
     })
 
     try {
-      const res = await onExplainVocabulary(context, word)
+      const res = await onExplainVocabulary(explanationContext, word)
       setWordLookup((prev) =>
         prev && prev.word === word
           ? {

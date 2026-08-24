@@ -90,6 +90,7 @@ export const defaultPromptConfig: PromptConfig = {
   previousSentenceCount: 1,
   nextSentenceCount: 1,
   batchSize: 1,
+  includeContextInExcerpt: false,
 }
 
 export const defaultJapanesePromptConfig: PromptConfig = {
@@ -146,6 +147,7 @@ export const defaultJapanesePromptConfig: PromptConfig = {
   previousSentenceCount: 1,
   nextSentenceCount: 1,
   batchSize: 1,
+  includeContextInExcerpt: false,
 }
 
 export const defaultVocabularyPromptConfig: VocabularyPromptConfig = {
@@ -261,6 +263,7 @@ function convertLegacyPromptConfig(parsed: Partial<PromptConfig> & {
       previousSentenceCount: clampPromptContextSentenceCount(parsed.previousSentenceCount),
       nextSentenceCount: clampPromptContextSentenceCount(parsed.nextSentenceCount),
       batchSize: clampBatchSize(parsed.batchSize),
+      includeContextInExcerpt: parsed.includeContextInExcerpt === true,
     } satisfies PromptConfig
   }
 
@@ -278,6 +281,7 @@ function convertLegacyPromptConfig(parsed: Partial<PromptConfig> & {
     previousSentenceCount: clampPromptContextSentenceCount(parsed.previousSentenceCount),
     nextSentenceCount: clampPromptContextSentenceCount(parsed.nextSentenceCount),
     batchSize: clampBatchSize(parsed.batchSize),
+    includeContextInExcerpt: parsed.includeContextInExcerpt === true,
   } satisfies PromptConfig
 }
 

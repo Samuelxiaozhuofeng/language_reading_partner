@@ -37,6 +37,7 @@ export type PromptConfig = {
   previousSentenceCount: number
   nextSentenceCount: number
   batchSize: number
+  includeContextInExcerpt: boolean
 }
 
 export type VocabularyPromptConfig = {

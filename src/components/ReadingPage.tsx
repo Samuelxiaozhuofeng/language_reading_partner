@@ -40,6 +40,7 @@ type ReadingPageProps = {
   activeRange?: SentenceRange | null
   bookLanguage: BookLanguage
   contextSentenceCount?: number
+  includeContextInExcerpt?: boolean
   contextTitle?: {
     bookTitle: string
     chapterTitle: string
@@ -81,6 +82,7 @@ function ReadingPage({
   activeRange,
   bookLanguage,
   contextSentenceCount = 1,
+  includeContextInExcerpt = false,
   contextTitle,
   globalError,
   onAddToAnki,
@@ -510,6 +512,7 @@ function ReadingPage({
                 chapterPageCount={chapterPageCount}
                 chapterParagraphs={chapterParagraphs}
                 contextSentenceCount={contextSentenceCount}
+                includeContextInExcerpt={includeContextInExcerpt}
                 currentChapterPage={currentChapterPage}
                 currentChapterPageData={currentChapterPageData}
                 effectiveActiveSentenceId={effectiveActiveSentenceId}
@@ -537,6 +540,7 @@ function ReadingPage({
                 activeChunkSelection={effectiveActiveChunkSelection}
                 areAllSentencesExpanded={areAllSentencesExpanded}
                 contextSentenceCount={contextSentenceCount}
+                includeContextInExcerpt={includeContextInExcerpt}
                 expandedSentenceIds={effectiveExpandedSentenceIds}
                 isReadingSettingsOpen={isReadingSettingsOpen}
                 onAddToAnki={onAddToAnki}

@@ -24,6 +24,7 @@ type DraftReadingViewProps = {
   bookLanguage: BookLanguage
   expandedSentenceIds: Set<string>
   contextSentenceCount?: number
+  includeContextInExcerpt?: boolean
   isReadingSettingsOpen: boolean
   onAddToAnki: (
     sentence: SentenceItem,
@@ -63,6 +64,7 @@ export function DraftReadingView({
   areAllSentencesExpanded,
   bookLanguage,
   contextSentenceCount = 1,
+  includeContextInExcerpt = false,
   expandedSentenceIds,
   isReadingSettingsOpen,
   onAddToAnki,
@@ -98,19 +100,21 @@ export function DraftReadingView({
 
   const handleWordClick = async (sentence: SentenceItem, word: string) => {
     const sentenceIndex = sentences.findIndex((s) => s.id === sentence.id)
-    let context = getSentenceDisplayText(sentence)
+    const currentText = getSentenceDisplayText(sentence)
+    let explanationContext = currentText
     if (sentenceIndex >= 0 && typeof contextSentenceCount === 'number' && contextSentenceCount > 0) {
       const start = Math.max(0, sentenceIndex - contextSentenceCount)
       const end = Math.min(sentences.length, sentenceIndex + contextSentenceCount + 1)
-      context = sentences
+      explanationContext = sentences
         .slice(start, end)
         .map((s) => getSentenceDisplayText(s))
         .join(' ')
     }
+    const excerptText = includeContextInExcerpt ? explanationContext : currentText
 
     setWordLookup({
       word,
-      context,
+      context: excerptText,
       sentence,
       explanation: null,
       loading: true,
@@ -120,7 +124,7 @@ export function DraftReadingView({
     })
 
     try {
-      const res = await onExplainVocabulary(context, word)
+      const res = await onExplainVocabulary(explanationContext, word)
       setWordLookup((prev) =>
         prev && prev.word === word
           ? {

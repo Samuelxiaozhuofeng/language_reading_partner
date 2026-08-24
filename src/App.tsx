@@ -331,6 +331,7 @@ function App() {
         <ReadingPage
           activeRange={activeReadingRange}
           contextSentenceCount={persistent.promptConfig.previousSentenceCount}
+          includeContextInExcerpt={persistent.promptConfig.includeContextInExcerpt}
           contextTitle={currentContextTitle}
           errorCount={0}
           globalError={analysis.globalError}

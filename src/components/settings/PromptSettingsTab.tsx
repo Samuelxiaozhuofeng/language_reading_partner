@@ -53,6 +53,20 @@ function PromptSettingsTab({
                 }}
               />
             </label>
+
+            <label className="ai-share-toggle">
+              <input
+                type="checkbox"
+                checked={promptConfig.includeContextInExcerpt}
+                onChange={(event) =>
+                  onPromptChange('includeContextInExcerpt', event.target.checked)
+                }
+              />
+              <span>把上下文写入查词和 Anki</span>
+            </label>
+            <p className="panel-tip">
+              关闭后，解释仍带上下文，查词面板和 Anki 卡片只保留当前句。
+            </p>
           </div>
 
           <div className="field field-block">
@@ -173,6 +187,17 @@ function PromptSettingsTab({
               value={promptConfig.batchSize}
               onChange={(event) => onPromptChange('batchSize', Number(event.target.value))}
             />
+          </label>
+
+          <label className="ai-share-toggle">
+            <input
+              type="checkbox"
+              checked={promptConfig.includeContextInExcerpt}
+              onChange={(event) =>
+                onPromptChange('includeContextInExcerpt', event.target.checked)
+              }
+            />
+            <span>把上下文写入查词和 Anki</span>
           </label>
         </div>
 

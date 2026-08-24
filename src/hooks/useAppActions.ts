@@ -10,6 +10,7 @@ import {
 import type { AnkiConfigChangeHandler, AnkiFieldMappingChangeHandler } from '../lib/appState'
 import { createPendingAnkiNote } from '../lib/anki/pendingQueue'
 import { createChapterSentencesForLanguage } from '../lib/chapterText'
+import { shouldResegmentChapterText } from '../lib/segment'
 import {
   DEFAULT_CHAPTER_RANGE_SIZE,
   doesRangeContainSentenceIndex,
@@ -158,21 +159,34 @@ export function useAppActions({
     let chapter = await library.openChapter(chapterId)
     if (!chapter) return
 
-    if (chapter.sentences.length === 0 && chapter.sourceText) {
+    const resolvedLanguage = language ?? library.selectedBook?.language ?? currentLanguage
+    const didResegment = Boolean(
+      chapter.sourceText &&
+      shouldResegmentChapterText(
+        chapter.sourceText,
+        chapter.sentences.length,
+        resolvedLanguage,
+      ),
+    )
+
+    if (didResegment && chapter.sourceText) {
       const nextSentences = await createChapterSentencesForLanguage(
         chapter.sourceText,
-        language ?? library.selectedBook?.language ?? currentLanguage,
+        resolvedLanguage,
       )
       const updated = await library.updateCurrentChapter((currentChapter) => ({
         ...currentChapter,
         sentences: nextSentences,
+        ...(isNativeAndroid()
+          ? { activeRange: getFullSentenceRange(nextSentences.length) }
+          : {}),
       }))
       if (updated) {
         chapter = updated
       }
     }
 
-    if (isNativeAndroid() && chapter.sentences.length > 0 && !chapter.activeRange) {
+    if (isNativeAndroid() && chapter.sentences.length > 0 && (!chapter.activeRange || didResegment)) {
       const fullRange = getFullSentenceRange(chapter.sentences.length)
       const updated = await library.updateCurrentChapter((currentChapter) => ({
         ...currentChapter,

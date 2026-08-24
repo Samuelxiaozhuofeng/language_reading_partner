@@ -45,6 +45,7 @@ export function WordLookupPopover({
     <div
       aria-modal="true"
       className="reading-overlay is-sheet word-lookup-overlay"
+      dir="ltr"
       role="dialog"
       onClick={onClose}
     >
